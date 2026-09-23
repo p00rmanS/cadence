@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 234 241 240;
+  --panel: 255 255 255;
+  --ink: 18 48 47;
+  --muted: 79 104 102;
+  --line: 201 216 214;
+  --ok: 24 113 85;
+  --ok-bg: 215 238 229;
+  --gap: 179 20 79;
+  --gap-bg: 249 220 231;
+  --busy: 154 169 168;
+  --accent: 31 111 178;
+  --accent-ink: 255 255 255;
+  --warn: 168 98 0;
+  --warn-bg: 250 232 210;
+}
+
+:root[data-theme="dark"] {
+  --bg: 15 30 30;
+  --panel: 23 42 42;
+  --ink: 227 239 237;
+  --muted: 147 175 172;
+  --line: 44 69 68;
+  --ok: 92 199 162;
+  --ok-bg: 22 57 47;
+  --gap: 242 114 159;
+  --gap-bg: 64 26 41;
+  --busy: 97 121 122;
+  --accent: 111 176 234;
+  --accent-ink: 10 22 34;
+  --warn: 230 169 75;
+  --warn-bg: 58 42 15;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 15 30 30;
+    --panel: 23 42 42;
+    --ink: 227 239 237;
+    --muted: 147 175 172;
+    --line: 44 69 68;
+    --ok: 92 199 162;
+    --ok-bg: 22 57 47;
+    --gap: 242 114 159;
+    --gap-bg: 64 26 41;
+    --busy: 97 121 122;
+    --accent: 111 176 234;
+    --accent-ink: 10 22 34;
+    --warn: 230 169 75;
+    --warn-bg: 58 42 15;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--accent));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root:not([data-theme="light"]) {
+    --bg: 255 255 255 !important;
+    --panel: 255 255 255 !important;
+    --ink: 0 0 0 !important;
+    --muted: 70 70 70 !important;
+    --line: 190 190 190 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

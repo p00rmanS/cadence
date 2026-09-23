@@ -1,0 +1,97 @@
+{
+  "name": "ShiftFit - Publish",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shiftfit/publish",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-publish",
+      "name": "Webhook: /shiftfit/publish",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Never trust a webhook body blindly (same rule as contracts.ts's validatePublishResponse,\n// applied here to what's coming IN instead of what's going out). A malformed or truncated\n// request must not reach the Google Calendar node.\nconst body = $input.first().json.body || {};\nconst scheduleVersion = body.scheduleVersion;\nconst events = body.events;\nconst DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];\nconst inDay = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;\n\nif (typeof scheduleVersion !== 'string' || !scheduleVersion || !Array.isArray(events)) {\n  throw new Error('Malformed publish request: scheduleVersion and events are required.');\n}\n\n// TODO once Workflow B is standing up: compare `scheduleVersion` against the last version this\n// workflow actually approved (persisted by that step) and reject a stale/changed schedule here.\n// Today the frontend's own approval dialog is the only gate, so this step only checks shape.\n\nconst clean = [];\nfor (const e of events) {\n  const ok =\n    e && typeof e.studentId === 'string' && typeof e.studentName === 'string' && DAYS.includes(e.day) &&\n    inDay(e.start) && inDay(e.end) && e.end > e.start && typeof e.shiftId === 'string' && e.shiftId;\n  if (ok) clean.push({ studentId: e.studentId, studentName: e.studentName, day: e.day, start: e.start, end: e.end, shiftId: e.shiftId });\n}\nif (!clean.length) throw new Error('No valid events in the publish request.');\n\n// One item per event from here on, each carrying the schedule version so later nodes\n// (and the final response) don't need to look it up again.\nreturn clean.map((e) => ({ json: { ...e, scheduleVersion } }));"
+      },
+      "id": "revalidate-version",
+      "name": "Validate request shape",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 320]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Look up this shift in the persisted shiftId -> googleEventId map so the next node can\n// create a NEW event or update the SAME event instead of always creating — that's what makes\n// retries and re-publishes idempotent (see docs/N8N_ARCHITECTURE.md, \"Idempotency strategy\").\n//\n// This uses n8n's own workflow static data as the store, so no external database is required\n// to get real idempotency for a pilot. If ShiftFit later gets a real backend (see ROADMAP.md\n// v3), swap this lookup for a query against that instead — the shape (shiftId -> googleEventId)\n// stays the same either way.\nconst store = $getWorkflowStaticData('global');\nif (!store.shiftfitSyncMap) store.shiftfitSyncMap = {};\nconst existingEventId = store.shiftfitSyncMap[$json.shiftId] || null;\nreturn { json: { ...$json, existingEventId } };"
+      },
+      "id": "diff-events",
+      "name": "Diff vs. previously synced events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 320]
+    },
+    {
+      "parameters": {
+        "operation": "={{ $json.existingEventId ? 'update' : 'create' }}",
+        "calendar": "REPLACE_WITH_CALENDAR_ID",
+        "eventId": "={{ $json.existingEventId }}",
+        "start": "={{ $json.recurrence ? $json.recurrence.startIso : null }}",
+        "end": "={{ $json.recurrence ? $json.recurrence.endIso : null }}",
+        "summary": "={{$json.studentName}} — shift",
+        "additionalFields": {
+          "recurrence": "={{ $json.recurrence ? ['RRULE:' + $json.recurrence.rrule, ...($json.recurrence.exdates.length ? ['EXDATE;TZID=' + $json.recurrence.timeZone + ':' + $json.recurrence.exdates.join(',')] : [])] : [] }}"
+        }
+      },
+      "id": "google-calendar-upsert",
+      "name": "Google Calendar: create/update event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [880, 320],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "operation/start/end/recurrence are set FROM the item's own fields (existingEventId from 'Diff vs. previously synced events', recurrence from ShiftFit's publish request — see PublishRecurrence in src/services/automation/contracts.ts). The exact parameter names (operation, eventId, additionalFields.recurrence) depend on your n8n Google Calendar node version — check them against your instance before relying on this; it has never been run live. Items without $json.recurrence mean no semester dates were configured when ShiftFit built the request, which the frontend now prevents (SaveShareDialog requires saved semester dates before 'Approve and send' is enabled) — if you see one anyway, skip it rather than sending a dateless event."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Write shiftId -> googleEventId into the same static-data map 'Diff vs. previously synced\n// events' read from, so the NEXT publish (or a retry of this one) recognizes these events\n// as already-synced instead of creating duplicates. Then build the response contracts.ts\n// expects (see PublishResponse / PublishEventResult in src/services/automation/contracts.ts).\nconst store = $getWorkflowStaticData('global');\nif (!store.shiftfitSyncMap) store.shiftfitSyncMap = {};\n\nconst results = [];\nlet scheduleVersion = null;\nfor (const item of $input.all()) {\n  // The Google Calendar node's own output usually replaces $json with the calendar event it\n  // returned, so the original shiftId/scheduleVersion are read back from the node BEFORE it\n  // (n8n keeps this linkage via paired items). Adjust the referenced node name here if you\n  // rename 'Diff vs. previously synced events'.\n  const original = $('Diff vs. previously synced events').itemMatching(item.pairedItem?.item ?? 0)?.json ?? {};\n  const shiftId = original.shiftId;\n  scheduleVersion = scheduleVersion || original.scheduleVersion;\n  const googleEventId = item.json.id || item.json.googleEventId;\n  if (shiftId && googleEventId) {\n    store.shiftfitSyncMap[shiftId] = googleEventId;\n    results.push({ shiftId, status: original.existingEventId ? 'updated' : 'created', googleEventId });\n  } else if (shiftId) {\n    // The calendar node didn't return an id — treat as failed rather than silently dropping it.\n    results.push({ shiftId, status: 'failed', error: 'Google Calendar did not return an event id.' });\n  }\n}\nreturn [{ json: { scheduleVersion, results } }];"
+      },
+      "id": "persist-sync-state",
+      "name": "Persist sync state",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 320]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { scheduleVersion: $json.scheduleVersion, results: $json.results } }}"
+      },
+      "id": "respond-publish",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 320]
+    }
+  ],
+  "connections": {
+    "Webhook: /shiftfit/publish": { "main": [[{ "node": "Validate request shape", "type": "main", "index": 0 }]] },
+    "Validate request shape": { "main": [[{ "node": "Diff vs. previously synced events", "type": "main", "index": 0 }]] },
+    "Diff vs. previously synced events": { "main": [[{ "node": "Google Calendar: create/update event", "type": "main", "index": 0 }]] },
+    "Google Calendar: create/update event": { "main": [[{ "node": "Persist sync state", "type": "main", "index": 0 }]] },
+    "Persist sync state": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "meta": {
+    "note": "Starting-point template only — not a tested workflow. No real credentials included. See docs/N8N_ARCHITECTURE.md Workflow C. The shiftId->googleEventId idempotency map now uses n8n's own workflow static data, so it works out of the box for a pilot with no external database — see the notes on 'Diff vs. previously synced events' and 'Persist sync state'."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "ShiftFit - Generate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shiftfit/generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-generate",
+      "name": "Webhook: /shiftfit/generate",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "REPLACE_WITH_YOUR_SCHEDULER_SERVICE_URL/schedule",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "students", "value": "={{$json.body.students}}" },
+            { "name": "assignments", "value": "={{$json.body.assignments}}" },
+            { "name": "settings", "value": "={{$json.body.settings}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-scheduler-service",
+      "name": "Call deterministic scheduler service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [520, 300],
+      "notes": "Must run the SAME algorithm as src/features/scheduling/scheduler.ts. Do not re-implement scheduling rules in a Code node here — port the module instead."
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems"
+      },
+      "id": "respond-generate",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [780, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: /shiftfit/generate": { "main": [[{ "node": "Call deterministic scheduler service", "type": "main", "index": 0 }]] },
+    "Call deterministic scheduler service": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "meta": {
+    "note": "Starting-point template only — not a tested workflow. Server-side re-validation for Workflow B; see docs/N8N_ARCHITECTURE.md."
+  }
+}

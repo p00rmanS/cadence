@@ -4,4 +4,10 @@ node_modules/
 .wrangler/
 .env
 .env.*
+!.env.example
 *.log
+dist/
+dist-ssr/
+coverage/
+*.local
+*.tsbuildinfo

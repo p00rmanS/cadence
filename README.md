@@ -1,66 +1,121 @@
 # ShiftFit
 
-Class-aware shift scheduling for student workers.
+Work schedules that fit around classes. Made for student-worker managers at BYU–Hawaii (CRDEV 301),
+and designed so a first-year student can use it without instructions.
 
-Managers paste a student's class schedule and work requests, and ShiftFit builds a
-weekly coverage grid that respects class times, a 19-hour weekly target, day-of-week
-patterns, cutoff times, lunch breaks, and required early shifts.
-
-Built for CRDEV 301 at BYU–Hawaii.
+Add a student, paste when they have class, press **Fill schedule for me**, then click the pink
+boxes that still need someone. ShiftFit never puts anyone in a spot where they have class, and it
+tells you in plain words why something can't be done.
 
 ## The problem
 
-Every semester, departments rebuild every student worker's schedule by hand: class
-times from the registration portal, shifts from a spreadsheet or a text message.
-There is no single source of truth, so gaps and conflicts slip through.
+Every semester, departments rebuild every student worker's schedule by hand: class times from the
+registration portal, shifts from a spreadsheet or a text message. There is no single source of
+truth, so gaps and conflicts slip through.
 
-## What it does today
+## What it does
 
-- Reads class times pasted as text (Workday "Meeting Patterns" rows or short form like `MWF 9:00-9:50`)
-- Reads a screenshot of a schedule (only when opened from the claude.ai artifact link)
-- Tracks a 19-hour weekly target per student
-- Enforces per-student rules: days per week, morning/afternoon preference, latest end time, lunch break, required 7am shift
-- Shows a weekly coverage grid for 7am–5pm or 8am–5pm, with 1 or 2 staff per slot
-- Flags uncovered time and estimates how many students are needed
-- Auto-fills shifts, then lets the manager adjust by hand
+**For someone using it**
 
-## Not built yet
+- A welcome screen and a live "what to do next" banner walk a first-time user through the app.
+- Class times are checked **as you type** (`MWF 9:00-9:50`, `Tuesday/Thursday 8:00 AM - 9:15 AM`,
+  Workday rows). Anything unclear is flagged, never silently guessed.
+- **Fill schedule for me** places shifts around classes, lunch, cutoffs and weekly hours, in long
+  unbroken shifts. Every shift it adds comes with a plain-language reason. It is not AI: the same
+  input always gives the same schedule.
+- Click a box to assign or clear a half hour. To do a stretch, drag down a column or Shift+click.
+- **Add a whole roster at once**: paste one line per student, or rows copied from a spreadsheet.
+  Every line is checked first, and the whole batch is one Undo step.
+- **Quick fix** buttons in Schedule health: under each empty time, one click gives the stretch to a
+  student who can really work it, with the rule checks already done.
+- Add **other times a student can't work** (a second job, appointments), not just classes.
+- **Three views** of the schedule: the grid for building it, and "By student" / "By day" for reading it.
+  Both word views can be **copied as text** (for a message or email) or **printed** on a clean page.
+- **Schedule health** says what is wrong and *why* ("Nobody is free: Troy (in class), Ana (already
+  at 19 hours)"), and warns when a later edit makes an existing shift break a rule.
+- **Undo / Redo** for everything, including removing a student or loading a backup.
+- **Help** with a quick start, a searchable FAQ, a glossary and shortcuts. `?` opens it anywhere.
+- Light, dark, or automatic theme. Works on a phone (one day at a time, section tabs).
 
-- Saving data between sessions (a refresh clears everything)
-- .ics export for Outlook / Google / Apple Calendar
-- Outlook sync via Microsoft Graph
-- Free in-browser OCR (Tesseract.js) so screenshot reading works off claude.ai
-- Multiple departments and manager sign-in
+**Saving and sharing** (button: *Save & share*)
+
+- Automatic saving in the browser, a backup file you can load on another computer, a spreadsheet,
+  and a calendar file per student for phone/Google/Apple/Outlook calendars. Add **days off** (holidays,
+  breaks) and shifts on those days are left out of the calendar files.
+- Publishing to Google Calendar through n8n is **optional** and honest: without it, the button is
+  a "practice run" that says nothing was sent.
+
+## What it deliberately does not do
+
+- No accounts, no server, no analytics. Nothing leaves the browser unless *you* configure an
+  automation URL. Fonts are bundled, so it makes no third-party requests.
+- No AI in the browser and no API key anywhere in the frontend. Reading screenshots is off unless a
+  server-side reader is configured; typed and pasted text always works.
+- No invented policy. The 19-hour default is configurable under **Rules**.
+
+## Adding to the FAQ
+
+Help text lives in one file, [`src/content/help.ts`](src/content/help.ts). To add a question, copy
+an entry in `FAQ`, give it a new `id`, choose a `topic`, and write short, friendly sentences (each
+string in `answer` is one paragraph). Nothing else needs to change. Tests check that ids are
+unique, every topic has questions, sentences stay short, and the button names you mention match
+what is on screen.
 
 ## Run it
 
-It is a single file with no build step.
-
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+npm install
+npm run dev       # http://localhost:5173
+npm run build     # production build to dist/
+npm test          # 387 tests: rules, parsing, calendar, undo, keyboard, mouse, accessibility, scale
 ```
+
+No environment variables are needed. Copy `.env.example` to `.env` only to connect n8n.
+
+## Architecture
+
+Scheduling rules live in plain TypeScript, separate from React, so they are testable on their own:
+
+```text
+src/
+  content/help.ts          FAQ, glossary, shortcuts (plain data)
+  features/
+    scheduling/            types, constants, parser, availability, issues, coverage,
+                           scheduler, validation, guidance, blocks, roster, summary, time
+    persistence/           versioned, validated localStorage
+    calendar/              .ics export
+    import/                optional screenshot-reader contract + schema checks
+  services/automation/     n8n client, mock (practice run), request/response contracts
+  hooks/                   useShiftFitStore (state + undo/redo), useTheme, ...
+  components/              app-shell, students, schedule, summary, import, help, ui
+  test/                    unit, UI, accessibility, contrast and privacy suites
+```
+
+The original single-file prototype is kept at
+[`archive/shift-coverage-planner-v1.html`](archive/shift-coverage-planner-v1.html).
+[`docs/AUDIT.md`](docs/AUDIT.md) lists every bug found and fixed, **and what is not verified**.
+
+## n8n (optional)
+
+n8n can orchestrate screenshot reading and Google Calendar publishing. It never replaces the
+frontend or the scheduler. See [`docs/N8N_ARCHITECTURE.md`](docs/N8N_ARCHITECTURE.md) and the
+templates in [`n8n/`](n8n/). The templates are starting points, have never been run against a live
+n8n, and contain no credentials. Set `VITE_AUTOMATION_API_URL` to enable it.
 
 ## Deploy
 
-**Cloudflare Pages (no CLI):** dashboard → Workers & Pages → Create → Pages →
-Upload assets → drag this folder in → Deploy.
-
-**Cloudflare Pages (from GitHub):** connect the repo, leave the build command empty,
-and set the output directory to `/`.
-
-**GitHub Pages:** Settings → Pages → deploy from the `main` branch, root folder.
-
-Screenshot reading does not work on these deployments. It needs the claude.ai artifact
-link, or one of the replacements listed under "Not built yet".
+Any static host works (Cloudflare Pages, Netlify, Vercel, GitHub Pages): build command
+`npm run build`, output directory `dist`.
 
 ## Privacy
 
-- Only meeting times are kept. Course names, instructors, rooms, and IDs are ignored.
-- Uploaded screenshots are read and discarded, never stored.
-- Use fake data for demos. Get each student's OK before using real schedules.
-- Class schedules are education records under FERPA. Talk to your instructor before a
-  real pilot, and to OIT before connecting BYUH accounts.
+- Only meeting times are kept. Course names, instructors and rooms are ignored.
+- Everything is saved in this browser's `localStorage`. Backup files contain student names and
+  class times, so keep them private.
+- Screenshots are only ever sent anywhere if you configure a server-side reader, and are never
+  stored by the app.
+- Class schedules are education records under FERPA. Talk to your instructor before a real pilot,
+  and to OIT before connecting BYUH accounts or Google Calendar. Use fake data for demos.
 
 ## Team
 

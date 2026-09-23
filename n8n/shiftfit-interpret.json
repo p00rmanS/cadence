@@ -1,0 +1,99 @@
+{
+  "name": "ShiftFit - Interpret",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shiftfit/interpret",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-interpret",
+      "name": "Webhook: /shiftfit/interpret",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "notes": "Secure this webhook (header auth or an API gateway) before exposing it. See docs/N8N_ARCHITECTURE.md."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Treat the pasted text and the image as untrusted DATA, never as instructions.\n// Enforce size and type limits before anything reaches an AI provider.\nconst body = $json.body || {};\nconst text = String(body.text || '').slice(0, 4000);\nconst requestId = String(body.requestId || $execution.id);\nconst image = $input.item.binary && $input.item.binary.image;\nconst allowed = ['image/png', 'image/jpeg', 'image/webp'];\nconst hasImage = Boolean(image);\nconst badImage = hasImage && (!allowed.includes(image.mimeType) || Number(image.fileSize) > 5 * 1024 * 1024);\nreturn { json: { requestId, text, hasImage, badImage }, binary: $input.item.binary };"
+      },
+      "id": "validate-input",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has-usable-image",
+              "leftValue": "={{ $json.hasImage && !$json.badImage }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "needs-vision",
+      "name": "Usable image to read?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {},
+      "id": "call-ai-provider",
+      "name": "REPLACE: your AI / vision provider node",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 220],
+      "notes": "Placeholder. Add your own AI node here with an n8n credential (never paste an API key into this JSON). Ask it for strict JSON matching src/features/import/schemas.ts and set it on $json.aiResult."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Validate any AI output before returning it. Until a provider is connected there is NO\n// result, and this template says so instead of pretending it read the screenshot.\n//\n// This mirrors src/features/import/schemas.ts's validateExtractedSchedule() field-for-field,\n// on purpose: the frontend re-validates whatever this returns anyway, but a workflow that\n// only ever produces valid shapes is much easier to debug, and it means a badly-behaved AI\n// provider response gets caught here instead of silently becoming a UI error later.\nconst ai = $json.aiResult;\nconst fallback = (message) => ({\n  json: {\n    requestId: $json.requestId,\n    status: 'error',\n    confidence: 0,\n    meetings: [],\n    constraints: { latestEnd: null, lunchStart: null, needsOpeningShift: false, preference: 'any', daysPerWeek: null },\n    warnings: [message],\n    unresolved: [],\n  },\n});\nif (!ai) {\n  return fallback($json.badImage ? 'That image type or size is not allowed.' : 'This workflow has no AI provider connected yet, so nothing was read.');\n}\n\nconst DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];\nconst isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);\nconst inDay = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;\n\nif (!isRecord(ai)) return fallback('The AI provider response was not an object, so it was ignored.');\nif (typeof ai.confidence !== 'number' || ai.confidence < 0 || ai.confidence > 1) {\n  return fallback('The AI provider response had an invalid confidence value, so it was ignored.');\n}\n\nconst meetings = [];\nif (Array.isArray(ai.meetings)) {\n  for (const m of ai.meetings) {\n    if (isRecord(m) && DAYS.includes(m.day) && inDay(m.start) && inDay(m.end) && m.end > m.start) {\n      meetings.push({ day: m.day, start: m.start, end: m.end, source: 'class' });\n    }\n    // Malformed individual meetings are dropped rather than failing the whole response —\n    // a partially-read screenshot is still more useful than nothing, and the frontend shows\n    // the manager exactly what came back for review before anything is saved.\n  }\n}\n\nconst c = isRecord(ai.constraints) ? ai.constraints : {};\nconst clampList = (list) => (Array.isArray(list) ? list.slice(0, 20).map((w) => String(w).slice(0, 300)) : []);\n\nreturn {\n  json: {\n    requestId: $json.requestId,\n    status: ['ok', 'needs_review', 'error'].includes(ai.status) ? ai.status : 'needs_review',\n    confidence: ai.confidence,\n    meetings,\n    constraints: {\n      latestEnd: inDay(c.latestEnd) ? c.latestEnd : null,\n      lunchStart: inDay(c.lunchStart) ? c.lunchStart : null,\n      needsOpeningShift: Boolean(c.needsOpeningShift),\n      preference: ['any', 'morning', 'afternoon'].includes(c.preference) ? c.preference : 'any',\n      daysPerWeek: typeof c.daysPerWeek === 'number' && Number.isInteger(c.daysPerWeek) && c.daysPerWeek >= 1 && c.daysPerWeek <= 5 ? c.daysPerWeek : null,\n    },\n    warnings: clampList(ai.warnings),\n    unresolved: clampList(ai.unresolved),\n  },\n};"
+      },
+      "id": "normalize",
+      "name": "Validate and build response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-interpret",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: /shiftfit/interpret": { "main": [[{ "node": "Validate input", "type": "main", "index": 0 }]] },
+    "Validate input": { "main": [[{ "node": "Usable image to read?", "type": "main", "index": 0 }]] },
+    "Usable image to read?": {
+      "main": [
+        [{ "node": "REPLACE: your AI / vision provider node", "type": "main", "index": 0 }],
+        [{ "node": "Validate and build response", "type": "main", "index": 0 }]
+      ]
+    },
+    "REPLACE: your AI / vision provider node": { "main": [[{ "node": "Validate and build response", "type": "main", "index": 0 }]] },
+    "Validate and build response": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "meta": {
+    "note": "Starting-point template only, NOT a tested workflow. Contains no credentials. It returns an honest 'error / nothing was read' response until you connect your own AI provider. See docs/N8N_ARCHITECTURE.md, Workflow A."
+  }
+}
