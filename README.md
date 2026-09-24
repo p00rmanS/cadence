@@ -118,7 +118,11 @@ n8n, and contain no credentials. Set `VITE_AUTOMATION_API_URL` to enable it.
 ## Deploy
 
 Any static host works (Cloudflare Pages, Netlify, Vercel, GitHub Pages): build command
-`npm run build`, output directory `dist`.
+`npm run build`, output directory `dist`. The build needs Node 20.19 or newer.
+
+For Netlify these settings are already in [`netlify.toml`](netlify.toml) (build command, `dist`, Node 22).
+Deploy the `master` branch. No environment variables are needed; leave `VITE_AUTOMATION_API_URL` unset
+until an n8n server exists.
 
 ## Privacy
 
