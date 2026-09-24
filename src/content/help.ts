@@ -59,6 +59,7 @@ export const FAQ: FaqItem[] = [
     answer: [
       "Any of these work, one class per line: MWF 9:00-9:50, TTh 1:00pm-2:15pm, or Tuesday/Thursday 8:00 AM - 9:15 AM. You can also paste the Meeting Patterns column straight from Workday.",
       "M = Monday, T = Tuesday, W = Wednesday, Th or R = Thursday, F = Friday. Weekend classes aren't part of the Monday to Friday schedule.",
+      "An online course with no meeting time, like “Online - Asynchronous” or “TBA”, is fine to paste. It blocks nothing, and ShiftFit tells you it skipped it.",
     ],
     keywords: ["workday", "paste", "MWF", "TTh", "format"],
   },
@@ -71,6 +72,26 @@ export const FAQ: FaqItem[] = [
       "You can also copy rows from a spreadsheet, with the name in the first column and the classes in the next ones. ShiftFit checks every line first and tells you which ones it can't read.",
     ],
     keywords: ["bulk", "many", "roster", "import", "spreadsheet", "paste", "list", "csv", "everyone"],
+  },
+  {
+    id: "paste-shifts",
+    topic: "Getting started",
+    question: "I already have a schedule written down. Can I paste it in?",
+    answer: [
+      "Yes. Open Settings at the top, then press “Paste existing shifts”. Type one student per line: the name, a colon, then the days and times, like Noa K.: MWF 9:00am-1:00pm. Separate several shifts with a semicolon.",
+      "The students must already be added. ShiftFit shows what it understood before adding anything. A half hour that breaks a rule, like overlapping a class, is skipped and you are told why. Press Undo to take the whole paste back.",
+    ],
+    keywords: ["import", "existing", "text", "email", "supervisor", "already", "paste", "shifts"],
+  },
+  {
+    id: "student-photo",
+    topic: "Getting started",
+    question: "Can I add a photo for a student?",
+    answer: [
+      "Yes. Press the pencil next to a student, then Choose a photo. Pick a PNG, JPG or WebP file up to 5 MB. ShiftFit crops it to a small square and shows it on the student's card and in the By student and By day lists.",
+      "The photo is kept in this browser only, like the rest of your schedule. It is included in a backup file, so keep backups private.",
+    ],
+    keywords: ["picture", "profile", "image", "avatar", "upload", "face"],
   },
   {
     id: "other-times",

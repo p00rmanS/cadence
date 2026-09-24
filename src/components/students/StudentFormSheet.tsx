@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { HelpTip } from "../help/HelpTip";
+import { Avatar } from "../ui/Avatar";
+import { makeAvatar } from "../../lib/image";
 import { ImportPanel } from "../import/ImportPanel";
 import { MeetingReview } from "../import/MeetingReview";
 import { NO_CUTOFF } from "../../features/scheduling/constants";
@@ -68,6 +70,10 @@ export function StudentFormSheet({
   const [needsOpeningShift, setNeedsOpeningShift] = useState(student?.needsOpeningShift ?? false);
   const [classText, setClassText] = useState(student?.classText ?? "");
   const [blockedText, setBlockedText] = useState(student?.blockedText ?? "");
+  const [avatar, setAvatar] = useState<string | null>(student?.avatar ?? null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [triedSave, setTriedSave] = useState(false);
 
@@ -95,10 +101,27 @@ export function StudentFormSheet({
     );
   }
 
+  // Only the most recently chosen photo may update the form. Shrinking takes a moment, so without
+  // this a slow first photo could finish last and silently replace the one picked after it.
+  const photoRequest = useRef(0);
+  async function handlePhoto(file: File) {
+    const mine = ++photoRequest.current;
+    setPhotoError(null);
+    setPhotoBusy(true);
+    try {
+      const url = await makeAvatar(file);
+      if (mine === photoRequest.current) setAvatar(url);
+    } catch (err) {
+      if (mine === photoRequest.current) setPhotoError(err instanceof Error ? err.message : "That photo could not be used.");
+    } finally {
+      if (mine === photoRequest.current) setPhotoBusy(false);
+    }
+  }
+
   function handleSubmit() {
     setTriedSave(true);
     if (nameError || classError) return;
-    onSave({ name: trimmed, preference, daysPerWeek, classText, blockedText, latestEnd, lunchStart, needsOpeningShift });
+    onSave({ name: trimmed, avatar, preference, daysPerWeek, classText, blockedText, latestEnd, lunchStart, needsOpeningShift });
   }
 
   const latestOptions = withCurrent(LATEST_OPTIONS, latestEnd, (v) => formatMinutes(v));
@@ -157,6 +180,40 @@ export function StudentFormSheet({
               <span className="text-muted">A first name and last initial is enough.</span>
             )}
           </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Avatar name={trimmed || "?"} color={student?.color ?? "#1F6FB2"} avatar={avatar ?? undefined} size="lg" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              Photo <span className="font-normal text-muted">(optional)</span>
+            </p>
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hidden
+              aria-label="Choose a photo file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handlePhoto(file);
+                e.target.value = "";
+              }}
+            />
+            <div className="mt-1 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => photoInput.current?.click()} disabled={photoBusy}>
+                {photoBusy ? "Working…" : avatar ? "Change photo" : "Choose a photo"}
+              </Button>
+              {avatar && (
+                <Button variant="ghost" onClick={() => setAvatar(null)} disabled={photoBusy}>
+                  Remove photo
+                </Button>
+              )}
+            </div>
+            <p className={photoError ? "mt-1 text-xs text-gap" : "mt-1 text-xs text-muted"} role={photoError ? "alert" : undefined}>
+              {photoError ?? "PNG, JPG or WebP, up to 5 MB. It is shrunk and kept in this browser only."}
+            </p>
+          </div>
         </div>
 
         <ImportPanel classText={classText} onClassTextChange={setClassText} onExtracted={handleExtracted} />

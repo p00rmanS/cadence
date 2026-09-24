@@ -49,6 +49,8 @@ import type {
 
 export type NewStudentInput = {
   name: string;
+  /** Saved thumbnail (data URL) or null/undefined for none. */
+  avatar?: string | null;
   preference: Student["preference"];
   daysPerWeek: number;
   classText: string;
@@ -96,6 +98,7 @@ export type Action =
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
+  | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
   | { type: "SET_SEMESTER"; semester: SemesterConfig | null }
   | { type: "AUTOFILL"; replace: boolean }
@@ -127,6 +130,7 @@ function toStudent(id: string, input: NewStudentInput, color: string): Student {
     id,
     name: input.name.trim(),
     color,
+    ...(input.avatar ? { avatar: input.avatar } : {}),
     preference: input.preference,
     daysPerWeek: input.daysPerWeek,
     classText: input.classText,
@@ -214,7 +218,7 @@ function fillRange(doc: Doc, student: Student, day: Day, from: number, to: numbe
     skipped > 0
       ? `${verb} ${plural(changed, "slot")} on ${range}. Skipped ${plural(skipped, "slot")} (${firstSkip}).`
       : `${verb} ${plural(changed, "slot")} on ${range}.`;
-  return { assignments, changed, message, verb };
+  return { assignments, changed, skipped, firstSkip, message, verb };
 }
 
 /**
@@ -338,6 +342,33 @@ export function reducer(state: State, action: Action): State {
       const outcome = fillRange(doc, student, action.day, action.from, action.to, true);
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
+    }
+    case "IMPORT_SHIFTS": {
+      // Each pasted shift goes through the same rule checks as a click on the grid. A shift that
+      // breaks a hard rule (class, lunch, cutoff) or a limit is skipped and counted, never forced.
+      let assignments = doc.assignments;
+      let placed = 0;
+      let skipped = 0;
+      let firstSkip = "";
+      for (const entry of action.entries) {
+        const student = doc.students.find((s) => s.id === entry.studentId);
+        if (!student) continue;
+        const from = entry.start;
+        const to = entry.end - doc.settings.slotMinutes;
+        if (to < from) continue;
+        const outcome = fillRange({ ...doc, assignments }, student, entry.day, from, to, true);
+        assignments = outcome.assignments;
+        placed += outcome.changed;
+        skipped += outcome.skipped;
+        if (!firstSkip && outcome.firstSkip) firstSkip = outcome.firstSkip;
+      }
+      if (!placed) {
+        return { ...state, toast: toast(skipped ? `Nothing was added: every shift broke a rule (${firstSkip}).` : "Nothing new to add — those shifts are already on the schedule.") };
+      }
+      const tail = skipped ? ` Skipped ${plural(skipped, "half hour")} that broke a rule (${firstSkip}).` : "";
+      return commit(state, { ...doc, assignments }, "Imported pasted shifts", {
+        toast: toast(`Added ${plural((placed * doc.settings.slotMinutes) / 60, "hour")} of pasted shifts.${tail}`),
+      });
     }
     case "SET_SETTINGS":
       return commit(state, { ...doc, settings: { ...doc.settings, ...action.settings } }, "Changed settings");
@@ -511,6 +542,7 @@ export function useShiftFitStore() {
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
+      importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
       confirmOverride: () => dispatch({ type: "CONFIRM_OVERRIDE" }),
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
       setSettings: (settings: Partial<ScheduleSettings>) => dispatch({ type: "SET_SETTINGS", settings }),
