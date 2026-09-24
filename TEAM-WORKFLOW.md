@@ -203,6 +203,10 @@ version to keep — it needs a human to decide. This is normal, not a disaster.
 
 ## 9. Coordinate before editing the same files
 
+**Who does what:** Christroi focuses on UI/UX design; James and Jared work on both UI and logic. The
+list of which files belong to whom (and which shared files need a heads-up first) is in
+[`CLAUDE.md`](CLAUDE.md), under "Who is on the team and who does what". Read it before you start.
+
 Two people editing the same file at the same time is the #1 cause of merge conflicts and lost
 work. Before starting a task, a quick message to the team — "I'm about to edit
 `ScheduleGrid.tsx`, anyone else in there?" — saves everyone time later. If your task will touch
