@@ -1,6 +1,6 @@
 # Audit
 
-Six audits are recorded here. Everything listed was confirmed by reading code, running it, or
+Seven audits are recorded here. Everything listed was confirmed by reading code, running it, or
 writing a test that failed first. Nothing here is generic advice.
 
 - **Part 1**: bugs in the original single-file prototype
@@ -13,8 +13,11 @@ writing a test that failed first. Nothing here is generic advice.
   (2026-09-22) — what's actually built vs. what the course deliverables (D1–D6) still need.
 - **Part 6**: hardening the n8n publish/interpret workflow templates (2026-09-23) — a real bug
   in the publish contract (no calendar dates were ever sent) found and fixed along the way.
+- **Part 7**: a check of the finished app against every acceptance criterion in the original build
+  brief, plus every markdown file against the code (2026-09-24). Two real bugs fixed.
 
-Run `npm test` to re-check all of it (387 tests in 20 suites).
+Run `npm test` to re-check all of it (410 tests in 22 suites as of 2026-09-24; earlier parts quote the
+counts from when they were written).
 
 ---
 
@@ -210,6 +213,63 @@ inputs (see the commands used, not kept in the repo), not by executing the workf
 n8n instance. `npm test` (389/389), `npm run lint` and `npm run build` were re-run clean after
 this pass, and the "Send to Google Calendar" flow (including the new date gate) was re-verified
 in a live browser.
+
+---
+
+## Part 7: the finished app against the original brief, and the docs against the code (2026-09-24)
+
+Every acceptance criterion in [`CLAUDE_CODE_SHIFTfit_N8N_MASTER_PROMPT_v2.md`](../CLAUDE_CODE_SHIFTfit_N8N_MASTER_PROMPT_v2.md)
+was checked, and every markdown file was compared with the code it describes.
+
+### Bugs found and fixed
+
+| Area | Bug | Consequence | Fix |
+| --- | --- | --- | --- |
+| Parser | A course with no meeting time (`Online - Asynchronous`, `TBA`, `Arranged`) was reported as an **error**, and the student form refuses to save while any line has an error. A test even locked this in. | Pasting a normal registration export that contains an online course made the manager delete that line by hand before they could save the student. The same happened in "Add several at once". | Recognized as understood: it blocks nothing, invents no time, and shows a gentle note instead of an error. Only lines with **no clock time** qualify, so `Online MWF 9:00am-9:50am` or `TBA 9:00-9:50` are still reported, never silently skipped. 3 tests replace the old one. |
+| Profile photos | If two photos were chosen quickly, a slow first one could finish **after** the second and silently replace it. | The saved photo could be a different one from the last one picked. | Only the most recent choice may update the form. A test reproduces the slow-first case and was confirmed to **fail without the fix**. |
+| Docs | README, AUDIT and TEAM-WORKFLOW quoted test counts that were out of date (387/389 vs. 410); the README did not mention paste-shifts, photos, online courses, `lib/`, or `shift-import.ts`; the README **Team table was empty**; nothing pointed teammates to `TEAM-WORKFLOW.md` or `CLAUDE.md`. | A teammate reading the README would be told the wrong things. | Updated; hard-coded counts removed where they would go stale again (`npm test` prints the real number). Team table filled from the team's project document. |
+
+### The 17 acceptance criteria
+
+| # | Criterion | Status |
+| --- | --- | --- |
+| 1 | `npm install` succeeds | Yes. `npm ci --dry-run` is clean and the lockfile is in sync. |
+| 2 | `npm run dev` starts the app | Yes, run in a real browser this round. |
+| 3 | `npm run build` succeeds | Yes. |
+| 4 | Unit tests pass | Yes, 410/410. |
+| 5 | Schedule survives refresh | Yes, tested, and re-checked live for photos too. |
+| 6 | Add, edit, remove a student | Yes, tested. |
+| 7 | Paste common formats and review the result | Yes. 31 real-world lines were tried by hand this round (24-hour times, `a.m.`, en-dashes, room names, weekend and overnight rejection); the online-course case above was the only miss. |
+| 8 | Manually assign and unassign | Yes. |
+| 9 | Auto-fill respects hard rules, favors long shifts | Yes, measured in Part 2 and Part 4. |
+| 10 | Switching open hours cannot alter hour totals | Yes, tested. |
+| 11 | Gap ranges group correctly | Yes, tested. |
+| 12 | Coverage metrics correct and labeled | Yes, two labeled numbers. |
+| 13 | Works with keyboard only | Tested with real keyboard events in jsdom; **not** re-done with a real screen reader (see "not verified"). |
+| 14 | Light and dark polished | Contrast is measured for both themes. "Polished" is a judgment; the visual redesign is ongoing (ROADMAP). |
+| 15 | Mobile does not need a 5-column grid | Yes, one day at a time; checked in an emulated viewport only. |
+| 16 | No API secret in source or built assets | Yes. A scan of `src/` and `dist/` found none (the one hit is the test that contains the scanning pattern itself). |
+| 17 | Works with no AI provider and no Supabase | Yes; both are absent. |
+
+### Things the brief asked for that are **not** built (deliberately or not yet)
+
+- **The five-step import flow** (`Upload / Paste → AI Review → Draft → Manager Review → Sync`) as a visible stepper.
+  The pieces exist (paste, review before saving, auto-fill draft, approval dialog, honest sync state) but
+  they are separate screens, not one guided flow.
+- **Shifts drawn as one continuous block** in the grid (still one chip per half hour; ROADMAP).
+- **"Uncovered staff-hours" and "required early shifts still missing"** as summary tiles. The information is
+  shown per gap and per student card, not as two headline numbers.
+- **Supabase and `supabase/migrations/`.** Not added, on purpose: the brief says not to add a database "just to
+  say the project has one". The future tables and the photo-storage question are on the ROADMAP.
+- **A collapsible right panel on medium screens.** Below 1024 px the three panels become tabs; there is no
+  in-between collapse.
+- **Tailwind 4 and React 19.** The app uses Tailwind 3 and React 18 (both work and have 0 known
+  vulnerabilities). Upgrading is a project of its own, not a bug.
+
+### What this audit did not verify
+
+Nothing new was verified with a real screen reader, a physical phone, real paper for printing, a live n8n, or real
+first-year students. Those limits from earlier parts still stand.
 
 ---
 

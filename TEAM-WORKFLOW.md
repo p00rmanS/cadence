@@ -59,7 +59,7 @@ Other commands you'll use while working:
 | Command | What it does |
 | --- | --- |
 | `npm run build` | Builds the production version (and type-checks everything) |
-| `npm test` | Runs the automated test suite (389 tests as of this writing) |
+| `npm test` | Runs the whole automated test suite and prints how many passed |
 | `npm run lint` | Type-checks the code without building |
 
 Run `npm test` and `npm run lint` before you consider a change finished — both should say
