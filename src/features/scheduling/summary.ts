@@ -24,7 +24,7 @@ export type ShiftLine = {
 };
 
 export type StudentShifts = { student: Student; hours: number; shifts: ShiftLine[] };
-export type DayShifts = { day: Day; shifts: (ShiftLine & { name: string; color: string })[] };
+export type DayShifts = { day: Day; shifts: (ShiftLine & { name: string; color: string; avatar?: string })[] };
 
 function lines(assignments: ShiftBlock[], slotMinutes: number): ShiftLine[] {
   return mergeContiguousBlocks(assignments, slotMinutes).map((b) => ({ ...b, hours: (b.end - b.start) / 60 }));
@@ -50,7 +50,7 @@ export function summarizeByDay(students: Student[], assignments: ShiftBlock[], s
     day,
     shifts: all
       .filter((l) => l.day === day && byId.has(l.studentId))
-      .map((l) => ({ ...l, name: byId.get(l.studentId)!.name, color: byId.get(l.studentId)!.color }))
+      .map((l) => ({ ...l, name: byId.get(l.studentId)!.name, color: byId.get(l.studentId)!.color, avatar: byId.get(l.studentId)!.avatar }))
       .sort((a, b) => a.start - b.start || a.name.localeCompare(b.name)),
   }));
 }

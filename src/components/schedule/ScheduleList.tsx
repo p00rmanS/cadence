@@ -2,16 +2,12 @@ import { Clipboard, Printer } from "lucide-react";
 import { Button } from "../ui/Button";
 import { scheduleToText, shiftText, summarizeByDay, summarizeByStudent } from "../../features/scheduling/summary";
 import { formatRange, hoursLabel } from "../../features/scheduling/time";
-import { initials } from "../../features/scheduling/selectors";
+import { Avatar } from "../ui/Avatar";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import type { ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
-function Chip({ name, color }: { name: string; color: string }) {
-  return (
-    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded px-1 text-[11px] font-bold text-white" style={{ backgroundColor: color }} aria-hidden>
-      {initials(name)}
-    </span>
-  );
+function Chip({ name, color, avatar }: { name: string; color: string; avatar?: string }) {
+  return <Avatar name={name} color={color} avatar={avatar} size="sm" />;
 }
 
 /**
@@ -70,7 +66,7 @@ export function ScheduleList({
             {summarizeByStudent(students, assignments, settings).map(({ student, hours, shifts }) => (
               <li key={student.id} className="break-inside-avoid rounded-xl border border-line bg-panel p-3 print:mb-3">
                 <div className="flex items-center gap-2">
-                  <Chip name={student.name} color={student.color} />
+                  <Chip name={student.name} color={student.color} avatar={student.avatar} />
                   <h3 className="min-w-0 flex-1 truncate font-semibold">{student.name}</h3>
                   <span className="text-sm text-muted">{hoursLabel(hours)} a week</span>
                 </div>
@@ -99,7 +95,7 @@ export function ScheduleList({
                     {shifts.map((s) => (
                       <li key={`${s.studentId}-${s.start}`} className="flex items-center gap-3">
                         <span className="w-40 shrink-0 tabular-nums">{formatRange(s.start, s.end)}</span>
-                        <Chip name={s.name} color={s.color} />
+                        <Chip name={s.name} color={s.color} avatar={s.avatar} />
                         <span>{s.name}</span>
                       </li>
                     ))}

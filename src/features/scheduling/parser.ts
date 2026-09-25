@@ -178,6 +178,9 @@ const MERIDIEM = String.raw`[ap]\.?\s*m\.?(?![a-z])`;
 const TIME_TOKEN = String.raw`(?:noon|\d{1,2}(?::\d{2})?\s*(?:${MERIDIEM})?)`;
 const LINE_RE = new RegExp(String.raw`^([^\d]+?)\s*(${TIME_TOKEN})\s*(?:-|to|until)\s*(${TIME_TOKEN})`, "i");
 
+const NO_MEETING = /\b(online|on-line|asynchronous|async|tba|tbd|arranged|by arrangement|no meeting|does not meet|no set time|independent study)\b/i;
+const CLOCK_TIME = /\d{1,2}\s*(?::\d{2}|[ap]\.?\s*m\b)/i;
+
 /** Parses one line of pasted class-time text into a structured result (never throws). */
 export function parseMeetingLine(rawLine: string): ParsedMeetingLine {
   const raw = rawLine.trim();
@@ -187,6 +190,12 @@ export function parseMeetingLine(rawLine: string): ParsedMeetingLine {
   const cleaned = raw.replace(/\|/g, " ").replace(/[–—−]/g, "-").replace(/\s+/g, " ").trim();
   const match = LINE_RE.exec(cleaned);
   if (!match) {
+    // Registration exports list online and to-be-announced courses with no meeting time. That is
+    // not a typo to fix: there is simply nothing to keep the student out of. Only lines with no
+    // clock time in them count, so a real "MWF 9:00" line can never be skipped by mistake.
+    if (NO_MEETING.test(cleaned) && !CLOCK_TIME.test(cleaned)) {
+      return { raw, ok: true, noMeeting: true, warning: "No meeting time listed (online or to be announced), so nothing is blocked for this course." };
+    }
     return { raw, ok: false, warning: "Could not find a day + time range on this line." };
   }
   const [, dayToken, startToken, endToken] = match;
@@ -240,6 +249,10 @@ export function parseClassText(text: string): ParseResult {
   if (rawLines.length > MAX_LINES) errors.push(`Too many lines — only the first ${MAX_LINES} were read.`);
 
   for (const line of lines) {
+    if (line.ok && line.noMeeting) {
+      warnings.push(`"${line.raw}" — ${line.warning}`);
+      continue;
+    }
     if (!line.ok || !line.days || line.start == null || line.end == null) {
       errors.push(`"${line.raw}" — ${line.warning ?? "could not be read"}`);
       continue;

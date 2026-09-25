@@ -9,6 +9,7 @@ import { WelcomeDialog } from "../components/help/WelcomeDialog";
 import { StudentRail } from "../components/students/StudentRail";
 import { StudentFormSheet } from "../components/students/StudentFormSheet";
 import { BulkAddDialog } from "../components/students/BulkAddDialog";
+import { ShiftImportDialog } from "../components/schedule/ShiftImportDialog";
 import { SchedulePanel } from "../components/schedule/SchedulePanel";
 import { InsightsPanel } from "../components/summary/InsightsPanel";
 import { Button } from "../components/ui/Button";
@@ -44,6 +45,7 @@ import { clsx } from "../lib/clsx";
 type Dialog =
   | { kind: "student"; id: string | "new" }
   | { kind: "bulk" }
+  | { kind: "import-shifts" }
   | { kind: "help"; tab?: "start" | "faq" }
   | { kind: "rules" }
   | { kind: "share" }
@@ -158,6 +160,7 @@ export function App() {
         onAutoFill={() => store.runAutoFill(false)}
         onRebuild={() => store.runAutoFill(true)}
         onClearShifts={() => setDialog({ kind: "clear-shifts" })}
+        onImportShifts={() => setDialog({ kind: "import-shifts" })}
         hasAutoShifts={hasAutoShifts}
         hasShifts={assignments.length > 0}
         hasStudents={students.length > 0}
@@ -300,6 +303,17 @@ export function App() {
           onClose={() => setDialog(null)}
           onAdd={(rows) => {
             store.addStudents(rows);
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === "import-shifts" && (
+        <ShiftImportDialog
+          students={students}
+          slotMinutes={settings.slotMinutes}
+          onClose={() => setDialog(null)}
+          onAdd={(entries) => {
+            store.importShifts(entries);
             setDialog(null);
           }}
         />

@@ -1,0 +1,14 @@
+# Netlify build settings for ShiftFit, kept in the repository so nobody has to remember them.
+# Values here override the same settings typed into the Netlify website.
+
+[build]
+  # `npm run build` type-checks the code, then builds the site into the `dist` folder.
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # The build tool (Vite 8) needs Node 20.19 or newer; Netlify's default can be older.
+  NODE_VERSION = "22"
+
+# Do NOT set VITE_AUTOMATION_API_URL here or on Netlify until an n8n server exists.
+# Anything starting with VITE_ is bundled into the public website, so never put a secret in one.

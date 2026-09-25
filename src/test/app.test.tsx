@@ -1056,3 +1056,89 @@ describe("accessibility rules", () => {
     }
   });
 });
+
+describe("paste existing shifts", () => {
+  it("previews the pasted lines, then places them as one undoable step", async () => {
+    const { user } = boot();
+    await user.click(screen.getByRole("button", { name: /paste existing shifts/i }));
+    const dialog = screen.getByRole("dialog", { name: /paste shifts you already have/i });
+    expect((within(dialog).getByRole("button", { name: "Add shifts" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await user.type(within(dialog).getByLabelText("One student per line"), "Leilani P.: M 8:00am-9:00am{Enter}Nobody: M 8:00am-9:00am");
+    expect(dialog.textContent).toMatch(/1 of 2 lines, 1 will be skipped/);
+    expect(dialog.textContent).toMatch(/No student named "Nobody"/);
+
+    await user.click(within(dialog).getByRole("button", { name: "Add 1 shift" }));
+    expect(screen.queryByRole("dialog", { name: /paste shifts/i })).toBeNull();
+    expect(toast().textContent).toMatch(/Added 1 hour of pasted shifts/);
+    expect(cell(/^Monday 8:00am to 8:30am/).getAttribute("aria-label")).toMatch(/Leilani P\./);
+  });
+});
+
+describe("student photos", () => {
+  const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD";
+
+  function fakeImagePipeline() {
+    (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap = async () => ({ width: 400, height: 300, close() {} });
+    HTMLCanvasElement.prototype.getContext = (() => ({ fillRect() {}, drawImage() {}, fillStyle: "" })) as never;
+    HTMLCanvasElement.prototype.toDataURL = (() => JPEG) as never;
+  }
+
+  async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Edit Troy C." }));
+    return screen.getByRole("dialog", { name: /edit troy c\./i });
+  }
+
+  it("refuses a file that is not a photo or is over 5 MB, and says why", async () => {
+    const { user } = boot();
+    const dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "notes.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/PNG, JPG or WebP/));
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/bigger than 5 MB/));
+    expect(within(dialog).queryByRole("button", { name: "Remove photo" })).toBeNull();
+  });
+
+  it("keeps the LAST photo chosen even when an earlier, slower one finishes after it", async () => {
+    const A = "data:image/jpeg;base64,/9j/AAAA";
+    const B = "data:image/jpeg;base64,/9j/BBBB";
+    const finish: Record<string, () => void> = {};
+    let lastDrawn = "";
+    (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap = (file: File) =>
+      new Promise((resolve) => {
+        finish[file.name] = () => resolve({ width: 100, height: 100, close() {}, tag: file.name });
+      });
+    HTMLCanvasElement.prototype.getContext = (() => ({ fillRect() {}, drawImage(b: { tag: string }) { lastDrawn = b.tag; }, fillStyle: "" })) as never;
+    HTMLCanvasElement.prototype.toDataURL = (() => (lastDrawn === "slow.png" ? A : B)) as never;
+
+    const { user } = boot();
+    const dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "slow.png", { type: "image/png" })] } });
+    fireEvent.change(input, { target: { files: [new File(["x"], "fast.png", { type: "image/png" })] } });
+    finish["fast.png"]();
+    await waitFor(() => expect(dialog.querySelector(`img[src="${B}"]`)).toBeTruthy());
+    finish["slow.png"]();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(dialog.querySelector(`img[src="${B}"]`)).toBeTruthy();
+    expect(dialog.querySelector(`img[src="${A}"]`)).toBeNull();
+  });
+
+  it("saves a chosen photo onto the student's card, and Remove photo takes it off again", async () => {
+    fakeImagePipeline();
+    const { user } = boot();
+    let dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "me.png", { type: "image/png" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Change photo" })).toBeTruthy());
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(document.querySelector(`img[src="${JPEG}"]`)).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem("shiftfit:state")!).students[0].avatar).toBe(JPEG);
+
+    dialog = await openEditor(user);
+    await user.click(within(dialog).getByRole("button", { name: "Remove photo" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(document.querySelector(`img[src="${JPEG}"]`)).toBeNull();
+  });
+});

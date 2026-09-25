@@ -1,4 +1,5 @@
 import { MAX_ASSIGNMENTS, MAX_STUDENTS, STUDENT_COLORS } from "./constants";
+import { isValidAvatar } from "../../lib/image";
 import { isIsoDate, isValidTimeZone } from "./time";
 import { DAYS } from "./types";
 import type {
@@ -118,6 +119,8 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       id: s.id as string,
       name: (s.name as string).trim(),
       color,
+      // A photo that is not a thumbnail this app made (wrong type, too long, hand-edited) is dropped and initials show instead.
+      ...(isValidAvatar(s.avatar) ? { avatar: s.avatar } : {}),
       preference,
       daysPerWeek: s.daysPerWeek as number,
       classText: typeof s.classText === "string" ? s.classText.slice(0, 5000) : "",
