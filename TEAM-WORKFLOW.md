@@ -12,6 +12,14 @@ you have never used Git or GitHub before. Every command below is one you type in
 If you get stuck on any step, stop and ask in the team chat before guessing — Git mistakes are
 almost always fixable, but it's easier to fix them before more work is piled on top.
 
+> **Never use GitHub's "Download ZIP" button, and never work in a copy of the project someone sent you
+> as a ZIP.** A ZIP has no history and no connection to GitHub, so your work can't be pushed or reviewed,
+> and it can quietly overwrite other people's newer changes. Always **clone** (step 2 below).
+>
+> **You can't push straight to `master`.** GitHub blocks it on purpose (see
+> [`docs/GITHUB-SETTINGS.md`](docs/GITHUB-SETTINGS.md)). Every change goes through a branch and a pull
+> request that another person approves.
+
 ---
 
 ## 1. James: invite your teammates to the repository
@@ -38,17 +46,25 @@ Do this once, the first time you set up the project on a computer.
 
 1. **Install Git**, if you don't have it: https://git-scm.com/downloads
 2. **Install Node.js** (needed to run the app), if you don't have it: https://nodejs.org
-   (the LTS version is fine).
-3. **Clone the repository** — this downloads a full copy of the project:
+   (the LTS version is fine; it must be Node 20.19 or newer. Check with `node --version`).
+3. **Sign in to GitHub from your terminal** (once per computer). Install the GitHub tool
+   (Mac: `brew install gh`, Windows: `winget install --id GitHub.cli`), then run `gh auth login` and
+   choose GitHub.com, HTTPS, and "Login with a web browser". Then tell Git who you are, using your own
+   name and the email on your GitHub account:
+   ```bash
+   git config --global user.name "Your Name"
+   git config --global user.email "you@example.com"
+   ```
+4. **Clone the repository** — this downloads a full copy of the project:
    ```bash
    git clone https://github.com/p00rmanS/cadence.git
    cd cadence
    ```
-4. **Install the project's dependencies** (libraries the app needs — this reads `package.json`):
+5. **Install the project's dependencies** (libraries the app needs — this reads `package.json`):
    ```bash
    npm install
    ```
-5. **Run the app locally**, to check it works:
+6. **Run the app locally**, to check it works:
    ```bash
    npm run dev
    ```
