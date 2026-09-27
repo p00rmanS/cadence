@@ -38,14 +38,14 @@ export function nextStep(input: GuidanceInput): Guidance {
     return {
       tone: "start",
       title: "Start here: add your first student",
-      body: "Type a name and paste the times they have class. ShiftFit will keep them out of those times.",
+      body: "Type a name and paste the times they have class. Cadence will keep them out of those times.",
       action: { label: "Add a student", kind: "add-student" },
     };
   }
   if (input.shiftCount === 0) {
     return {
       tone: "todo",
-      title: "Next: let ShiftFit fill the week",
+      title: "Next: let Cadence fill the week",
       body: "Press the button and it will place shifts for everyone around classes and lunch. You can change anything after.",
       action: { label: "Fill schedule for me", kind: "auto-fill" },
     };

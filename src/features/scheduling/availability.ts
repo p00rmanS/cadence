@@ -1,8 +1,9 @@
 import type { BusyBlock, ConstraintViolation, Day, Minutes, ScheduleSettings, ShiftBlock, Student } from "./types";
 import { DAY_LABEL } from "./types";
 import { DAYS } from "./types";
-import { MIN_OPENING_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
-import { formatMinutes, hoursLabel } from "./time";
+import { DEVOTIONAL, MIN_OPENING_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
+import { isDevotional, weeklyLimit } from "./term";
+import { formatMinutes, formatRange, hoursLabel } from "./time";
 
 /**
  * ============================================================================
@@ -108,6 +109,9 @@ export function blockedBySlot(
   slotStart: Minutes,
   settings: ScheduleSettings,
 ): ConstraintViolation | null {
+  if (isDevotional(day, slotStart, settings)) {
+    return { code: "devotional", message: `can't work during Tuesday devotional (${formatRange(DEVOTIONAL.start, DEVOTIONAL.end)})` };
+  }
   const busy = busyBlockAt(student, day, slotStart, settings.slotMinutes);
   if (busy) {
     return busy.source === "class"
@@ -137,8 +141,8 @@ export function softViolations(
 ): ConstraintViolation[] {
   if (blockedBySlot(student, day, slotStart, settings) || isAssigned(student.id, day, slotStart, assignments)) return [];
   const out: ConstraintViolation[] = [];
-  if (assignedHours(student.id, assignments, settings) >= settings.weeklyTargetHours) {
-    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(settings.weeklyTargetHours)}` });
+  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
+    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` });
   }
   if (!canUseDay(student, day, assignments, settings)) {
     out.push({ code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` });
@@ -158,11 +162,34 @@ export function canAssign(
   if (isAssigned(student.id, day, slotStart, assignments)) {
     return { code: "already_assigned", message: "is already working this slot" };
   }
-  if (assignedHours(student.id, assignments, settings) >= settings.weeklyTargetHours) {
-    return { code: "over_weekly_target", message: `is already at ${hoursLabel(settings.weeklyTargetHours)}` };
+  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
+    return { code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` };
   }
   if (!canUseDay(student, day, assignments, settings)) {
     return { code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` };
   }
   return null;
+}
+
+/**
+ * One student's shifts on one day, merged into continuous runs ("9:00am–11:00am").
+ * Used to enforce MIN_SHIFT_MINUTES, which is about whole shifts, not single boxes.
+ */
+export function shiftRuns(
+  studentId: string,
+  day: Day,
+  assignments: ShiftBlock[],
+  settings: ScheduleSettings,
+): { start: Minutes; end: Minutes }[] {
+  const starts = studentAssignments(studentId, assignments)
+    .filter((a) => a.day === day)
+    .map((a) => a.start)
+    .sort((a, b) => a - b);
+  const runs: { start: Minutes; end: Minutes }[] = [];
+  for (const start of starts) {
+    const last = runs[runs.length - 1];
+    if (last && last.end === start) last.end = start + settings.slotMinutes;
+    else if (!last || last.end < start) runs.push({ start, end: start + settings.slotMinutes });
+  }
+  return runs;
 }

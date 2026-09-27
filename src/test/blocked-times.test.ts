@@ -41,7 +41,7 @@ describe("other times a student can't work", () => {
 
   it("are flagged if a shift is later left on top of one", () => {
     const s = makeStudent({ name: "Ana", busy: [{ day: "wed", start: 14 * 60, end: 15 * 60, source: "manual" }] });
-    const issues = findIssues([s], run("s1", "wed", 14 * 60, 15 * 60), settings);
+    const issues = findIssues([s], run("s1", "wed", 14 * 60, 16 * 60), settings);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ code: "unavailable", overridden: false });
     expect(issues[0].message).toBe("Ana is marked unavailable then: Wed 2:00pm–3:00pm.");

@@ -17,12 +17,12 @@ export function WelcomeDialog({
 }) {
   const steps = [
     { icon: UserPlus, title: "Add your students", body: "Type a name and paste the times they have class." },
-    { icon: Sparkles, title: "Let ShiftFit fill the week", body: "It places shifts around classes and lunch for you." },
+    { icon: Sparkles, title: "Let Cadence fill the week", body: "It places shifts around classes and lunch for you." },
     { icon: CalendarCheck, title: "Fix the pink spots", body: "Pink means nobody is working then. Click to add someone." },
   ];
   return (
     <Modal
-      title="Welcome to ShiftFit"
+      title="Welcome to Cadence"
       description="Make a work schedule that fits around everyone's classes. It takes about two minutes to try."
       onClose={onExploreSample}
       footer={

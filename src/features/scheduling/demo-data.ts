@@ -8,7 +8,7 @@ import type { Day, ShiftBlock, Student } from "./types";
  *  SAMPLE DATA FOR THE WELCOME/DEMO STATE
  * ============================================================================
  * Six made-up students with made-up class schedules, used to show a new
- * manager what a filled-in ShiftFit looks like before they've added anyone
+ * manager what a filled-in Cadence looks like before they've added anyone
  * real. This is the ONLY file with fake names in it — nothing here is a real
  * BYU–Hawaii student (see the README's Privacy section).
  */
@@ -69,8 +69,8 @@ export function buildDemoData(): { students: Student[]; assignments: ShiftBlock[
     ...range("s1", "mon", 12 * 60 + 30, 15 * 60),
     ...range("s1", "wed", 8 * 60, 12 * 60),
     ...range("s1", "wed", 12 * 60 + 30, 15 * 60),
-    ...range("s1", "fri", 7 * 60, 12 * 60),
-    ...range("s1", "fri", 12 * 60 + 30, 13 * 60 + 30),
+    ...range("s1", "fri", 7 * 60, 11 * 60),
+    ...range("s1", "fri", 12 * 60 + 30, 14 * 60 + 30),
   ];
 
   return { students: [troy, leilani, kekoa, mele, tanvi, josefa], assignments };

@@ -6,7 +6,7 @@ import type { Day, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from 
  * ============================================================================
  *  THE "CONTRACT" WITH THE CALENDAR-PUBLISHING SERVER (n8n)
  * ============================================================================
- * ShiftFit itself never talks to Google Calendar. Instead, when the manager
+ * Cadence itself never talks to Google Calendar. Instead, when the manager
  * presses "Save & share" -> publish, this app sends a plain description of
  * the approved shifts to a separate server (an automation tool called n8n —
  * see `docs/N8N_ARCHITECTURE.md` and the `n8n/` folder) which is responsible

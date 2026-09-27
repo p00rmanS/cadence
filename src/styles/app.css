@@ -65,6 +65,12 @@ body,
   height: 100%;
 }
 
+/* Slightly larger than the browser's 16px so the whole app (text, buttons and spacing all
+   scale with it) is easier to read for managers who don't use screens all day. */
+html {
+  font-size: 17px;
+}
+
 body {
   margin: 0;
   background: rgb(var(--bg));

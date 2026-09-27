@@ -45,7 +45,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Missing settings.");
     return null;
   }
-  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours } = input;
+  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term } = input;
   if (!isMinutes(openTime) || !isMinutes(closeTime) || openTime >= closeTime) {
     errors.push("Settings: open and close times must be valid, with opening before closing.");
     return null;
@@ -62,7 +62,8 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Settings: the weekly hour target must be between 0 and 40.");
     return null;
   }
-  return { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours };
+  // Schedules saved before the Semester/Break switch existed have no term; they were made for the semester.
+  return { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term: term === "break" ? "break" : "semester" };
 }
 
 function readBusy(input: unknown, label: string, errors: string[]): BusyBlock[] | null {
@@ -156,6 +157,55 @@ function readSemester(input: unknown, errors: string[]): SemesterConfig | null {
 }
 
 /**
+ * Reads one list of shifts from a backup, keeping only valid shifts for known students.
+ * Returns null when the list itself is unusable (the error is recorded instead).
+ */
+function readShifts(list: unknown, students: Student[] | null, prefix: string, errors: string[], notes: string[]): ShiftBlock[] | null {
+  if (!Array.isArray(list)) {
+    errors.push(`${prefix}assignments must be a list.`);
+    return null;
+  }
+  if (list.length > MAX_ASSIGNMENTS) {
+    errors.push(`${prefix}Too many shifts (limit ${MAX_ASSIGNMENTS}).`);
+    return null;
+  }
+  if (!students) return null;
+  const known = new Set(students.map((s) => s.id));
+  const seen = new Set<string>();
+  const out: ShiftBlock[] = [];
+  let orphans = 0;
+  let duplicates = 0;
+  for (const [i, a] of list.entries()) {
+    if (!isRecord(a) || typeof a.studentId !== "string" || !isDay(a.day) || !isMinutes(a.start) || a.start % 30 !== 0) {
+      errors.push(`${prefix}Shift #${i + 1} is not valid.`);
+      if (errors.length >= MAX_ERRORS) break;
+      continue;
+    }
+    if (!known.has(a.studentId)) {
+      orphans++;
+      continue;
+    }
+    const key = `${a.studentId}|${a.day}|${a.start}`;
+    if (seen.has(key)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(key);
+    out.push({
+      id: typeof a.id === "string" && a.id ? a.id.slice(0, 120) : `shift-${key}`,
+      studentId: a.studentId,
+      day: a.day,
+      start: a.start,
+      source: a.source === "autofill" ? "autofill" : "manual",
+      ...(a.override === true ? { override: true } : {}),
+    });
+  }
+  if (orphans) notes.push(`${prefix}Skipped ${orphans} shift${orphans === 1 ? "" : "s"} that belonged to students not in the file.`);
+  if (duplicates) notes.push(`${prefix}Skipped ${duplicates} duplicate shift${duplicates === 1 ? "" : "s"}.`);
+  return out;
+}
+
+/**
  * Validates a backup/localStorage blob BEFORE it can reach application state, and
  * returns a sanitized copy (unknown fields stripped, orphan shifts dropped) instead
  * of trusting the file. `notes` lists anything that was quietly dropped.
@@ -163,56 +213,21 @@ function readSemester(input: unknown, errors: string[]): SemesterConfig | null {
 export function validatePersistedState(input: unknown): ValidationResult<PersistedStateV1> {
   const errors: string[] = [];
   const notes: string[] = [];
-  if (!isRecord(input)) return { ok: false, errors: ["That file is not a ShiftFit backup."] };
+  if (!isRecord(input)) return { ok: false, errors: ["That file is not a Cadence backup."] };
   if (input.version !== 1) errors.push(`Unsupported backup version: ${String(input.version)}.`);
 
   const settings = readSettings(input.settings, errors);
   const students = readStudents(input.students, errors);
   const semester = readSemester(input.semester, errors);
 
-  let assignments: ShiftBlock[] = [];
-  if (!Array.isArray(input.assignments)) {
-    errors.push("assignments must be a list.");
-  } else if (input.assignments.length > MAX_ASSIGNMENTS) {
-    errors.push(`Too many shifts (limit ${MAX_ASSIGNMENTS}).`);
-  } else if (students) {
-    const known = new Set(students.map((s) => s.id));
-    const seen = new Set<string>();
-    let orphans = 0;
-    let duplicates = 0;
-    for (const [i, a] of input.assignments.entries()) {
-      if (!isRecord(a) || typeof a.studentId !== "string" || !isDay(a.day) || !isMinutes(a.start) || a.start % 30 !== 0) {
-        errors.push(`Shift #${i + 1} is not valid.`);
-        if (errors.length >= MAX_ERRORS) break;
-        continue;
-      }
-      if (!known.has(a.studentId)) {
-        orphans++;
-        continue;
-      }
-      const key = `${a.studentId}|${a.day}|${a.start}`;
-      if (seen.has(key)) {
-        duplicates++;
-        continue;
-      }
-      seen.add(key);
-      assignments.push({
-        id: typeof a.id === "string" && a.id ? a.id.slice(0, 120) : `shift-${key}`,
-        studentId: a.studentId,
-        day: a.day,
-        start: a.start,
-        source: a.source === "autofill" ? "autofill" : "manual",
-        ...(a.override === true ? { override: true } : {}),
-      });
-    }
-    if (orphans) notes.push(`Skipped ${orphans} shift${orphans === 1 ? "" : "s"} that belonged to students not in the file.`);
-    if (duplicates) notes.push(`Skipped ${duplicates} duplicate shift${duplicates === 1 ? "" : "s"}.`);
-  }
+  const assignments = readShifts(input.assignments, students, "", errors, notes) ?? [];
+  // Optional: older saved data has only one schedule.
+  const otherTermAssignments =
+    input.otherTermAssignments === undefined ? [] : (readShifts(input.otherTermAssignments, students, "In the other schedule: ", errors, notes) ?? []);
 
   if (errors.length || !settings || !students) {
-    return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a ShiftFit backup."] };
+    return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a Cadence backup."] };
   }
-  if (!Array.isArray(input.assignments)) assignments = [];
 
   const selected = typeof input.selectedStudentId === "string" && students.some((s) => s.id === input.selectedStudentId);
   return {
@@ -223,6 +238,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
       settings,
       students,
       assignments,
+      otherTermAssignments,
       selectedStudentId: selected ? (input.selectedStudentId as string) : (students[0]?.id ?? null),
       semester,
     },

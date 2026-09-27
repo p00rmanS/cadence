@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { assignedHours } from "../features/scheduling/availability";
 import { DEFAULT_SETTINGS } from "../features/scheduling/constants";
 import { findIssues } from "../features/scheduling/issues";
+import { validatePersistedState } from "../features/scheduling/validation";
 import { initialState, reducer } from "../hooks/useShiftFitStore";
 import type { Action, NewStudentInput, State } from "../hooks/useShiftFitStore";
 
@@ -74,19 +75,20 @@ describe("clicking the schedule", () => {
   });
 
   it("asks first before going over the weekly hours, and flags it once confirmed", () => {
-    let s = apply(withNoa(), { type: "SET_SETTINGS", settings: { weeklyTargetHours: 1 } }, { type: "TOGGLE_SLOT", day: "tue", start: 600 }, { type: "TOGGLE_SLOT", day: "tue", start: 630 });
-    expect(assignedHours("n1", s.doc.assignments, s.doc.settings)).toBe(1);
-    s = apply(s, { type: "TOGGLE_SLOT", day: "tue", start: 660 });
-    expect(s.pendingOverride?.message).toMatch(/already at 1 hour./);
-    expect(s.doc.assignments).toHaveLength(2); // nothing added yet
+    const thu = (start: number): Action => ({ type: "TOGGLE_SLOT", day: "thu", start });
+    let s = apply(withNoa(), { type: "SET_SETTINGS", settings: { weeklyTargetHours: 2 } }, thu(600), thu(630), thu(660), thu(690));
+    expect(assignedHours("n1", s.doc.assignments, s.doc.settings)).toBe(2);
+    s = apply(s, thu(720));
+    expect(s.pendingOverride?.message).toMatch(/already at 2 hours./);
+    expect(s.doc.assignments).toHaveLength(4); // nothing added yet
 
     const cancelled = apply(s, { type: "CANCEL_OVERRIDE" });
     expect(cancelled.pendingOverride).toBeNull();
-    expect(cancelled.doc.assignments).toHaveLength(2);
+    expect(cancelled.doc.assignments).toHaveLength(4);
 
     const confirmed = apply(s, { type: "CONFIRM_OVERRIDE" });
-    expect(confirmed.doc.assignments).toHaveLength(3);
-    expect(confirmed.doc.assignments[2].override).toBe(true);
+    expect(confirmed.doc.assignments).toHaveLength(5);
+    expect(confirmed.doc.assignments[4].override).toBe(true);
     const issues = findIssues(confirmed.doc.students, confirmed.doc.assignments, confirmed.doc.settings);
     expect(issues.every((i) => i.overridden)).toBe(true);
   });
@@ -107,9 +109,9 @@ describe("ranges", () => {
   const withNoa = () => apply(empty, { type: "ADD_STUDENT", id: "n1", input: noa });
 
   it("fills a stretch and clears it again", () => {
-    let s = apply(withNoa(), { type: "SET_RANGE", day: "tue", from: 600, to: 720, assign: true });
+    let s = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 720, assign: true });
     expect(s.doc.assignments).toHaveLength(5); // 10:00 .. 12:00 inclusive of the last box
-    s = apply(s, { type: "SET_RANGE", day: "tue", from: 720, to: 600, assign: false });
+    s = apply(s, { type: "SET_RANGE", day: "thu", from: 720, to: 600, assign: false });
     expect(s.doc.assignments).toHaveLength(0);
   });
 
@@ -256,5 +258,66 @@ describe("adding several students", () => {
 
   it("does nothing for an empty list", () => {
     expect(apply(empty, { type: "ADD_STUDENTS", entries: [] }).doc.students).toHaveLength(0);
+  });
+});
+
+describe("separate semester and break schedules", () => {
+  const withNoa = () => apply(empty, { type: "ADD_STUDENT", id: "n1", input: noa });
+  const toBreak: Action = { type: "SET_SETTINGS", settings: { term: "break" } };
+  const toSemester: Action = { type: "SET_SETTINGS", settings: { term: "semester" } };
+  const starts = (s: State) => s.doc.assignments.map((a) => `${a.day} ${a.start}`).sort();
+
+  it("keeps the semester schedule untouched while the break schedule is edited", () => {
+    const semester = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 690, assign: true });
+    const semesterShifts = starts(semester);
+    expect(semesterShifts).toHaveLength(4);
+
+    let s = apply(semester, toBreak);
+    expect(s.doc.assignments).toEqual([]); // the break schedule starts empty
+    expect(s.toast?.message).toMatch(/Showing the break schedule.*semester schedule is kept as it was/);
+    s = apply(s, { type: "SET_RANGE", day: "mon", from: 13 * 60, to: 14 * 60 + 30, assign: true }, { type: "AUTOFILL", replace: false });
+    const breakShifts = starts(s);
+    expect(breakShifts.length).toBeGreaterThan(4);
+
+    s = apply(s, toSemester);
+    expect(starts(s)).toEqual(semesterShifts);
+    s = apply(s, toBreak);
+    expect(starts(s)).toEqual(breakShifts);
+  });
+
+  it("undoes a switch like any other change", () => {
+    const semester = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 690, assign: true });
+    const back = apply(semester, toBreak, { type: "UNDO" });
+    expect(back.doc.settings.term).toBe("semester");
+    expect(starts(back)).toEqual(starts(semester));
+  });
+
+  it("clearing shifts only clears the schedule that is showing", () => {
+    let s = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 690, assign: true }, toBreak);
+    s = apply(s, { type: "SET_RANGE", day: "mon", from: 600, to: 690, assign: true }, { type: "CLEAR_SHIFTS" });
+    expect(s.doc.assignments).toEqual([]);
+    expect(s.toast?.message).toMatch(/Cleared all shifts in the break schedule\. The other schedule is untouched/);
+    expect(starts(apply(s, toSemester))).toHaveLength(4);
+  });
+
+  it("removing a student removes their shifts from both schedules", () => {
+    let s = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 690, assign: true }, toBreak);
+    s = apply(s, { type: "SET_RANGE", day: "mon", from: 600, to: 690, assign: true }, { type: "REMOVE_STUDENT", id: "n1" });
+    expect(s.doc.assignments).toEqual([]);
+    expect(s.doc.otherTermAssignments).toEqual([]);
+  });
+
+  it("a backup keeps both schedules", () => {
+    let s = apply(withNoa(), { type: "SET_RANGE", day: "thu", from: 600, to: 690, assign: true }, toBreak);
+    s = apply(s, { type: "SET_RANGE", day: "mon", from: 600, to: 690, assign: true });
+    const saved = validatePersistedState(
+      JSON.parse(JSON.stringify({ version: 1, settings: s.doc.settings, students: s.doc.students, assignments: s.doc.assignments, otherTermAssignments: s.doc.otherTermAssignments, selectedStudentId: "n1", semester: null })),
+    );
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const loaded = apply(empty, { type: "LOAD_STATE", state: saved.value, notes: [] });
+    expect(loaded.doc.settings.term).toBe("break");
+    expect(starts(loaded)).toEqual(["mon 600", "mon 630", "mon 660", "mon 690"]);
+    expect(starts(apply(loaded, toSemester))).toEqual(["thu 600", "thu 630", "thu 660", "thu 690"]);
   });
 });

@@ -1,4 +1,4 @@
-import { blockedBySlot, daySlots, hasOpeningShift } from "./availability";
+import { blockedBySlot, daySlots, hasOpeningShift, shiftRuns } from "./availability";
 import {
   MAX_SHIFT_MINUTES,
   MIN_OPENING_SHIFT_MINUTES,
@@ -6,7 +6,8 @@ import {
   OPENING_SHIFT_START,
   RELAXED_DAY_EXTRA_HOURS,
 } from "./constants";
-import { formatMinutes, formatRange } from "./time";
+import { isDevotional, weeklyLimit } from "./term";
+import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
 import type {
   AutoFillExplanation,
@@ -146,9 +147,15 @@ function preferenceMismatches(student: Student, slotStarts: Minutes[]): number {
   return 0;
 }
 
-/** Soft per-day hour cap so top-up doesn't pile every remaining hour onto one day. */
+/** Soft per-day hour cap so top-up doesn't pile every remaining hour onto one day. Never below one minimum-length shift. */
 function dayCapHours(student: Student, settings: ScheduleSettings): number {
-  return Math.ceil(settings.weeklyTargetHours / student.daysPerWeek) + settings.slotMinutes / 60;
+  return Math.max(MIN_SHIFT_MINUTES / 60, Math.ceil(weeklyLimit(settings) / student.daysPerWeek) + settings.slotMinutes / 60);
+}
+
+/** True when `a` should win over `b`: compares the first number, then the next only on a tie, and so on. */
+function rankedBefore(a: number[], b: number[]): boolean {
+  const i = a.findIndex((v, k) => v !== b[k]);
+  return i >= 0 && a[i] < b[i];
 }
 
 function compareCandidates(a: Candidate, b: Candidate): number {
@@ -173,7 +180,10 @@ function compareCandidates(a: Candidate, b: Candidate): number {
  * Phase 3 (top-up): bring everyone toward the weekly target, in the thinnest-covered
  *   time, preferring to extend an existing shift over starting a new one.
  *
- * Hard rules (class, cutoff, lunch, weekly limit, days per week) are never broken.
+ * Hard rules (class, cutoff, lunch, devotional, weekly limit, days per week, 2-hour
+ * minimum shift) are never broken.
+ *
+ * During a break the weekly limit rises to 40 hours, and top-up aims for that full 40.
  */
 export function autoFill(
   students: Student[],
@@ -182,12 +192,16 @@ export function autoFill(
   options: AutoFillOptions = {},
 ): AutoFillResult {
   const base = options.replaceAutoFilled ? existingAssignments.filter((a) => a.source === "manual") : existingAssignments;
-  const plan = new Plan(settings, base);
+  // `let`, not `const`: phase 4 may rebuild the plan after moving part of a shift.
+  let plan = new Plan(settings, base);
   const slots = daySlots(settings);
   const slotHours = settings.slotMinutes / 60;
   const minSlots = Math.ceil(MIN_SHIFT_MINUTES / settings.slotMinutes);
   const maxSlots = Math.max(minSlots, Math.floor(MAX_SHIFT_MINUTES / settings.slotMinutes));
   const explanations: AutoFillExplanation[] = [];
+  const limit = weeklyLimit(settings);
+  // Auto-fill aims for the full limit: 19 hours in the semester, 40 during a break.
+  const aim = limit;
 
   const runBefore = (student: Student, day: Day, startSlot: Minutes): number => {
     let n = 0;
@@ -224,7 +238,7 @@ export function autoFill(
       if (blockedBySlot(student, day, s, settings) || plan.has(student.id, day, s)) return null;
     }
     const addedHours = len * slotHours;
-    if (plan.hours(student.id) + addedHours > settings.weeklyTargetHours) return null;
+    if (plan.hours(student.id) + addedHours > limit) return null;
     if (plan.hoursOn(student.id, day) === 0 && plan.daysUsed(student.id) >= student.daysPerWeek) return null;
     if (plan.hoursOn(student.id, day) + addedHours > dayCapHours(student, settings) + extraDayHours) return null;
 
@@ -243,11 +257,12 @@ export function autoFill(
     const touches = before > 0 || after > 0;
     const splitShift = plan.hoursOn(student.id, day) > 0 && !touches;
     const mergedRun = len + before + after;
+    // Every shift must be at least MIN_SHIFT_MINUTES once joined to any shift it touches.
+    if (mergedRun < minSlots) return null;
 
     let score = 0;
     if (phase === "coverage") score += -gain * 10 + over * 4 + plan.hours(student.id) * 0.5;
     else score += (staffSum / len) * 10 - len * 0.5;
-    if (len < minSlots && !touches) score += 30;
     if (splitShift) score += 25;
     if (touches) score -= 10;
     if (mergedRun > maxSlots) score += 4 * (mergedRun - maxSlots);
@@ -308,7 +323,7 @@ export function autoFill(
     if (!placed) {
       openingShiftUnmet.push({
         studentId: student.id,
-        reason: `No day has ${MIN_OPENING_SHIFT_MINUTES / 60} free hour in a row at ${formatMinutes(OPENING_SHIFT_START)} (classes, cutoff, lunch or hour limits are in the way).`,
+        reason: `No day has ${hoursLabel(Math.max(MIN_OPENING_SHIFT_MINUTES, MIN_SHIFT_MINUTES) / 60)} free in a row from ${formatMinutes(OPENING_SHIFT_START)} (classes, cutoff, lunch or hour limits are in the way).`,
       });
     }
   }
@@ -323,6 +338,7 @@ export function autoFill(
   // ---------------------------------------------------------------------------
   for (const day of DAYS) {
     for (let i = 0; i < slots.length; i++) {
+      if (isDevotional(day, slots[i], settings)) continue;
       while (plan.staff(day, slots[i]) < settings.minStaffPerSlot) {
         let best: Candidate | null = null;
         for (let studentIndex = 0; studentIndex < students.length; studentIndex++) {
@@ -350,9 +366,8 @@ export function autoFill(
   // weekly hours. For each student, keep adding their best-scoring remaining
   // block (preferring to extend an existing shift and spread hours evenly
   // across days) until they hit their target or nothing more can be placed
-  // without breaking a rule — in which case they're reported in `unmet`.
+  // without breaking a rule.
   // ---------------------------------------------------------------------------
-  const unmet: AutoFillResult["unmet"] = [];
   for (let studentIndex = 0; studentIndex < students.length; studentIndex++) {
     const student = students[studentIndex];
     let guard = slots.length * DAYS.length;
@@ -368,19 +383,119 @@ export function autoFill(
       }
       return found;
     };
-    while (plan.hours(student.id) < settings.weeklyTargetHours && guard-- > 0) {
+    while (plan.hours(student.id) < aim && guard-- > 0) {
       // Prefer an even spread across days; only stretch a day if that is the only way to reach the target.
       const best = findBest(0) ?? findBest(RELAXED_DAY_EXTRA_HOURS);
       if (best === null) break;
-      place(best, "top-up", `Adds hours for ${student.name} toward ${settings.weeklyTargetHours} hrs, in the least-covered time.`);
+      place(best, "top-up", `Adds hours for ${student.name} toward ${aim} hrs, in the least-covered time.`);
     }
-    if (plan.hours(student.id) < settings.weeklyTargetHours) {
-      unmet.push({
+  }
+
+  // ---------------------------------------------------------------------------
+  // PHASE 4 — close small shortfalls by moving part of a shift.
+  // Because no shift may be shorter than MIN_SHIFT_MINUTES, a student can end up
+  // a little short (say 18.5 of 19): the last half hour can't be a shift of its
+  // own. So we shorten one of their automatic shifts and give them a new, longer
+  // shift elsewhere, so the total comes out exact. The part we shorten must be
+  // time someone else is also working, so no hour loses coverage. Shifts the
+  // manager placed by hand are never changed.
+  // ---------------------------------------------------------------------------
+  const slotSet = (blocks: readonly ShiftBlock[], studentId: string) =>
+    new Set(blocks.filter((b) => b.studentId === studentId).map((b) => `${b.day}|${b.start}`));
+
+  /** The best "shorten this, add that" change that brings the student exactly to `aim`, or null. */
+  function findMove(student: Student) {
+    const missing = Math.round((aim - plan.hours(student.id)) / slotHours);
+    if (missing <= 0) return null;
+    const mine = plan.blocks.filter((b) => b.studentId === student.id);
+
+    // Ways to shorten a shift: nothing at all (the first entry, whose day is unused), or
+    // 1+ boxes off either end of an automatic shift, never below the minimum length.
+    const trims: { day: Day; boxes: Minutes[] }[] = [{ day: "mon", boxes: [] }];
+    for (const day of DAYS) {
+      for (const run of shiftRuns(student.id, day, mine, settings)) {
+        const boxes = mine.filter((b) => b.day === day && b.start >= run.start && b.start < run.end).sort((a, b) => a.start - b.start);
+        if (boxes.some((b) => b.source !== "autofill")) continue;
+        for (let t = 1; t <= boxes.length - minSlots; t++) {
+          for (const cut of [boxes.slice(-t), boxes.slice(0, t)]) {
+            if (cut.every((b) => plan.staff(day, b.start) > settings.minStaffPerSlot)) trims.push({ day, boxes: cut.map((b) => b.start) });
+          }
+        }
+      }
+    }
+
+    let best: { trim: (typeof trims)[number]; day: Day; startIdx: number; len: number; rank: number[] } | null = null;
+    for (const trim of trims) {
+      const cut = new Set(trim.boxes.map((m) => `${trim.day}|${m}`));
+      const kept = plan.blocks.filter((b) => !(b.studentId === student.id && cut.has(`${b.day}|${b.start}`)));
+      if (student.needsOpeningShift && hasOpeningShift(student.id, plan.blocks, settings) && !hasOpeningShift(student.id, kept, settings)) continue;
+      const keptSlots = slotSet(kept, student.id);
+      const daysUsed = new Set(kept.filter((b) => b.studentId === student.id).map((b) => b.day));
+      const len = missing + trim.boxes.length;
+      for (const day of DAYS) {
+        if (!daysUsed.has(day) && daysUsed.size >= student.daysPerWeek) continue;
+        for (let startIdx = 0; startIdx + len <= slots.length; startIdx++) {
+          const newBoxes = slots.slice(startIdx, startIdx + len);
+          if (newBoxes.some((m) => keptSlots.has(`${day}|${m}`) || blockedBySlot(student, day, m, settings))) continue;
+          let before = 0;
+          while (keptSlots.has(`${day}|${newBoxes[0] - (before + 1) * settings.slotMinutes}`)) before++;
+          let after = 0;
+          while (keptSlots.has(`${day}|${newBoxes[len - 1] + (after + 1) * settings.slotMinutes}`)) after++;
+          if (before + len + after < minSlots) continue;
+          const gain = newBoxes.filter((m) => plan.staff(day, m) < settings.minStaffPerSlot).length;
+          // Smallest change first, then the new shift that covers the most empty time, then the earliest.
+          const rank = [trim.boxes.length, -gain, DAYS.indexOf(day), startIdx];
+          if (!best || rankedBefore(rank, best.rank)) best = { trim, day, startIdx, len, rank };
+        }
+      }
+    }
+    return best;
+  }
+
+  for (const student of students) {
+    let guard = DAYS.length * 2;
+    while (plan.hours(student.id) < aim && guard-- > 0) {
+      const move = findMove(student);
+      if (!move) break;
+      const cut = new Set(move.trim.boxes.map((m) => `${move.trim.day}|${m}`));
+      const start = slots[move.startIdx];
+      const end = start + move.len * settings.slotMinutes;
+      const added: ShiftBlock[] = slots
+        .slice(move.startIdx, move.startIdx + move.len)
+        .map((m) => ({ id: shiftId(student.id, move.day, m), studentId: student.id, day: move.day, start: m, source: "autofill" }));
+      plan = new Plan(settings, [...plan.blocks.filter((b) => !(b.studentId === student.id && cut.has(`${b.day}|${b.start}`))), ...added]);
+      // Keep the "what did it do" list true: earlier explanations no longer cover the part that moved.
+      if (move.trim.boxes.length) {
+        const cutStart = Math.min(...move.trim.boxes);
+        const cutEnd = Math.max(...move.trim.boxes) + settings.slotMinutes;
+        for (let i = explanations.length - 1; i >= 0; i--) {
+          const e = explanations[i];
+          if (e.studentId !== student.id || e.day !== move.trim.day || e.end <= cutStart || e.start >= cutEnd) continue;
+          if (e.start >= cutStart && e.end <= cutEnd) explanations.splice(i, 1);
+          else if (e.start < cutStart) e.end = cutStart;
+          else e.start = cutEnd;
+        }
+      }
+      const moved = move.trim.boxes.length
+        ? `Moved ${hoursLabel((move.trim.boxes.length * settings.slotMinutes) / 60)} of ${student.name}'s ${DAY_LABEL[move.trim.day]} shift (someone else covers it) to `
+        : `Adds `;
+      explanations.push({
         studentId: student.id,
-        reason: `${student.name}'s classes, cutoff, lunch and days-per-week leave room for only ${plan.hours(student.id)} of ${settings.weeklyTargetHours} hours.`,
+        day: move.day,
+        start,
+        end,
+        phase: "top-up",
+        reason: `${moved}${DAY_LABEL[move.day]} ${formatRange(start, end)} so ${student.name} reaches ${aim} hours without a shift under ${hoursLabel(MIN_SHIFT_MINUTES / 60)}.`,
       });
     }
   }
+
+  const unmet: AutoFillResult["unmet"] = students
+    .filter((student) => plan.hours(student.id) < aim)
+    .map((student) => ({
+      studentId: student.id,
+      reason: `${student.name}'s classes, cutoff, lunch, days-per-week and the ${MIN_SHIFT_MINUTES / 60}-hour minimum shift leave room for only ${plan.hours(student.id)} of ${aim} hours.`,
+    }));
 
   return {
     assignments: normalizeAssignments(plan.blocks),
