@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, Plus } from "lucide-react";
 import { HelpTip } from "../help/HelpTip";
 import { assignedHours } from "../../features/scheduling/availability";
 import { buildCoverageSlots, buildGapRanges, summarizeCoverage } from "../../features/scheduling/coverage";
 import { describeGap, suggestFillers } from "../../features/scheduling/issues";
+import { weeklyLimit } from "../../features/scheduling/term";
 import { formatRange, hoursLabel } from "../../features/scheduling/time";
 import { DAY_LABEL } from "../../features/scheduling/types";
 import type { Day } from "../../features/scheduling/types";
@@ -19,7 +20,9 @@ import type { ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../..
  * attention" problem/warning list, the list of understaffed times with
  * one-click "Quick fix" buttons (each is a real candidate from
  * `suggestFillers`, not a guess — see `../../features/scheduling/issues.ts`),
- * and a collapsible log of what the last "Fill schedule for me" run did.
+ * and a collapsible log of what the last "Fill schedule for me" run did. Only the
+ * status, the problems and the first few empty times show by default; the
+ * percentages sit behind "More numbers" so the panel stays short and calm.
  * Everything here is read-only except the Quick fix buttons and "Pick to fix
  * it" links, which call back up to `App.tsx`/the store.
  */
@@ -64,7 +67,7 @@ export function InsightsPanel({
   const gaps = buildGapRanges(coverage);
   const summary = summarizeCoverage(coverage, settings);
   const nameOf = (id: string) => students.find((s) => s.id === id)?.name ?? "Someone";
-  const atTarget = students.filter((s) => assignedHours(s.id, assignments, settings) >= settings.weeklyTargetHours).length;
+  const atTarget = students.filter((s) => assignedHours(s.id, assignments, settings) >= weeklyLimit(settings)).length;
   const emptyHalfHours = summary.totalSlots - summary.fullyStaffedSlots;
   const problems = issues.filter((i) => !i.overridden);
   const warnings = issues.filter((i) => i.overridden);
@@ -72,6 +75,10 @@ export function InsightsPanel({
 
   // Quick fixes are worked out for the first few gaps only, so a huge roster can't slow the panel down.
   const QUICK_FIX_LIMIT = 10;
+  // A short list is easier to act on; the rest is one click away.
+  const GAPS_SHOWN = 5;
+  const [showAllGaps, setShowAllGaps] = useState(false);
+  const visibleGaps = showAllGaps ? gaps : gaps.slice(0, GAPS_SHOWN);
   const fixes = useMemo(
     () => gaps.slice(0, QUICK_FIX_LIMIT).map((g) => suggestFillers(students, assignments, settings, g.day, g.start, g.end)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +87,7 @@ export function InsightsPanel({
 
   return (
     <section aria-labelledby="insights-heading" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto bg-panel p-3 sm:p-4">
-      <h2 id="insights-heading" className="font-display text-base font-semibold">
+      <h2 id="insights-heading" className="font-display text-lg font-semibold">
         Schedule health
       </h2>
 
@@ -91,9 +98,9 @@ export function InsightsPanel({
           allGood ? "border-ok/40 bg-ok-bg" : problems.length ? "border-gap/50 bg-gap-bg" : "border-line bg-bg",
         )}
       >
-        {allGood ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" aria-hidden /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-gap" aria-hidden />}
+        {allGood ? <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-ok" aria-hidden /> : <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-gap" aria-hidden />}
         <div>
-          <p className="font-semibold">
+          <p className="text-lg font-semibold">
             {!students.length
               ? "Add a student to begin"
               : allGood
@@ -107,63 +114,68 @@ export function InsightsPanel({
               ? "The schedule will show how well the week is covered."
               : allGood
                 ? "No rules are broken and nobody is missing."
-                : "Details are below. Fixing the top item first is usually best."}
+                : "Start with the first item below."}
           </p>
         </div>
       </div>
 
-      <Meter
-        label="Hours with enough people"
-        help={`Of every 30-minute box in the week, how many have at least ${settings.minStaffPerSlot} ${settings.minStaffPerSlot === 1 ? "person" : "people"} working.`}
-        percent={summary.fullyStaffedPercent}
-        detail={`${summary.fullyStaffedSlots} of ${summary.totalSlots} boxes are covered.`}
-      />
-      <Meter
-        label="Staffing filled"
-        help="Counts every person you need, not just every box. If you need 2 people and only 1 is working, the box isn't covered, but half of the staffing is filled."
-        percent={summary.demandFulfilledPercent}
-        detail={`You need ${settings.minStaffPerSlot} at once, all ${summary.totalSlots} boxes.`}
-      />
+      <details className="rounded-xl border border-line p-3">
+        <summary className="cursor-pointer text-sm font-semibold">More numbers</summary>
+        <div className="mt-3 flex flex-col gap-4">
+          <Meter
+            label="Hours with enough people"
+            help={`Of every 30-minute box in the week, how many have at least ${settings.minStaffPerSlot} ${settings.minStaffPerSlot === 1 ? "person" : "people"} working.`}
+            percent={summary.fullyStaffedPercent}
+            detail={`${summary.fullyStaffedSlots} of ${summary.totalSlots} boxes are covered.`}
+          />
+          <Meter
+            label="Staffing filled"
+            help="Counts every person you need, not just every box. If you need 2 people and only 1 is working, the box isn't covered, but half of the staffing is filled."
+            percent={summary.demandFulfilledPercent}
+            detail={`You need ${settings.minStaffPerSlot} at once, all ${summary.totalSlots} boxes.`}
+          />
 
-      <dl className="grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-xl border border-line p-3">
-          <dt className="text-xs text-muted">Students at their hours</dt>
-          <dd className="font-display text-xl font-semibold">
-            {atTarget} <span className="text-sm font-normal text-muted">of {students.length}</span>
-          </dd>
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-xl border border-line p-3">
+              <dt className="text-xs text-muted">Students at their hours</dt>
+              <dd className="font-display text-xl font-semibold">
+                {atTarget} <span className="text-sm font-normal text-muted">of {students.length}</span>
+              </dd>
+            </div>
+            <div className="rounded-xl border border-line p-3">
+              <dt className="text-xs text-muted">
+                Students needed (best case)
+                <HelpTip label="Students needed (best case)" align="right">
+                  Total hours to cover ({summary.theoreticalStaffingHours}) divided by the weekly limit. It pretends everyone is free at every hour, so treat it as the
+                  fewest students you could possibly need, not a promise.
+                </HelpTip>
+              </dt>
+              <dd className="font-display text-xl font-semibold">
+                {summary.theoreticalMinimumStudents}
+                <span className="block text-sm font-normal text-muted">you have {students.length}</span>
+              </dd>
+            </div>
+          </dl>
         </div>
-        <div className="rounded-xl border border-line p-3">
-          <dt className="text-xs text-muted">
-            Students needed (best case)
-            <HelpTip label="Students needed (best case)" align="right">
-              Total hours to cover ({summary.theoreticalStaffingHours}) divided by the weekly limit. It pretends everyone is free at every hour, so treat it as the
-              fewest students you could possibly need, not a promise.
-            </HelpTip>
-          </dt>
-          <dd className="font-display text-xl font-semibold">
-            {summary.theoreticalMinimumStudents}
-            <span className="block text-sm font-normal text-muted">you have {students.length}</span>
-          </dd>
-        </div>
-      </dl>
+      </details>
 
       {(problems.length > 0 || warnings.length > 0) && (
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Needs attention</h3>
+          <h3 className="mb-1.5 font-semibold">Needs attention</h3>
           <ul className="space-y-2">
             {problems.map((issue, i) => (
-              <li key={`p${i}`} className="rounded-lg border border-gap/40 bg-gap-bg p-2 text-sm">
+              <li key={`p${i}`} className="rounded-lg border border-gap/40 bg-gap-bg p-3">
                 <p className="flex items-start gap-1.5">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-gap" aria-hidden />
+                  <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-gap" aria-hidden />
                   <span>{issue.message}</span>
                 </p>
-                <button type="button" onClick={() => onSelectStudent(issue.studentId)} className="mt-1 text-xs font-medium text-accent underline underline-offset-2">
+                <button type="button" onClick={() => onSelectStudent(issue.studentId)} className="mt-1.5 text-sm font-medium text-accent underline underline-offset-2">
                   Pick {nameOf(issue.studentId)} to fix it
                 </button>
               </li>
             ))}
             {warnings.map((issue, i) => (
-              <li key={`w${i}`} className="rounded-lg border border-line bg-warn-bg p-2 text-sm">
+              <li key={`w${i}`} className="rounded-lg border border-line bg-warn-bg p-3 text-sm">
                 <p className="flex items-start gap-1.5">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
                   <span>
@@ -177,44 +189,50 @@ export function InsightsPanel({
       )}
 
       <div>
-        <h3 className="mb-1 text-sm font-semibold">Times that need someone</h3>
+        <h3 className="mb-1.5 font-semibold">Times that need someone</h3>
         {gaps.length ? (
-          <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
-            {gaps.map((g, gi) => (
-              <li key={`${g.day}-${g.start}`} className="rounded-lg border border-line p-2 text-sm">
-                <p>
-                  <span className="font-semibold text-gap">{DAY_LABEL[g.day]}</span> {formatRange(g.start, g.end)}{" "}
-                  <span className="text-muted">needs {g.shortfall} more</span>
-                </p>
-                {fixes[gi]?.length ? (
-                  <div className="mt-1.5">
-                    <p className="text-xs text-muted">Quick fix:</p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {fixes[gi].map((f) => {
-                        const partial = f.slots < f.total;
-                        const range = `${DAY_LABEL[g.day]} ${formatRange(g.start, g.end)}`;
-                        return (
-                          <button
-                            key={f.student.id}
-                            type="button"
-                            onClick={() => onFillGap(f.student.id, g.day, g.start, g.end - settings.slotMinutes)}
-                            aria-label={`Add ${f.student.name} to ${range}${partial ? `, ${hoursLabel((f.slots * settings.slotMinutes) / 60)} of ${hoursLabel((f.total * settings.slotMinutes) / 60)}` : ""}`}
-                            className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-accent/10 py-1 pl-2 pr-2.5 text-xs font-medium hover:bg-accent/20"
-                          >
-                            <Plus className="h-3 w-3" aria-hidden />
-                            {f.student.name}
-                            {partial && <span className="font-normal text-muted">({hoursLabel((f.slots * settings.slotMinutes) / 60)} of {hoursLabel((f.total * settings.slotMinutes) / 60)})</span>}
-                          </button>
-                        );
-                      })}
+          <>
+            <ul className="space-y-2">
+              {visibleGaps.map((g, gi) => (
+                <li key={`${g.day}-${g.start}`} className="rounded-lg border border-line p-3">
+                  <p>
+                    <span className="font-semibold text-gap">{DAY_LABEL[g.day]}</span> {formatRange(g.start, g.end)}{" "}
+                    <span className="text-muted">needs {g.shortfall} more</span>
+                  </p>
+                  {fixes[gi]?.length ? (
+                    <div className="mt-2">
+                      <div className="flex flex-wrap gap-2">
+                        {fixes[gi].map((f) => {
+                          const partial = f.slots < f.total;
+                          const range = `${DAY_LABEL[g.day]} ${formatRange(g.start, g.end)}`;
+                          return (
+                            <button
+                              key={f.student.id}
+                              type="button"
+                              onClick={() => onFillGap(f.student.id, g.day, g.start, g.end - settings.slotMinutes)}
+                              aria-label={`Add ${f.student.name} to ${range}${partial ? `, ${hoursLabel((f.slots * settings.slotMinutes) / 60)} of ${hoursLabel((f.total * settings.slotMinutes) / 60)}` : ""}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-accent/10 py-1.5 pl-2.5 pr-3 text-sm font-medium hover:bg-accent/20"
+                            >
+                              <Plus className="h-4 w-4" aria-hidden />
+                              {f.student.name}
+                              {partial && <span className="font-normal text-muted">({hoursLabel((f.slots * settings.slotMinutes) / 60)} of {hoursLabel((f.total * settings.slotMinutes) / 60)})</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <p className="mt-0.5 text-xs text-muted">{describeGap(students, assignments, settings, g.day, g.start)}</p>
-                )}
-              </li>
-            ))}
-          </ul>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted">{describeGap(students, assignments, settings, g.day, g.start)}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {gaps.length > GAPS_SHOWN && (
+              <button type="button" onClick={() => setShowAllGaps((v) => !v)} className="mt-2 text-sm font-medium text-accent underline underline-offset-2">
+                {showAllGaps ? "Show fewer" : `Show all ${gaps.length} times`}
+              </button>
+            )}
+          </>
         ) : (
           <p className="text-sm text-muted">Nothing is missing. Every box has enough people.</p>
         )}

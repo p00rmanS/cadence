@@ -24,9 +24,9 @@ export const FAQ: FaqItem[] = [
   {
     id: "what-is-shiftfit",
     topic: "Getting started",
-    question: "What is ShiftFit for?",
+    question: "What is Cadence for?",
     answer: [
-      "ShiftFit helps a manager decide who works when. You tell it when each student worker has class, and it shows you a week grid so you can make sure someone is working every hour.",
+      "Cadence helps a manager decide who works when. You tell it when each student worker has class, and it shows you a week grid so you can make sure someone is working every hour.",
       "It won't put anyone in a spot where they have class, and it warns you if someone would work too many hours.",
     ],
     keywords: ["purpose", "about", "overview"],
@@ -37,7 +37,7 @@ export const FAQ: FaqItem[] = [
     question: "What's the fastest way to make a schedule?",
     answer: [
       "1. Press Add student on the left and type a name. Paste or type the student's class times.",
-      "2. Press Fill schedule for me. ShiftFit places shifts for everyone.",
+      "2. Press Fill schedule for me. Cadence places shifts for everyone.",
       "3. Look for pink boxes in the grid. Those hours still need someone. Click a pink box to assign a student who is free.",
     ],
     keywords: ["start", "begin", "tutorial", "how to"],
@@ -47,7 +47,7 @@ export const FAQ: FaqItem[] = [
     topic: "Getting started",
     question: "How do I add a student?",
     answer: [
-      "Press Add student above the student list. Type their name, then paste their class times into the box. You will see each line checked right away: a green check means ShiftFit understood it.",
+      "Press Add student above the student list. Type their name, then paste their class times into the box. You will see each line checked right away: a green check means Cadence understood it.",
       "Then choose their preferences (morning or afternoon, how many days a week, when they must leave, lunch) and press Add student.",
     ],
     keywords: ["new", "create", "worker"],
@@ -68,7 +68,7 @@ export const FAQ: FaqItem[] = [
     question: "Can I add lots of students at once?",
     answer: [
       "Yes. Press “Add several at once” under the student list. Type one student per line: the name, a colon, then their class times. Separate several classes with a semicolon.",
-      "You can also copy rows from a spreadsheet, with the name in the first column and the classes in the next ones. ShiftFit checks every line first and tells you which ones it can't read.",
+      "You can also copy rows from a spreadsheet, with the name in the first column and the classes in the next ones. Cadence checks every line first and tells you which ones it can't read.",
     ],
     keywords: ["bulk", "many", "roster", "import", "spreadsheet", "paste", "list", "csv", "everyone"],
   },
@@ -78,7 +78,7 @@ export const FAQ: FaqItem[] = [
     question: "What if a student can't work at other times, like for a second job?",
     answer: [
       "In the student's form, use the box called “Any other times they can't work?”. Write those times the same way as classes, for example W 2:00pm-4:00pm.",
-      "ShiftFit treats these exactly like class time: it won't schedule them there, and the schedule says “is unavailable” instead of “has class”.",
+      "Cadence treats these exactly like class time: it won't schedule them there, and the schedule says “is unavailable” instead of “has class”.",
     ],
     keywords: ["job", "appointment", "practice", "busy", "unavailable", "blocked", "sports"],
   },
@@ -87,8 +87,8 @@ export const FAQ: FaqItem[] = [
     topic: "Getting started",
     question: "Why does it say “No am/pm given”?",
     answer: [
-      "If a time like 9:00 has no am or pm, ShiftFit makes a careful guess (for example, 9:00 is morning and 1:00 is afternoon) and tells you what it picked. Check the guess and add am or pm if it is wrong.",
-      "ShiftFit would rather ask than quietly put a class in the wrong place.",
+      "If a time like 9:00 has no am or pm, Cadence makes a careful guess (for example, 9:00 is morning and 1:00 is afternoon) and tells you what it picked. Check the guess and add am or pm if it is wrong.",
+      "Cadence would rather ask than quietly put a class in the wrong place.",
     ],
     keywords: ["warning", "ambiguous", "assumed"],
   },
@@ -118,7 +118,7 @@ export const FAQ: FaqItem[] = [
     question: "What does “Fill schedule for me” do?",
     answer: [
       "It adds shifts for you, following every rule. It keeps the shifts you placed yourself and only adds new ones. It prefers longer, unbroken shifts instead of lots of tiny ones.",
-      "“Rebuild automatic shifts” throws away only the shifts ShiftFit added before and makes them again. Shifts you placed by hand are never removed.",
+      "“Rebuild automatic shifts” throws away only the shifts Cadence added before and makes them again. Shifts you placed by hand are never removed.",
       "It is not AI. It follows fixed rules, so the same students and settings always give the same schedule.",
     ],
     keywords: ["autofill", "auto-fill", "automatic", "ai", "rebuild"],
@@ -148,8 +148,8 @@ export const FAQ: FaqItem[] = [
     topic: "Rules",
     question: "Can someone work more than their weekly hours?",
     answer: [
-      "Class conflicts, late cutoffs and lunch can never be broken. But if a student is at their weekly hour limit or day limit, ShiftFit asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
-      "The default weekly limit is 19 hours. You can change it under Rules. Check your own employer's policy: ShiftFit doesn't know it.",
+      "Class conflicts, late cutoffs and lunch can never be broken. But if a student is at their weekly hour limit or day limit, Cadence asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
+      "The default weekly limit is 19 hours. You can change it under Rules. Check your own employer's policy: Cadence doesn't know it.",
     ],
     keywords: ["override", "19", "limit", "hours", "overtime"],
   },
@@ -167,7 +167,7 @@ export const FAQ: FaqItem[] = [
     topic: "Rules",
     question: "What is an “opening shift”?",
     answer: [
-      "Some students need to start their week with a 7:00am shift. ShiftFit only counts it if they work at least one hour in a row starting at 7:00am, not a single lonely half hour.",
+      "Some students need to start their week with a 7:00am shift. Cadence only counts it if they work at least one hour in a row starting at 7:00am, not a single lonely half hour.",
       "If you switch to 8:00am office hours, a 7:00am shift is outside the schedule you can see. It still counts toward that student's hours.",
     ],
     keywords: ["7am", "early", "open"],
@@ -206,7 +206,7 @@ export const FAQ: FaqItem[] = [
     topic: "Saving & sharing",
     question: "I switched computers (or cleared my browser) and my schedule is gone. Help!",
     answer: [
-      "ShiftFit can only remember what is stored in the browser you are using. If you cleared browsing data or changed computers, that copy is gone.",
+      "Cadence can only remember what is stored in the browser you are using. If you cleared browsing data or changed computers, that copy is gone.",
       "To be safe, use Save & share → Save a backup file now and then. To restore, use Load a backup file. Backups contain student names and class times, so keep the file somewhere private.",
     ],
     keywords: ["backup", "restore", "lost", "missing", "import", "export"],
@@ -235,7 +235,7 @@ export const FAQ: FaqItem[] = [
     topic: "Saving & sharing",
     question: "Can students put their shifts on their phone calendar?",
     answer: [
-      "Yes. In Save & share, enter the first and last day of the semester and your timezone (ShiftFit never guesses these), then download a calendar file for each student. Opening it adds their weekly shifts to Google, Apple or Outlook calendar.",
+      "Yes. In Save & share, enter the first and last day of the semester and your timezone (Cadence never guesses these), then download a calendar file for each student. Opening it adds their weekly shifts to Google, Apple or Outlook calendar.",
       "Add holidays and breaks under “Days off” first. Shifts that fall on those days are left out. If you skip this step, shifts repeat on holidays too.",
     ],
     keywords: ["ics", "google calendar", "apple", "outlook", "phone"],
@@ -243,10 +243,10 @@ export const FAQ: FaqItem[] = [
   {
     id: "screenshots",
     topic: "Good to know",
-    question: "Can ShiftFit read a screenshot of a class schedule?",
+    question: "Can Cadence read a screenshot of a class schedule?",
     answer: [
       "Only if your organization has set up a reading service for it. If that button is greyed out, it isn't set up here. Typing or pasting the class times always works and is checked instantly.",
-      "Even when it is set up, ShiftFit shows you what it found and waits for you to approve before saving anything.",
+      "Even when it is set up, Cadence shows you what it found and waits for you to approve before saving anything.",
     ],
     keywords: ["image", "upload", "ocr", "photo", "picture"],
   },
@@ -270,7 +270,7 @@ export const GLOSSARY: GlossaryItem[] = [
   { term: "Covered", meaning: "Enough people are working during that half hour." },
   { term: "Gap", meaning: "A time when too few people are working. Shown in pink." },
   { term: "Class block", meaning: "A time when a student is in class and can't work." },
-  { term: "Must leave by", meaning: "The latest time a student can work. ShiftFit won't schedule them past it." },
+  { term: "Must leave by", meaning: "The latest time a student can work. Cadence won't schedule them past it." },
   { term: "Opening shift", meaning: "A required shift starting at 7:00am, lasting at least one hour." },
   { term: "Weekly limit", meaning: "The most hours a student may work in one week. The default is 19." },
   { term: "Assign anyway", meaning: "Going past a weekly hour or day limit on purpose. Allowed, but flagged with a warning." },

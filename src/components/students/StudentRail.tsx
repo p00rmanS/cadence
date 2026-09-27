@@ -3,6 +3,7 @@ import { Plus, Search, UserPlus } from "lucide-react";
 import { Button } from "../ui/Button";
 import { StudentCard } from "./StudentCard";
 import { summarizeStudent } from "../../features/scheduling/selectors";
+import { weeklyLimit } from "../../features/scheduling/term";
 import type { ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /** The left-hand column: search box, "Add student"/"Add several at once" entry points, and the scrolling list of `StudentCard`s. Filtering by the search box happens entirely here (`filtered`) — it doesn't change what's actually stored. */
@@ -39,7 +40,7 @@ export function StudentRail({
   return (
     <section aria-labelledby="students-heading" className="flex h-full min-h-0 flex-col gap-3 bg-panel p-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 id="students-heading" className="whitespace-nowrap font-display text-base font-semibold">
+        <h2 id="students-heading" className="whitespace-nowrap font-display text-lg font-semibold">
           Students
         </h2>
         <Button variant="primary" className="shrink-0 whitespace-nowrap px-2.5" onClick={onAddNew}>
@@ -47,7 +48,7 @@ export function StudentRail({
         </Button>
       </div>
       <p className="text-sm text-muted">
-        Pick a student, then click the schedule to give them shifts.{" "}
+        Click a name, then click the schedule.{" "}
         <button type="button" onClick={onAddMany} className="font-medium text-accent underline underline-offset-2">
           Add several at once
         </button>
@@ -72,7 +73,8 @@ export function StudentRail({
           <StudentCard
             key={student.id}
             summary={summarizeStudent(student, assignments, settings)}
-            targetHours={settings.weeklyTargetHours}
+            targetHours={weeklyLimit(settings)}
+            limitHours={weeklyLimit(settings)}
             selected={student.id === selectedStudentId}
             issueCount={issues.filter((i) => i.studentId === student.id && !i.overridden).length}
             onSelect={() => onSelect(student.id)}
@@ -84,7 +86,7 @@ export function StudentRail({
           <li className="rounded-xl border border-dashed border-line p-5 text-center">
             <UserPlus className="mx-auto h-8 w-8 text-muted" aria-hidden />
             <p className="mt-2 font-semibold">No students yet</p>
-            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. ShiftFit keeps them out of those times.</p>
+            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. Cadence keeps them out of those times.</p>
             <Button variant="primary" className="mt-3" onClick={onAddNew}>
               <Plus className="h-4 w-4" aria-hidden /> Add your first student
             </Button>

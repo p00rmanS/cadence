@@ -8,7 +8,7 @@ import { formatRange } from "../../features/scheduling/time";
  * anything read from a screenshot is treated as untrusted, so nothing is saved until the
  * person has looked at this list.
  */
-export function MeetingReview({ parse, title = "Here is what ShiftFit understood" }: { parse: ParseResult; title?: string }) {
+export function MeetingReview({ parse, title = "Here is what Cadence understood" }: { parse: ParseResult; title?: string }) {
   if (!parse.lines.length) return null;
   const good = parse.lines.filter((l) => l.ok).length;
   const bad = parse.lines.length - good;

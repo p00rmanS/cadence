@@ -11,7 +11,7 @@ import type { ScheduleSettings } from "../../features/scheduling/types";
  * live as the manager types/picks, and the Save button is disabled until
  * both are valid — see `hoursError` / `closeError` below.
  */
-const CLOSE_OPTIONS = Array.from({ length: 19 }, (_, i) => 12 * 60 + i * 30); // 12:00pm .. 9:00pm
+const CLOSE_OPTIONS = Array.from({ length: 25 }, (_, i) => 12 * 60 + i * 30); // 12:00pm .. 12:00am (midnight)
 
 export function RulesDialog({
   settings,
@@ -65,7 +65,7 @@ export function RulesDialog({
             Most hours a student can work in a week
           </label>
           <p id="rule-hours-help" className="text-xs text-muted">
-            ShiftFit warns you before a student goes over this. Check your own employer&apos;s policy for the right number.
+            Cadence warns you before a student goes over this. Check your own employer&apos;s policy for the right number.
           </p>
           <input
             id="rule-hours"
