@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Clock, Pencil, Trash2 } from "lucide-react";
 import { clsx } from "../../lib/clsx";
-import { initials } from "../../features/scheduling/selectors";
+import { Avatar } from "../ui/Avatar";
 import { hoursLabel } from "../../features/scheduling/time";
 import type { StudentSummary } from "../../features/scheduling/selectors";
 
@@ -47,13 +47,7 @@ export function StudentCard({
       {/* One real button owns "pick this student"; Edit and Remove are siblings, never nested inside it. */}
       <button type="button" aria-pressed={selected} onClick={onSelect} className="block w-full rounded text-left">
         <div className="flex items-center gap-2">
-          <span
-            className="inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1 text-xs font-bold text-white"
-            style={{ backgroundColor: student.color }}
-            aria-hidden
-          >
-            {initials(student.name)}
-          </span>
+          <Avatar name={student.name} color={student.color} avatar={student.avatar} />
           <span className="min-w-0 flex-1 truncate font-semibold">{student.name}</span>
           {selected && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">Selected</span>}
         </div>

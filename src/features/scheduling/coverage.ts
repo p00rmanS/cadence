@@ -68,6 +68,11 @@ export type CoverageSummary = {
   theoreticalMinimumStudents: number;
 };
 
+/**
+ * Boils the per-slot coverage down to the headline numbers: what percent of half hours have
+ * enough people, what percent of the needed people-slots are filled, and the rough minimum
+ * staff-hours and headcount the week would need if nobody had any classes.
+ */
 export function summarizeCoverage(coverage: CoverageSlot[], settings: ScheduleSettings): CoverageSummary {
   const totalSlots = coverage.length;
   const fullyStaffedSlots = coverage.filter((s) => s.fullyStaffed).length;
@@ -84,6 +89,7 @@ export function summarizeCoverage(coverage: CoverageSlot[], settings: ScheduleSe
   };
 }
 
+/** A day's position in the week (Monday = 0), for sorting things Monday to Friday. */
 export function dayLabelOrder(day: Day): number {
   return DAYS.indexOf(day);
 }

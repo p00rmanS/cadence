@@ -29,6 +29,7 @@ type Props = {
   onAutoFill: () => void;
   onRebuild: () => void;
   onClearShifts: () => void;
+  onImportShifts: () => void;
   hasAutoShifts: boolean;
   hasShifts: boolean;
   hasStudents: boolean;
@@ -45,12 +46,14 @@ type Props = {
   onThemeChange: (t: ThemeChoice) => void;
 };
 
+/** The bar across the top: the main "Fill schedule for me" button, undo/redo, help, and the collapsible settings. */
 export function TopBar({
   settings,
   onSettingsChange,
   onAutoFill,
   onRebuild,
   onClearShifts,
+  onImportShifts,
   hasAutoShifts,
   hasShifts,
   hasStudents,
@@ -148,6 +151,9 @@ export function TopBar({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <Button variant="secondary" onClick={onImportShifts} disabled={!hasStudents} title={hasStudents ? "Paste a schedule you already wrote as text" : "Add a student first"}>
+            Paste existing shifts
+          </Button>
           <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts ShiftFit added. Yours stay." : "There are no automatic shifts yet"}>
             Rebuild automatic shifts
           </Button>

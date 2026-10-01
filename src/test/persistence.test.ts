@@ -4,6 +4,11 @@ import { validatePersistedState } from "../features/scheduling/validation";
 import { DEFAULT_SETTINGS } from "../features/scheduling/constants";
 import type { PersistedStateV1 } from "../features/scheduling/types";
 
+/**
+ * Tests for saving to and loading from the browser (`features/persistence/storage.ts`): a good
+ * schedule survives a reload, and broken or hand-edited saved data is ignored instead of crashing.
+ */
+
 const validState: PersistedStateV1 = {
   version: 1,
   settings: DEFAULT_SETTINGS,

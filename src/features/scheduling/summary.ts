@@ -24,8 +24,9 @@ export type ShiftLine = {
 };
 
 export type StudentShifts = { student: Student; hours: number; shifts: ShiftLine[] };
-export type DayShifts = { day: Day; shifts: (ShiftLine & { name: string; color: string })[] };
+export type DayShifts = { day: Day; shifts: (ShiftLine & { name: string; color: string; avatar?: string })[] };
 
+/** Joins back-to-back half hours into whole shifts and adds each shift's length in hours. */
 function lines(assignments: ShiftBlock[], slotMinutes: number): ShiftLine[] {
   return mergeContiguousBlocks(assignments, slotMinutes).map((b) => ({ ...b, hours: (b.end - b.start) / 60 }));
 }
@@ -50,11 +51,12 @@ export function summarizeByDay(students: Student[], assignments: ShiftBlock[], s
     day,
     shifts: all
       .filter((l) => l.day === day && byId.has(l.studentId))
-      .map((l) => ({ ...l, name: byId.get(l.studentId)!.name, color: byId.get(l.studentId)!.color }))
+      .map((l) => ({ ...l, name: byId.get(l.studentId)!.name, color: byId.get(l.studentId)!.color, avatar: byId.get(l.studentId)!.avatar }))
       .sort((a, b) => a.start - b.start || a.name.localeCompare(b.name)),
   }));
 }
 
+/** One shift as readable text, e.g. "9:00am–11:00am (2 hours)". */
 export function shiftText(line: Pick<ShiftLine, "start" | "end" | "hours">): string {
   return `${formatRange(line.start, line.end)} (${hoursLabel(line.hours)})`;
 }

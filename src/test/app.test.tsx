@@ -4,7 +4,16 @@ import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { viewport } from "./setup";
+import { buildPublishRequest } from "../services/automation/contracts";
+import { signOutManager } from "../services/automation/managerSession";
 
+/**
+ * Whole-app tests: they draw the real app in a pretend browser (jsdom) and use it the way a person
+ * would, clicking buttons, typing and pressing keys, then check what appears on screen. Buttons
+ * are found by their visible or screen-reader names, so renaming a button means updating it here.
+ */
+
+/** Starts the app fresh (empty saved data). By default the welcome screen counts as already seen. */
 function boot({ welcomed = true }: { welcomed?: boolean } = {}) {
   window.localStorage.clear();
   if (welcomed) window.localStorage.setItem("shiftfit:welcomed", "1");
@@ -12,8 +21,11 @@ function boot({ welcomed = true }: { welcomed?: boolean } = {}) {
   return { user, ...render(<App />) };
 }
 
+// A schedule box, found by its spoken name (e.g. "Monday 9:00am ...").
 const cell = (label: RegExp) => screen.getByRole("button", { name: label });
+// The "next step" guidance banner at the top.
 const banner = () => screen.getAllByRole("status")[0];
+// The short pop-up message that appears after an action.
 const toast = () => document.querySelector<HTMLElement>('div[role="status"].pointer-events-none')!;
 
 /** The header has the real button; after a fill the guidance banner offers a second one. */
@@ -22,6 +34,7 @@ async function openShare(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("dialog", { name: /save & share/i });
 }
 
+/** Presses the main "Fill schedule for me" button. */
 async function fillSchedule(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /fill schedule for me/i }));
 }
@@ -293,9 +306,12 @@ describe("the schedule grid with a keyboard", () => {
 });
 
 describe("dragging to fill", () => {
+  // A box whose name starts with this text, e.g. "Monday 9:00am".
   const box = (label: string) => cell(new RegExp(`^${label}`));
+  // "true" if the selected student works that box, "false" if not.
   const pressed = (label: string) => box(label).getAttribute("aria-pressed");
 
+  // Selects Leilani P. as the student the grid clicks will assign.
   async function pick(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: /^Leilani P\./ }));
   }
@@ -494,6 +510,59 @@ describe("Save & share", () => {
     expect(dialog.textContent).not.toMatch(/Status: sent/);
   });
 
+  it("with a real server: asks for the manager passcode, sends, then offers to remove old events", async () => {
+    vi.stubEnv("VITE_AUTOMATION_API_URL", "/");
+    const requests: string[] = [];
+    // A pretend ShiftFit server: accepts one passcode, "creates" every event, and reports one old event.
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      requests.push(url);
+      if ((init.headers as Record<string, string>).authorization !== "Bearer manager-pass-123") return new Response(null, { status: 401 });
+      if (url === "/api/session") return new Response(null, { status: 200 });
+      const body = JSON.parse(init.body as string);
+      if (url === "/api/remove") return Response.json({ results: body.shiftIds.map((shiftId: string) => ({ shiftId, status: "removed" })) });
+      const sent = buildPublishRequest(body.students, body.assignments, body.settings, body.semester);
+      return Response.json({
+        scheduleVersion: sent.scheduleVersion,
+        results: sent.events.map((e) => ({ shiftId: e.shiftId, status: "created", googleEventId: "g" })),
+        staleShiftIds: ["old-shift-1"],
+      });
+    });
+    try {
+      const { user } = boot();
+      await fillSchedule(user);
+      const dialog = await openShare(user);
+      fireEvent.change(within(dialog).getByLabelText("First day"), { target: { value: "2026-08-24" } });
+      fireEvent.change(within(dialog).getByLabelText("Last day"), { target: { value: "2026-12-11" } });
+      await user.type(within(dialog).getByLabelText("Timezone"), "Pacific/Honolulu");
+      await user.click(within(dialog).getByRole("button", { name: "Save dates" }));
+
+      // Locked until a manager signs in.
+      const send = within(dialog).getByRole("button", { name: /approve and send/i }) as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+      await user.type(within(dialog).getByLabelText(/manager passcode/i), "wrong-pass-123");
+      await user.click(within(dialog).getByRole("button", { name: "Sign in" }));
+      await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/isn't right/));
+      await user.clear(within(dialog).getByLabelText(/manager passcode/i));
+      await user.type(within(dialog).getByLabelText(/manager passcode/i), "manager-pass-123{Enter}");
+      await waitFor(() => expect(dialog.textContent).toMatch(/Signed in as manager/));
+
+      await user.click(within(dialog).getByRole("button", { name: /approve and send/i }));
+      await user.click(screen.getByRole("button", { name: "Yes, send it" }));
+      await waitFor(() => expect(dialog.textContent).toMatch(/Status: sent/));
+      expect(dialog.textContent).toMatch(/1 older event is still on the calendar/);
+
+      await user.click(within(dialog).getByRole("button", { name: /remove old events/i }));
+      await user.click(screen.getByRole("button", { name: "Yes, remove them" }));
+      await waitFor(() => expect(dialog.textContent).toMatch(/Removed 1 old event\./));
+      expect(within(dialog).queryByRole("button", { name: /remove old events/i })).toBeNull();
+      expect(requests).toEqual(["/api/session", "/api/session", "/api/publish", "/api/remove"]);
+    } finally {
+      signOutManager();
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("keeps calendar files locked until the semester dates and timezone are saved", async () => {
     const created: Blob[] = [];
     URL.createObjectURL = (b: Blob | MediaSource) => {
@@ -564,6 +633,7 @@ describe("Save & share", () => {
 });
 
 describe("other times a student can't work", () => {
+  // Adds a student "Noa K." through the real form, with the given "other times they can't work".
   async function addNoa(user: ReturnType<typeof userEvent.setup>, blocked: string) {
     await user.click(screen.getByRole("button", { name: "Add student" }));
     const dialog = screen.getByRole("dialog", { name: /add a student/i });
@@ -608,6 +678,7 @@ describe("other times a student can't work", () => {
 });
 
 describe("days off in calendar files", () => {
+  // Opens Save & share and fills in a Fall 2026 semester so calendar files can be made.
   async function openCalendar(user: ReturnType<typeof userEvent.setup>) {
     const dialog = await openShare(user);
     fireEvent.change(within(dialog).getByLabelText("First day"), { target: { value: "2026-08-24" } });
@@ -731,6 +802,7 @@ describe("schedule views", () => {
 });
 
 describe("adding several students at once", () => {
+  // Opens the "Add several at once" dialog and returns it.
   async function openBulk(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: "Add several at once" }));
     return screen.getByRole("dialog", { name: /add several students at once/i });
@@ -798,6 +870,7 @@ describe("adding several students at once", () => {
 });
 
 describe("quick fixes for empty times", () => {
+  // The "Schedule health" panel on the right.
   const panel = () => document.querySelector("#insights-heading")!.closest("section") as HTMLElement;
 
   it("offers one-click buttons for students who can really cover a gap", () => {
@@ -981,7 +1054,8 @@ describe("audit round 3 fixes", () => {
 
   it("outlines the health panel when the banner sends you there, then stops", async () => {
     const { user } = boot();
-    const panel = () => document.querySelector("#insights-heading")!.closest<HTMLElement>('[tabindex="-1"]')!;
+    // The "Schedule health" panel on the right.
+  const panel = () => document.querySelector("#insights-heading")!.closest<HTMLElement>('[tabindex="-1"]')!;
     expect(panel().className).not.toMatch(/ring-accent/);
     await user.click(within(banner()).getByRole("button", { name: /see who is free/i }));
     await waitFor(() => expect(panel().className).toMatch(/ring-accent/));
@@ -1054,5 +1128,93 @@ describe("accessibility rules", () => {
     for (const role of ["button", "textbox", "searchbox", "combobox", "checkbox", "tab"] as const) {
       expect(screen.queryAllByRole(role, { name: /./ }).length, role).toBe(screen.queryAllByRole(role).length);
     }
+  });
+});
+
+describe("paste existing shifts", () => {
+  it("previews the pasted lines, then places them as one undoable step", async () => {
+    const { user } = boot();
+    await user.click(screen.getByRole("button", { name: /paste existing shifts/i }));
+    const dialog = screen.getByRole("dialog", { name: /paste shifts you already have/i });
+    expect((within(dialog).getByRole("button", { name: "Add shifts" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await user.type(within(dialog).getByLabelText("One student per line"), "Leilani P.: M 8:00am-9:00am{Enter}Nobody: M 8:00am-9:00am");
+    expect(dialog.textContent).toMatch(/1 of 2 lines, 1 will be skipped/);
+    expect(dialog.textContent).toMatch(/No student named "Nobody"/);
+
+    await user.click(within(dialog).getByRole("button", { name: "Add 1 shift" }));
+    expect(screen.queryByRole("dialog", { name: /paste shifts/i })).toBeNull();
+    expect(toast().textContent).toMatch(/Added 1 hour of pasted shifts/);
+    expect(cell(/^Monday 8:00am to 8:30am/).getAttribute("aria-label")).toMatch(/Leilani P\./);
+  });
+});
+
+describe("student photos", () => {
+  const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD";
+
+  // jsdom can't really decode or draw pictures, so this swaps in stand-ins that "shrink" any photo to a fixed tiny JPEG.
+  function fakeImagePipeline() {
+    (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap = async () => ({ width: 400, height: 300, close() {} });
+    HTMLCanvasElement.prototype.getContext = (() => ({ fillRect() {}, drawImage() {}, fillStyle: "" })) as never;
+    HTMLCanvasElement.prototype.toDataURL = (() => JPEG) as never;
+  }
+
+  // Opens the edit form for the demo student Troy C. and returns it.
+  async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Edit Troy C." }));
+    return screen.getByRole("dialog", { name: /edit troy c\./i });
+  }
+
+  it("refuses a file that is not a photo or is over 5 MB, and says why", async () => {
+    const { user } = boot();
+    const dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "notes.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/PNG, JPG or WebP/));
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/bigger than 5 MB/));
+    expect(within(dialog).queryByRole("button", { name: "Remove photo" })).toBeNull();
+  });
+
+  it("keeps the LAST photo chosen even when an earlier, slower one finishes after it", async () => {
+    const A = "data:image/jpeg;base64,/9j/AAAA";
+    const B = "data:image/jpeg;base64,/9j/BBBB";
+    const finish: Record<string, () => void> = {};
+    let lastDrawn = "";
+    (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap = (file: File) =>
+      new Promise((resolve) => {
+        finish[file.name] = () => resolve({ width: 100, height: 100, close() {}, tag: file.name });
+      });
+    HTMLCanvasElement.prototype.getContext = (() => ({ fillRect() {}, drawImage(b: { tag: string }) { lastDrawn = b.tag; }, fillStyle: "" })) as never;
+    HTMLCanvasElement.prototype.toDataURL = (() => (lastDrawn === "slow.png" ? A : B)) as never;
+
+    const { user } = boot();
+    const dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "slow.png", { type: "image/png" })] } });
+    fireEvent.change(input, { target: { files: [new File(["x"], "fast.png", { type: "image/png" })] } });
+    finish["fast.png"]();
+    await waitFor(() => expect(dialog.querySelector(`img[src="${B}"]`)).toBeTruthy());
+    finish["slow.png"]();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(dialog.querySelector(`img[src="${B}"]`)).toBeTruthy();
+    expect(dialog.querySelector(`img[src="${A}"]`)).toBeNull();
+  });
+
+  it("saves a chosen photo onto the student's card, and Remove photo takes it off again", async () => {
+    fakeImagePipeline();
+    const { user } = boot();
+    let dialog = await openEditor(user);
+    const input = within(dialog).getByLabelText("Choose a photo file", { selector: "input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "me.png", { type: "image/png" })] } });
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Change photo" })).toBeTruthy());
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(document.querySelector(`img[src="${JPEG}"]`)).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem("shiftfit:state")!).students[0].avatar).toBe(JPEG);
+
+    dialog = await openEditor(user);
+    await user.click(within(dialog).getByRole("button", { name: "Remove photo" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(document.querySelector(`img[src="${JPEG}"]`)).toBeNull();
   });
 });

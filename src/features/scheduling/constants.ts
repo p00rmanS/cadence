@@ -48,6 +48,17 @@ export const MAX_SHIFT_MINUTES = 240;
  */
 export const RELAXED_DAY_EXTRA_HOURS = 2;
 
+/** Largest photo a person may pick. The app shrinks it to a small thumbnail before saving. */
+export const MAX_AVATAR_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** Side length (px) of the saved square thumbnail. */
+export const AVATAR_SIZE = 128;
+/**
+ * Longest saved thumbnail data URL we accept (about 12 KB). Browser storage holds roughly 5 MB in
+ * total and backup files are capped at 5 MB, so 200 students x 16,000 characters (3.2 MB worst
+ * case) still fits. The resizer lowers JPEG quality until a photo is under this.
+ */
+export const MAX_AVATAR_CHARS = 16_000;
+
 export const MAX_STUDENTS = 200;
 export const MAX_ASSIGNMENTS = 5000;
 

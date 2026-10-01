@@ -28,10 +28,15 @@ export function endSentence(text: string): string {
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
+/** A start and end as readable text, e.g. "9:00am–11:00am". */
 export function formatRange(start: Minutes, end: Minutes): string {
   return `${formatMinutes(start)}–${formatMinutes(end)}`;
 }
 
+/**
+ * True if the browser recognizes this as a real timezone name (like "Pacific/Honolulu"). It asks
+ * the browser's own date formatter to use the zone; an unknown name makes it throw.
+ */
 export function isValidTimeZone(zone: string): boolean {
   if (!zone || zone.length > 64) return false;
   try {

@@ -81,6 +81,8 @@ export type Student = {
   name: string;
   /** Hex color used for this student's chips/highlights across the grid and views. Picked from `STUDENT_COLORS` in `constants.ts`. */
   color: string;
+  /** Optional profile photo: a small square JPEG stored as a data URL (see `src/lib/image.ts`). Absent means show initials. */
+  avatar?: string;
   preference: Preference;
   /** Most days per week this student may be scheduled, regardless of how many hours that leaves unfilled. */
   daysPerWeek: number;
@@ -194,6 +196,8 @@ export type ParsedMeetingLine = {
   end?: Minutes;
   /** Set even when `ok: true` — e.g. "no am/pm given, read as 9:00am-9:50am. Review before saving." */
   warning?: string;
+  /** True for a course with no meeting time (online, asynchronous, TBA). It is understood, blocks nothing, and is not an error. */
+  noMeeting?: boolean;
 };
 
 /** The result of reading a whole pasted block of text (many lines). `errors` are lines that were dropped; `warnings` are lines that were kept but should be double-checked. */

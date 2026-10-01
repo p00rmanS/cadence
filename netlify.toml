@@ -1,0 +1,52 @@
+# NOT IN USE FOR NOW: the team deploys to GitHub Pages (.github/workflows/deploy-pages.yml).
+# This file is kept so a Netlify site (for example one that runs the server in netlify/functions/
+# later) builds the same way, and because src/test/privacy.test.ts checks its security headers.
+#
+# Netlify build settings for ShiftFit, kept in the repository so nobody has to remember them.
+# Values here override the same settings typed into the Netlify website.
+
+[build]
+  # `npm run build` type-checks the code, then builds the site into the `dist` folder.
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # The build tool (Vite 8) needs Node 20.19 or newer; Netlify's default can be older.
+  NODE_VERSION = "22"
+
+# The server functions in netlify/functions/ deploy with the site but stay switched off
+# ("503 not set up") until their secrets are set as Netlify environment variables
+# (MANAGER_PASSCODE, AUTOMATION_URL, AUTOMATION_SECRET, SCHEDULER_SECRET; see .env.example).
+# Once they are, set VITE_AUTOMATION_API_URL = "/" so the app uses them. The main public website is
+# on GitHub Pages (.github/workflows/deploy-pages.yml); for it to use these functions, also set
+# ALLOWED_ORIGINS = https://p00rmans.github.io here.
+# Anything starting with VITE_ is bundled into the public website, so never put a secret in one.
+
+# Security headers: extra instructions Netlify sends with every page, telling the visitor's browser
+# what this site is and is not allowed to do. They protect people even if a bug ever let someone
+# sneak text into the page. `src/test/privacy.test.ts` checks these stay in place.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Content Security Policy, one rule at a time:
+    #  default-src 'self'        -> by default, only load things from this same website.
+    #  script-src 'self'         -> only run JavaScript files from this site (no injected <script>).
+    #  style-src 'self' 'unsafe-inline' -> our CSS files, plus the small inline colors React sets
+    #                               on each student chip.
+    #  img-src 'self' data: blob: -> our images, plus profile photos (stored as "data:" text).
+    #  font-src 'self' data:     -> our bundled fonts (the build tool may inline very small ones as "data:").
+    #  connect-src 'self' https: -> the app may only talk to other servers over HTTPS (the future
+    #                               n8n server). Narrow this to that one address once it exists.
+    #  object-src 'none'         -> no old browser plug-ins (Flash and similar).
+    #  base-uri 'self', form-action 'self' -> links and forms can't be redirected to another site.
+    #  frame-ancestors 'none'    -> no other website may show ShiftFit inside a frame (stops
+    #                               "clickjacking", where a fake page tricks you into clicking).
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    # Older browsers' version of frame-ancestors 'none'.
+    X-Frame-Options = "DENY"
+    # Don't let the browser guess a file's type; use the type the server states.
+    X-Content-Type-Options = "nosniff"
+    # When someone follows a link out of ShiftFit, don't tell the other site which page they came from.
+    Referrer-Policy = "no-referrer"
+    # ShiftFit never needs the camera, microphone or location, so switch them off entirely.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

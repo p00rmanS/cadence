@@ -9,6 +9,7 @@ import { WelcomeDialog } from "../components/help/WelcomeDialog";
 import { StudentRail } from "../components/students/StudentRail";
 import { StudentFormSheet } from "../components/students/StudentFormSheet";
 import { BulkAddDialog } from "../components/students/BulkAddDialog";
+import { ShiftImportDialog } from "../components/schedule/ShiftImportDialog";
 import { SchedulePanel } from "../components/schedule/SchedulePanel";
 import { InsightsPanel } from "../components/summary/InsightsPanel";
 import { Button } from "../components/ui/Button";
@@ -44,6 +45,7 @@ import { clsx } from "../lib/clsx";
 type Dialog =
   | { kind: "student"; id: string | "new" }
   | { kind: "bulk" }
+  | { kind: "import-shifts" }
   | { kind: "help"; tab?: "start" | "faq" }
   | { kind: "rules" }
   | { kind: "share" }
@@ -53,12 +55,18 @@ type Dialog =
 
 type MobileTab = "students" | "schedule" | "health";
 
+/** True while the person is typing in a text box, so keyboard shortcuts (like undo) don't fire by accident. */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
   return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
 }
 
+/**
+ * The whole app on one screen: students on the left, the schedule in the middle, schedule health
+ * on the right (tabs on a phone). It holds which dialog is open and hands the store's data and
+ * actions down to each panel.
+ */
 export function App() {
   const store = useShiftFitStore();
   const { theme, setTheme } = useTheme();
@@ -105,6 +113,7 @@ export function App() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [store.saveFailed]);
 
+  // Runs whatever the "next step" banner's button suggests (add a student, auto-fill, and so on).
   function onGuidanceAction(kind: GuidanceAction) {
     if (kind === "add-student") setDialog({ kind: "student", id: "new" });
     else if (kind === "auto-fill") store.runAutoFill(false);
@@ -158,6 +167,7 @@ export function App() {
         onAutoFill={() => store.runAutoFill(false)}
         onRebuild={() => store.runAutoFill(true)}
         onClearShifts={() => setDialog({ kind: "clear-shifts" })}
+        onImportShifts={() => setDialog({ kind: "import-shifts" })}
         hasAutoShifts={hasAutoShifts}
         hasShifts={assignments.length > 0}
         hasStudents={students.length > 0}
@@ -300,6 +310,17 @@ export function App() {
           onClose={() => setDialog(null)}
           onAdd={(rows) => {
             store.addStudents(rows);
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === "import-shifts" && (
+        <ShiftImportDialog
+          students={students}
+          slotMinutes={settings.slotMinutes}
+          onClose={() => setDialog(null)}
+          onAdd={(entries) => {
+            store.importShifts(entries);
             setDialog(null);
           }}
         />

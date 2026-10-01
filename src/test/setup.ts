@@ -6,6 +6,7 @@ import { afterEach, beforeEach } from "vitest";
  */
 export const viewport = { width: 1280 };
 
+/** Answers a "min-width"/"max-width" screen-size question using the pretend window size in `viewport`. */
 function matches(query: string): boolean {
   const min = /min-width:\s*(\d+)px/.exec(query);
   if (min) return viewport.width >= Number(min[1]);
@@ -15,6 +16,8 @@ function matches(query: string): boolean {
 }
 
 beforeEach(() => {
+  // Server tests run in plain Node with no browser; there is nothing to fake for them.
+  if (typeof window === "undefined") return;
   viewport.width = 1280;
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -49,6 +52,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (typeof document === "undefined") return;
   document.body.style.overflow = "";
   document.documentElement.removeAttribute("data-theme");
 });

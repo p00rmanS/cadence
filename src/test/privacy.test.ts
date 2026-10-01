@@ -1,7 +1,16 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { CONTENT_SECURITY_POLICY, addCspToHtml } from "../lib/contentSecurityPolicy";
 
+/**
+ * Privacy and security guards. These tests read the project's own files (not the running app) and
+ * fail if someone accidentally adds a tracker, a font or script loaded from another company, a
+ * network call to an unexpected address, or removes the website's security headers. Student data
+ * is personal (FERPA), so these mistakes must be caught before they ship.
+ */
+
+/** Every .ts, .tsx and .css file under `dir`, skipping the tests folder. */
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -42,6 +51,47 @@ describe("privacy: the app makes no third-party requests on its own", () => {
     for (const file of sourceFiles("src")) {
       const text = readFileSync(file, "utf8");
       expect(text, file).not.toMatch(/localStorage\.setItem\([^)]*(image|screenshot)/i);
+    }
+  });
+});
+
+describe("security: the website's protective headers stay switched on", () => {
+  const toml = readFileSync("netlify.toml", "utf8");
+
+  it("sends a Content Security Policy that only runs our own scripts and forbids framing", () => {
+    const policy = /Content-Security-Policy\s*=\s*"([^"]+)"/.exec(toml)?.[1] ?? "";
+    expect(policy).toContain("script-src 'self'");
+    expect(policy).not.toMatch(/script-src[^;]*unsafe/); // no 'unsafe-inline' / 'unsafe-eval' for scripts
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("object-src 'none'");
+  });
+
+  it("sends the other standard protective headers", () => {
+    expect(toml).toMatch(/X-Frame-Options\s*=\s*"DENY"/);
+    expect(toml).toMatch(/X-Content-Type-Options\s*=\s*"nosniff"/);
+    expect(toml).toMatch(/Referrer-Policy\s*=/);
+  });
+
+  it("hosts that can't send headers (GitHub Pages) get the same policy inside the built page", () => {
+    const built = addCspToHtml("<html><head><title>x</title></head></html>");
+    expect(built.indexOf("Content-Security-Policy")).toBeLessThan(built.indexOf("<title>"));
+    expect(CONTENT_SECURITY_POLICY).toContain("script-src 'self'");
+    expect(CONTENT_SECURITY_POLICY).not.toMatch(/script-src[^;]*unsafe/);
+    expect(CONTENT_SECURITY_POLICY).toContain("object-src 'none'");
+    // Every rule in the meta version also appears, word for word, in the Netlify header version.
+    const header = /Content-Security-Policy\s*=\s*"([^"]+)"/.exec(toml)?.[1] ?? "";
+    for (const rule of CONTENT_SECURITY_POLICY.split("; ")) expect(header, rule).toContain(rule);
+    const viteConfig = readFileSync("vite.config.ts", "utf8");
+    expect(viteConfig).toMatch(/apply: "build"/);
+    expect(viteConfig).toContain("addCspToHtml");
+  });
+
+  it("index.html has no inline script the policy would block (the app would show a blank page)", () => {
+    const html = readFileSync("index.html", "utf8");
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+    for (const [, attributes, body] of scripts) {
+      expect(attributes).toMatch(/\bsrc=/);
+      expect(body.trim()).toBe("");
     }
   });
 });

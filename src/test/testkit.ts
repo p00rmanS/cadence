@@ -20,10 +20,12 @@ export function makeStudent(overrides: Partial<Student> = {}): Student {
   };
 }
 
+/** The default office rules, with any changes a test asks for. */
 export function makeSettings(overrides: Partial<ScheduleSettings> = {}): ScheduleSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
 }
 
+/** One half-hour shift for a student, starting at `start` minutes after midnight. */
 export function slot(studentId: string, day: Day, start: number, source: ShiftBlock["source"] = "manual"): ShiftBlock {
   return { id: `${source}-${studentId}-${day}-${start}`, studentId, day, start, source };
 }

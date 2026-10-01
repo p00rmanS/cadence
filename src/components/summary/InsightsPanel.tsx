@@ -43,6 +43,7 @@ function Meter({ label, help, percent, detail }: { label: string; help: string; 
   );
 }
 
+/** The "Schedule health" panel: how many hours still need someone, which times, and any rule problems. */
 export function InsightsPanel({
   students,
   assignments,
@@ -63,6 +64,7 @@ export function InsightsPanel({
   const coverage = buildCoverageSlots(assignments, settings);
   const gaps = buildGapRanges(coverage);
   const summary = summarizeCoverage(coverage, settings);
+  // A student's name from their id ("Someone" if they were removed).
   const nameOf = (id: string) => students.find((s) => s.id === id)?.name ?? "Someone";
   const atTarget = students.filter((s) => assignedHours(s.id, assignments, settings) >= settings.weeklyTargetHours).length;
   const emptyHalfHours = summary.totalSlots - summary.fullyStaffedSlots;

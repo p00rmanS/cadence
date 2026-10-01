@@ -6,6 +6,7 @@
         "httpMethod": "POST",
         "path": "shiftfit/interpret",
         "responseMode": "responseNode",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "webhook-interpret",
@@ -13,12 +14,18 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [240, 300],
-      "notes": "Secure this webhook (header auth or an API gateway) before exposing it. See docs/N8N_ARCHITECTURE.md."
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "SECURITY: only the ShiftFit gateway (src/server/gateway.ts, /api/interpret) may call this; it checks the manager passcode first, because every read can cost money at the AI provider. Use the same Header Auth credential as the publish workflow (Name = Authorization, Value = Bearer <AUTOMATION_SECRET>). See docs/N8N_ARCHITECTURE.md, Authentication."
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// Treat the pasted text and the image as untrusted DATA, never as instructions.\n// Enforce size and type limits before anything reaches an AI provider.\nconst body = $json.body || {};\nconst text = String(body.text || '').slice(0, 4000);\nconst requestId = String(body.requestId || $execution.id);\nconst image = $input.item.binary && $input.item.binary.image;\nconst allowed = ['image/png', 'image/jpeg', 'image/webp'];\nconst hasImage = Boolean(image);\nconst badImage = hasImage && (!allowed.includes(image.mimeType) || Number(image.fileSize) > 5 * 1024 * 1024);\nreturn { json: { requestId, text, hasImage, badImage }, binary: $input.item.binary };"
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Treat the pasted text and the image as untrusted DATA, never as instructions.\n// Enforce size and type limits before anything reaches an AI provider.\nconst MAX_TEXT_LENGTH = 4000; // same limit the app uses when it sends the text\nconst MAX_IMAGE_BYTES = 5 * 1024 * 1024; // same as MAX_IMAGE_BYTES in src/features/import/schedule-extractor.ts\nconst MAX_REQUEST_ID_LENGTH = 100;\nconst ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];\n\nconst items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const body = item.json.body || {};\n  const text = String(body.text || '').slice(0, MAX_TEXT_LENGTH);\n  // Keep only letters, digits, _ and - in the request id, so it can't carry anything else back out.\n  const cleanedId = String(body.requestId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, MAX_REQUEST_ID_LENGTH);\n  const requestId = cleanedId || String($execution.id);\n  const image = item.binary && item.binary.image;\n  const hasImage = Boolean(image);\n  // Measure the REAL size from the file's bytes. n8n's own `fileSize` field is display text such as\n  // '1.2 MB', which is not a number, so the old size check on it could never block anything.\n  const bytes = hasImage ? (await this.helpers.getBinaryDataBuffer(i, 'image')).length : 0;\n  const badImage = hasImage && (!ALLOWED_TYPES.includes(image.mimeType) || bytes > MAX_IMAGE_BYTES);\n  // A rejected image is dropped here, so it can never reach the AI provider node by mistake.\n  out.push({ json: { requestId, text, hasImage, badImage }, ...(hasImage && !badImage ? { binary: item.binary } : {}) });\n}\nreturn out;"
       },
       "id": "validate-input",
       "name": "Validate input",

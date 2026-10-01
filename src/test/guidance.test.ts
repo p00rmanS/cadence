@@ -3,6 +3,11 @@ import { FAQ, FAQ_TOPICS, GLOSSARY, SHORTCUTS } from "../content/help";
 import { nextStep } from "../features/scheduling/guidance";
 import type { GuidanceInput } from "../features/scheduling/guidance";
 
+/**
+ * Tests for the "what should I do next?" banner (`features/scheduling/guidance.ts`) and for the
+ * help text in `content/help.ts` (every question answered, every shortcut listed, no jargon).
+ */
+
 const base: GuidanceInput = { studentCount: 3, shiftCount: 40, blockingIssues: 0, gapSlots: 0, studentsBelowTarget: 0 };
 
 describe("nextStep tells a newcomer what to do next", () => {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { parseRoster } from "../features/scheduling/roster";
 
+/**
+ * Tests for "Add several at once" (`features/scheduling/roster.ts`): reading many
+ * "Name: class times" lines into new students, and reporting lines it can't read.
+ */
+
 describe("parseRoster", () => {
   it("reads 'Name: classes' lines, several classes per student separated by semicolons", () => {
     const r = parseRoster("Noa K.: MWF 9:00am-9:50am; TTh 1:00pm-2:15pm\nKai P.: Tuesday/Thursday 8:00 AM - 9:15 AM");

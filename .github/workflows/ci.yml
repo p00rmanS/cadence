@@ -1,0 +1,41 @@
+# Automatic checks for every pull request (and every push to master).
+#
+# GitHub runs this on its own computers: it installs the exact library versions from
+# package-lock.json, then runs the same three checks we run by hand (type check, tests, build).
+# A red X on the pull request means something failed; click "Details" to see which step and why.
+# docs/GITHUB-SETTINGS.md explains how to make this check required before merging.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# This workflow only reads the code; it can't change anything in the repository.
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Install Node 22 (same as Netlify)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the exact library versions from package-lock.json
+        run: npm ci
+
+      - name: Type check (npm run lint)
+        run: npm run lint
+
+      - name: Run all tests (npm test)
+        run: npm test
+
+      - name: Build the website (npm run build)
+        run: npm run build

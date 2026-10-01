@@ -9,9 +9,11 @@ import { MAX_BACKUP_BYTES, exportBackup, parseBackup } from "../../features/pers
 import { shiftsToCsv } from "../../features/scheduling/blocks";
 import { isIsoDate, isValidTimeZone } from "../../features/scheduling/time";
 import { downloadTextFile, todayStamp } from "../../lib/download";
-import { buildPublishRequest, summarizePublish } from "../../services/automation/contracts";
+import { buildPublishRequest, scheduleForServer, summarizePublish } from "../../services/automation/contracts";
 import type { PublishSummary } from "../../services/automation/contracts";
 import { getAutomationClient } from "../../services/automation/n8nClient";
+import { useManagerSession } from "../../hooks/useManagerSession";
+import { ManagerSignIn } from "./ManagerSignIn";
 import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /**
@@ -21,8 +23,9 @@ import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, St
  * The biggest dialog in the app — it's really five features bundled behind
  * one button, each in its own `<Section>` below: backup file (save/load),
  * spreadsheet export, per-student calendar (.ics) files, publishing to
- * Google Calendar via n8n (or a harmless "practice run" if n8n isn't
- * connected — see `client.kind` and `../../services/automation`), and the
+ * Google Calendar through the ShiftFit server (after a manager signs in), or a
+ * harmless "practice run" if no server is connected — see `client.kind` and
+ * `../../services/automation`, and the
  * "start over" reset/clear actions. Read each `Section` block independently;
  * they don't depend on each other.
  */
@@ -40,6 +43,7 @@ type Props = {
   onClose: () => void;
 };
 
+/** One boxed part of the Save & share dialog, with an icon, a title and a "?" help tip. */
 function Section({ icon, title, help, children }: { icon: ReactNode; title: string; help: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-line p-4">
@@ -67,12 +71,13 @@ const zoneList: string[] = (() => {
   }
 })();
 
+/** Save & share: backups, spreadsheet, semester dates, per-student calendar files, and sending to Google Calendar. */
 export function SaveShareDialog(props: Props) {
   const { settings, students, assignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ state: PersistedStateV1; notes: string[] } | null>(null);
-  const [confirm, setConfirm] = useState<"reset" | "clear" | "publish" | null>(null);
+  const [confirm, setConfirm] = useState<"reset" | "clear" | "publish" | "remove-old" | null>(null);
 
   const [startDate, setStartDate] = useState(semester?.startDate ?? "");
   const [endDate, setEndDate] = useState(semester?.endDate ?? "");
@@ -86,6 +91,11 @@ export function SaveShareDialog(props: Props) {
   const [busy, setBusy] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [lastPublish, setLastPublish] = useState<{ version: string; summary: PublishSummary } | null>(null);
+  const [removeMessage, setRemoveMessage] = useState<string | null>(null);
+  const signedIn = useManagerSession();
+  // With a real server, nothing can be sent until a manager has signed in on this tab.
+  const needsSignIn = client.kind === "server" && !signedIn;
+  const oldEvents = lastPublish?.summary.staleShiftIds ?? [];
 
   const dateProblem =
     startDate && !isIsoDate(startDate)
@@ -104,6 +114,7 @@ export function SaveShareDialog(props: Props) {
     semester?.timeZone === timeZone &&
     JSON.stringify(skipDates) === JSON.stringify(semester?.skipDates ?? []);
 
+  // Adds a holiday/break date, but only a real date inside the semester.
   function addDayOff() {
     if (!isIsoDate(dayOff)) {
       setDayOffProblem("Pick a real date to add.");
@@ -117,12 +128,14 @@ export function SaveShareDialog(props: Props) {
   }
   const calendarReady = isSemesterConfigured(semester) && draftMatchesSaved;
 
+  // Downloads the whole schedule as a backup file.
   function handleBackup() {
     const state: PersistedStateV1 = { version: 1, settings, students, assignments, selectedStudentId, semester };
     downloadTextFile(`shiftfit-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
     setMessage({ tone: "ok", text: "Backup saved to your Downloads folder. It contains student names and class times, so keep it private." });
   }
 
+  // Opens a backup file the manager picked, checks it, and asks before replacing the current schedule.
   async function handleFile(file: File) {
     // Check the size first: reading a huge file into memory would freeze the page.
     if (file.size > MAX_BACKUP_BYTES) {
@@ -138,15 +151,41 @@ export function SaveShareDialog(props: Props) {
     setPendingImport({ state: result.value, notes: result.notes });
   }
 
+  // Sends the approved shifts to the calendar server and records an honest summary of what happened.
   async function runPublish() {
     setBusy(true);
     setPublishError(null);
+    setRemoveMessage(null);
     try {
-      const response = await client.publishSchedule(request);
+      // Only the facts the server needs are sent (no photos, no pasted text); it rebuilds `request` itself.
+      const response = await client.publishSchedule(scheduleForServer(students, assignments, settings, semester), request);
       setLastPublish({ version: request.scheduleVersion, summary: summarizePublish(request, response) });
     } catch (err) {
       setLastPublish(null);
       setPublishError(err instanceof Error ? err.message : "Something went wrong while publishing.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Deletes the old calendar events (moved or removed shifts) the manager just confirmed, then reports what happened.
+  async function runRemoveOld() {
+    setBusy(true);
+    try {
+      const { results } = await client.removeEvents(oldEvents);
+      const removed = results.filter((r) => r.status === "removed").length;
+      const failed = results.filter((r) => r.status === "failed").length;
+      const practice = results.length > 0 && results.every((r) => r.status === "dry_run");
+      setRemoveMessage(
+        practice
+          ? `Practice run: ${oldEvents.length} old events would be removed. Nothing was deleted.`
+          : `Removed ${removed} old ${removed === 1 ? "event" : "events"}.${failed ? ` ${failed} could not be removed; try again.` : ""}`,
+      );
+      // Forget the ones that are gone, so the button only offers what is really still there.
+      const stillThere = new Set(results.filter((r) => r.status === "failed").map((r) => r.shiftId));
+      setLastPublish((last) => (last ? { ...last, summary: { ...last.summary, staleShiftIds: last.summary.staleShiftIds.filter((id) => stillThere.has(id)) } } : last));
+    } catch (err) {
+      setRemoveMessage(err instanceof Error ? err.message : "Something went wrong while removing old events.");
     } finally {
       setBusy(false);
     }
@@ -339,11 +378,17 @@ export function SaveShareDialog(props: Props) {
             icon={<Send className="h-4 w-4" aria-hidden />}
             title="Send to Google Calendar"
             help={
-              client.kind === "n8n"
-                ? "Sends the approved schedule to the shared Google Calendar through your n8n workflow. Running it again updates the same events instead of making duplicates."
+              client.kind === "server"
+                ? "Sends the approved schedule to the shared Google Calendar. Running it again updates the same events instead of making duplicates."
                 : "This copy of ShiftFit isn't connected to Google Calendar, so this only does a practice run: it checks your schedule and shows what would be sent. Nothing leaves your computer."
             }
           >
+            {/* With a real server: the passcode box, which becomes "Signed in as manager" + Sign out once accepted. */}
+            {client.kind === "server" && (
+              <div className="mb-3">
+                <ManagerSignIn purpose="needed to send to Google Calendar" />
+              </div>
+            )}
             {blockingIssues > 0 ? (
               <p role="alert" className="rounded-lg bg-gap-bg p-3 text-sm">
                 Fix the {blockingIssues} {blockingIssues === 1 ? "problem" : "problems"} shown in Schedule health first. A schedule that breaks a rule can&apos;t be sent.
@@ -354,11 +399,11 @@ export function SaveShareDialog(props: Props) {
               </p>
             ) : (
               <Button
-                variant={client.kind === "n8n" ? "primary" : "secondary"}
-                disabled={busy || !hasShifts}
-                onClick={() => (client.kind === "n8n" ? setConfirm("publish") : void runPublish())}
+                variant={client.kind === "server" ? "primary" : "secondary"}
+                disabled={busy || !hasShifts || needsSignIn}
+                onClick={() => (client.kind === "server" ? setConfirm("publish") : void runPublish())}
               >
-                <Send className="h-4 w-4" aria-hidden /> {busy ? "Working…" : client.kind === "n8n" ? "Approve and send" : "Do a practice run"}
+                <Send className="h-4 w-4" aria-hidden /> {busy ? "Working…" : client.kind === "server" ? "Approve and send" : "Do a practice run"}
               </Button>
             )}
             {calendarReady && !hasShifts && <p className="mt-2 text-xs text-muted">Add some shifts first.</p>}
@@ -373,6 +418,17 @@ export function SaveShareDialog(props: Props) {
                   {stale && " The schedule has changed since then, so send it again to update the calendar."}
                 </p>
               )}
+              {oldEvents.length > 0 && !publishError && (
+                <div className="mt-2 rounded-lg bg-bg p-3">
+                  <p>
+                    {oldEvents.length} older {oldEvents.length === 1 ? "event is" : "events are"} still on the calendar for shifts you moved or removed.
+                  </p>
+                  <Button variant="danger" className="mt-2" disabled={busy || needsSignIn} onClick={() => setConfirm("remove-old")}>
+                    <Trash2 className="h-4 w-4" aria-hidden /> Remove old events
+                  </Button>
+                </div>
+              )}
+              {removeMessage && <p className="mt-2 rounded-lg bg-bg p-3">{removeMessage}</p>}
             </div>
           </Section>
 
@@ -427,7 +483,25 @@ export function SaveShareDialog(props: Props) {
           }}
         >
           <p>
-            This will create or update {request.events.length} calendar events for {new Set(request.events.map((e) => e.studentId)).size} students. ShiftFit only sends these shifts. It never asks the calendar to delete anything.
+            This will create or update {request.events.length} calendar events for {new Set(request.events.map((e) => e.studentId)).size} students. It
+            doesn&apos;t delete anything. If older events are left over from shifts you moved, you&apos;ll be asked about them separately.
+          </p>
+        </ConfirmDialog>
+      )}
+      {confirm === "remove-old" && (
+        <ConfirmDialog
+          title="Remove old events from Google Calendar?"
+          danger
+          confirmLabel="Yes, remove them"
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            setConfirm(null);
+            void runRemoveOld();
+          }}
+        >
+          <p>
+            This deletes {oldEvents.length} {oldEvents.length === 1 ? "event" : "events"} (every week of each) that ShiftFit made earlier for shifts that
+            are no longer in the schedule. Students will no longer see them. This can&apos;t be undone from ShiftFit.
           </p>
         </ConfirmDialog>
       )}
