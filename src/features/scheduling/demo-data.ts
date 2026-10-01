@@ -40,6 +40,7 @@ function makeStudent(
   };
 }
 
+/** One demo shift from `start` to `end`, cut into the half-hour pieces the app stores. */
 function range(studentId: string, day: Day, start: number, end: number): ShiftBlock[] {
   const out: ShiftBlock[] = [];
   for (let m = start; m < end; m += 30) {
@@ -48,6 +49,7 @@ function range(studentId: string, day: Day, start: number, end: number): ShiftBl
   return out;
 }
 
+/** The made-up sample roster and shifts shown the first time the app opens (no real students). */
 export function buildDemoData(): { students: Student[]; assignments: ShiftBlock[] } {
   const troy = makeStudent(
     "s1",

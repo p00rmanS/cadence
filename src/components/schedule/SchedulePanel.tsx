@@ -31,6 +31,7 @@ export function SchedulePanel(props: {
   const [view, setView] = useState<View>("grid");
   const refs = useRef<Record<View, HTMLButtonElement | null>>({ grid: null, student: null, day: null });
 
+  // Left/right arrow keys move between the view tabs (Grid, By student, By day).
   function onKey(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     e.preventDefault();

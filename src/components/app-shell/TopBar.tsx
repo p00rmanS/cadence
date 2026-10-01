@@ -46,6 +46,7 @@ type Props = {
   onThemeChange: (t: ThemeChoice) => void;
 };
 
+/** The bar across the top: the main "Fill schedule for me" button, undo/redo, help, and the collapsible settings. */
 export function TopBar({
   settings,
   onSettingsChange,

@@ -20,10 +20,12 @@ export type { SemesterConfig };
 const JS_WEEKDAY: Record<Day, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5 };
 const MS_PER_DAY = 86_400_000;
 
+/** A number as at least two digits, e.g. 7 -> "07" (calendar files need fixed-width dates and times). */
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/** A date written the calendar-file way, with no dashes, e.g. "20261006". */
 function utcDateStamp(date: Date): string {
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
 }
@@ -33,8 +35,20 @@ function localDateTime(date: Date, minutes: number): string {
   return `${utcDateStamp(date)}T${pad(Math.floor(minutes / 60))}${pad(minutes % 60)}00`;
 }
 
+/**
+ * Makes text safe to put inside one line of a .ics file. Backslashes, semicolons and commas have
+ * special meaning there, so each gets a backslash in front. Every kind of line break (Windows
+ * "\r\n", old-Mac "\r" on its own, Unix "\n") becomes the two characters "\n", and any other hidden
+ * control character is removed. Without this, a name containing a line break could start a new line
+ * in the file and add calendar instructions nobody asked for.
+ */
 function escapeText(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/[\u0000-\u001f\u007f]/g, "");
 }
 
 /** RFC 5545 line folding: lines longer than 75 characters continue on a space-prefixed line. */
@@ -46,12 +60,14 @@ function fold(line: string): string {
   return parts.join("\r\n ");
 }
 
+/** The "EXDATE" line listing the days off (holidays, breaks) this weekly shift should skip, or nothing. */
 function exdate(semester: SemesterConfig, first: Date, count: number, startMinutes: number): string[] {
   const skipped = excludedOccurrences(semester, first, count);
   if (!skipped.length) return [];
   return [`EXDATE;TZID=${semester.timeZone}:${skipped.map((d) => localDateTime(d, startMinutes)).join(",")}`];
 }
 
+/** True once the manager has saved a start date, an end date and a timezone. Calendar export needs all three. */
 export function isSemesterConfigured(semester: Partial<SemesterConfig> | null | undefined): semester is SemesterConfig {
   return Boolean(semester?.startDate && semester?.endDate && semester?.timeZone);
 }
@@ -81,6 +97,10 @@ export function excludedOccurrences(semester: SemesterConfig, first: Date, count
   return [...found.values()].sort((a, b) => a.getTime() - b.getTime());
 }
 
+/**
+ * A safe download name for a student's calendar file, e.g. "shiftfit-noa-k.ics". Anything other
+ * than letters and digits becomes a dash, so a name can't create folders or odd file names.
+ */
 export function icsFileName(student: Student): string {
   const slug = student.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "student";
   return `shiftfit-${slug}.ics`;

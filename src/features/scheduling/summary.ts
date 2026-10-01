@@ -26,6 +26,7 @@ export type ShiftLine = {
 export type StudentShifts = { student: Student; hours: number; shifts: ShiftLine[] };
 export type DayShifts = { day: Day; shifts: (ShiftLine & { name: string; color: string; avatar?: string })[] };
 
+/** Joins back-to-back half hours into whole shifts and adds each shift's length in hours. */
 function lines(assignments: ShiftBlock[], slotMinutes: number): ShiftLine[] {
   return mergeContiguousBlocks(assignments, slotMinutes).map((b) => ({ ...b, hours: (b.end - b.start) / 60 }));
 }
@@ -55,6 +56,7 @@ export function summarizeByDay(students: Student[], assignments: ShiftBlock[], s
   }));
 }
 
+/** One shift as readable text, e.g. "9:00am–11:00am (2 hours)". */
 export function shiftText(line: Pick<ShiftLine, "start" | "end" | "hours">): string {
   return `${formatRange(line.start, line.end)} (${hoursLabel(line.hours)})`;
 }

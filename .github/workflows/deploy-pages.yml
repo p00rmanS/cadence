@@ -1,0 +1,78 @@
+# Publishes the website to GitHub Pages: https://<owner>.github.io/<repository>/
+# (for this repository: https://p00rmans.github.io/cadence/).
+#
+# It runs every time master changes (that is, after a pull request is merged), and can also be
+# started by hand from the Actions tab ("Run workflow"). Nothing is deployed unless the type check
+# and every test pass first.
+#
+# One-time setup (see docs/GITHUB-SETTINGS.md, "GitHub Pages"):
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+#
+# GitHub Pages only hosts the website. The ShiftFit server (the gateway, for Google Calendar and
+# screenshots) can't run there; it runs on Netlify. To connect them, set the repository VARIABLE
+# (not secret: it is public anyway) VITE_AUTOMATION_API_URL to the gateway's address, e.g.
+# https://your-site.netlify.app, under Settings -> Secrets and variables -> Actions -> Variables.
+# Without it the github.io site works fully, with Google Calendar in practice-run mode.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Reading the code, and publishing to Pages, is all this workflow may do.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# If master changes twice quickly, finish one deploy before starting the next (never two at once).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Install Node 22 (same as Netlify)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the exact library versions from package-lock.json
+        run: npm ci
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Run all tests
+        run: npm test
+
+      - name: Build the website for the /<repository>/ folder
+        run: npm run build
+        env:
+          # The site lives at /cadence/, not at the root, so every link must start with it (see vite.config.ts).
+          BASE_PATH: /${{ github.event.repository.name }}/
+          # Public address of the ShiftFit server, or empty for practice-run mode. Never a secret.
+          VITE_AUTOMATION_API_URL: ${{ vars.VITE_AUTOMATION_API_URL }}
+
+      - name: Package the built site for Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

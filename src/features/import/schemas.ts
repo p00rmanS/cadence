@@ -17,12 +17,14 @@ export type ExtractedSchedule = {
   unresolved: string[];
 };
 
+/** True for a plain object like `{ ... }` (not null, not a list). */
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 const FULL_DAYS = new Set(DAYS);
 
+/** True for a whole number of minutes from midnight (0) up to the next midnight (1440). */
 function inDay(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
 }

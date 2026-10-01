@@ -51,6 +51,7 @@ function withCurrent(options: Opt[], current: number | null, label: (v: number) 
   return [...options, { value: current, label: label(current) }].sort((a, b) => (a.value ?? -1) - (b.value ?? -1));
 }
 
+/** The add/edit student form: name, photo, class times, blocked times and work preferences. */
 export function StudentFormSheet({
   student,
   existingNames,
@@ -86,6 +87,7 @@ export function StudentFormSheet({
   const classError =
     parse.errors.length || blockedParse.errors.length ? "Fix or delete the lines marked with a red ✕ before saving." : null;
 
+  // Fills the form with what the screenshot reader found. Nothing is saved until the manager presses Save.
   function handleExtracted(outcome: ExtractionOutcome) {
     const ai = outcome.ai;
     if (!ai) return;
@@ -104,6 +106,7 @@ export function StudentFormSheet({
   // Only the most recently chosen photo may update the form. Shrinking takes a moment, so without
   // this a slow first photo could finish last and silently replace the one picked after it.
   const photoRequest = useRef(0);
+  // Shrinks a chosen photo to a thumbnail. If a newer photo is picked meanwhile, the older result is ignored.
   async function handlePhoto(file: File) {
     const mine = ++photoRequest.current;
     setPhotoError(null);
@@ -118,6 +121,7 @@ export function StudentFormSheet({
     }
   }
 
+  // Save button: show any problems first; only save when the name and class times are fine.
   function handleSubmit() {
     setTriedSave(true);
     if (nameError || classError) return;

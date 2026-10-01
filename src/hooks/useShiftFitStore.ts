@@ -112,9 +112,12 @@ export type Action =
   | { type: "SAVE_STATUS"; failed: boolean }
   | { type: "OTHER_TAB_CHANGED" };
 
+/** How many undo steps are kept; older ones are forgotten so memory doesn't grow forever. */
 const HISTORY_LIMIT = 100;
+/** Counts up for every message, so showing the same text twice still counts as a new message. */
 let toastSeq = 0;
 
+/** A short pop-up message (a "toast") with a fresh id. */
 function toast(message: string): State["toast"] {
   toastSeq += 1;
   return { id: toastSeq, message };
@@ -125,6 +128,7 @@ function manualId(studentId: string, day: Day, start: number): string {
   return `manual-${studentId}-${day}-${start}`;
 }
 
+/** Turns what the manager typed in the student form into a full student record. */
 function toStudent(id: string, input: NewStudentInput, color: string): Student {
   return {
     id,
@@ -148,6 +152,7 @@ function nextColor(students: Student[]): string {
   return STUDENT_COLORS.find((c) => !used.has(c)) ?? STUDENT_COLORS[students.length % STUDENT_COLORS.length];
 }
 
+/** What the app starts with: the schedule saved in this browser if there is one, otherwise the demo data. */
 export function initialState(): State {
   const saved = storage.load();
   const base = { past: [], future: [], toast: null, pendingOverride: null, lastAutofill: null, saveFailed: false, otherTabChanged: false };
@@ -166,6 +171,10 @@ export function initialState(): State {
   };
 }
 
+/**
+ * Applies a change to the schedule and records the old version as an undo step (named by
+ * `label`, e.g. "Auto-fill"). Any "redo" steps are cleared, since the history has now branched.
+ */
 function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {}): State {
   return {
     ...state,
@@ -176,10 +185,12 @@ function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {
   };
 }
 
+/** Keeps the selected student if they still exist; otherwise selects the first student (or nobody). */
 function fixSelection(doc: Doc, selected: string | null): string | null {
   return selected && doc.students.some((s) => s.id === selected) ? selected : (doc.students[0]?.id ?? null);
 }
 
+/** A count with the right word form, e.g. plural(1, "shift") -> "1 shift", plural(3, "shift") -> "3 shifts". */
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }

@@ -5,11 +5,18 @@ import type { Action, State } from "../hooks/useShiftFitStore";
 import { makeSettings, makeStudent, run, slot } from "./testkit";
 import { assignedHours } from "../features/scheduling/availability";
 
+/**
+ * Tests for the "who could cover this gap?" suggestions (`suggestFillers` in `issues.ts`) and for
+ * the one-click fix that assigns a suggested student through the store.
+ */
+
 const settings = makeSettings();
+// Runs several store actions in a row, starting from state `s`, and returns the final state.
 const apply = (s: State, ...a: Action[]) => a.reduce(reducer, s);
 
 describe("suggestFillers", () => {
-  const busyAt = (day: "mon", start: number, end: number) => [{ day, start, end, source: "class" as const }];
+  // A one-item class list: busy on Monday from `start` to `end`.
+  const busyAt =(day: "mon", start: number, end: number) => [{ day, start, end, source: "class" as const }];
 
   it("suggests only students who can really work the stretch, best coverage first", () => {
     const full = makeStudent({ id: "a", name: "Ana" });
@@ -56,6 +63,7 @@ describe("suggestFillers", () => {
 });
 
 describe("the FILL_GAP action", () => {
+  // An empty schedule with no undo history or messages, to start each test clean.
   const base = () => {
     const empty = apply(initialState(), { type: "CLEAR_ALL" });
     return { ...empty, past: [], future: [], toast: null };

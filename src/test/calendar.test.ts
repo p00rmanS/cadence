@@ -4,10 +4,16 @@ import { mergeContiguousBlocks, scheduleVersion, shiftsToCsv } from "../features
 import { makeStudent, run, slot } from "./testkit";
 import type { SemesterConfig } from "../features/scheduling/types";
 
+/**
+ * Tests for the calendar files students import (`features/calendar/ics.ts`) and for merged shift
+ * blocks, schedule version fingerprints and the spreadsheet (CSV) export (`scheduling/blocks.ts`).
+ */
+
 // 2026-08-24 is a Monday; 2026-12-11 is a Friday.
 const semester: SemesterConfig = { startDate: "2026-08-24", endDate: "2026-12-11", timeZone: "Pacific/Honolulu" };
 const NOW = new Date("2026-08-01T12:00:00Z");
 
+/** A calendar file split into its lines (calendar files end each line with \r\n). */
 function lines(ics: string): string[] {
   return ics.split("\r\n");
 }
@@ -79,6 +85,16 @@ describe("calendar file (.ics)", () => {
     for (const l of lines(ics)) expect(l.length).toBeLessThanOrEqual(75);
   });
 
+  it("can't be tricked into adding calendar lines by a line break hidden in a name (including a lone \\r)", () => {
+    for (const breaker of ["\r", "\n", "\r\n"]) {
+      const sneaky = makeStudent({ id: "s1", name: `Noa${breaker}BEGIN:VALARM\u0007` });
+      const ics = buildStudentIcs(sneaky, [slot("s1", "mon", 540)], semester, 30, NOW);
+      // Once the real CRLF line endings are removed, no other line-break character may remain.
+      expect(ics.replace(/\r\n/g, ""), JSON.stringify(breaker)).not.toMatch(/[\r\n\u0007]/);
+      expect(lines(ics).some((l) => l.startsWith("BEGIN:VALARM"))).toBe(false);
+    }
+  });
+
   it("needs all three of dates and timezone, and names files safely", () => {
     expect(isSemesterConfigured(semester)).toBe(true);
     expect(isSemesterConfigured({ ...semester, timeZone: "" })).toBe(false);
@@ -128,6 +144,7 @@ describe("shift blocks, versions and CSV", () => {
 describe("days off (holidays and breaks)", () => {
   const student = makeStudent({ id: "s1", name: "Noa K." });
   const base: SemesterConfig = { startDate: "2026-08-24", endDate: "2026-12-11", timeZone: "Pacific/Honolulu" };
+  // Just the "skip these dates" (EXDATE) lines of a calendar file.
   const events = (ics: string) => ics.split("\r\n").filter((l) => l.startsWith("EXDATE"));
 
   it("skips only the weekday that the holiday falls on", () => {

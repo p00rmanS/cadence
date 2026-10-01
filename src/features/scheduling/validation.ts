@@ -29,18 +29,40 @@ export type ValidationResult<T> = { ok: true; value: T; notes: string[] } | { ok
 const MAX_ERRORS = 10;
 const MAX_SKIP_DATES = 100;
 
+/** True for a plain object like `{ ... }` (not null, not a list). */
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** True for a whole number of minutes from midnight (0) up to the next midnight (1440). */
 function isMinutes(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
 }
 
+/** True for one of the five weekday codes the app uses ("mon" to "fri"). */
 function isDay(v: unknown): v is Day {
   return typeof v === "string" && (DAYS as string[]).includes(v);
 }
 
+/**
+ * Hidden "control characters" are codes 0-31 and 127: line breaks, tabs, the null character and
+ * similar. A real name or id never has one, and the app's own text boxes can't type one; only a
+ * hand-edited backup file could. A line break hidden in a name could break the calendar files and
+ * publish requests the name is later copied into, so they are never let through.
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/g;
+
+/** True if the text contains any hidden control character (see above). */
+function hasControlCharacters(text: string): boolean {
+  return new RegExp(CONTROL_CHARACTERS.source).test(text);
+}
+
+/** The same text with every hidden control character turned into a plain space. */
+function removeControlCharacters(text: string): string {
+  return text.replace(CONTROL_CHARACTERS, " ");
+}
+
+/** Checks the office-wide rules (open hours, staff per slot, weekly target) and returns a clean copy, or null. */
 function readSettings(input: unknown, errors: string[]): ScheduleSettings | null {
   if (!isRecord(input)) {
     errors.push("Missing settings.");
@@ -66,6 +88,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
   return { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours };
 }
 
+/** Checks one student's list of class/blocked times; any bad entry rejects the list. */
 function readBusy(input: unknown, label: string, errors: string[]): BusyBlock[] | null {
   if (!Array.isArray(input)) {
     errors.push(`${label}: busy must be a list.`);
@@ -83,6 +106,11 @@ function readBusy(input: unknown, label: string, errors: string[]): BusyBlock[] 
   return out;
 }
 
+/**
+ * Checks every student field by field and returns clean copies. Problems that can be safely
+ * repaired are (a bad color gets a default, hidden characters in a name become spaces, an
+ * unreadable photo is dropped); anything else is reported as an error.
+ */
 function readStudents(input: unknown, errors: string[]): Student[] | null {
   if (!Array.isArray(input)) {
     errors.push("students must be a list.");
@@ -100,9 +128,12 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       errors.push(`${label} is not an object.`);
       continue;
     }
-    if (typeof s.id !== "string" || !s.id || s.id.length > 100) errors.push(`${label}: id is required.`);
+    if (typeof s.id !== "string" || !s.id || s.id.length > 100 || hasControlCharacters(s.id)) errors.push(`${label}: id is required.`);
     else if (ids.has(s.id)) errors.push(`${label}: duplicate id.`);
-    if (typeof s.name !== "string" || !s.name.trim() || s.name.length > 80) errors.push(`${label}: name is required (80 characters max).`);
+    // Hidden characters in a name are replaced with spaces (below) rather than rejecting the whole
+    // file, so one odd name in the browser's saved data can never wipe out the manager's schedule.
+    const cleanName = typeof s.name === "string" ? removeControlCharacters(s.name).trim() : "";
+    if (!cleanName || cleanName.length > 80) errors.push(`${label}: name is required (80 characters max).`);
     if (typeof s.daysPerWeek !== "number" || !Number.isInteger(s.daysPerWeek) || s.daysPerWeek < 1 || s.daysPerWeek > 5) {
       errors.push(`${label}: days per week must be 1 to 5.`);
     }
@@ -117,7 +148,7 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       typeof s.color === "string" && /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : STUDENT_COLORS[i % STUDENT_COLORS.length];
     out.push({
       id: s.id as string,
-      name: (s.name as string).trim(),
+      name: cleanName,
       color,
       // A photo that is not a thumbnail this app made (wrong type, too long, hand-edited) is dropped and initials show instead.
       ...(isValidAvatar(s.avatar) ? { avatar: s.avatar } : {}),
@@ -134,6 +165,7 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
   return errors.length ? null : out;
 }
 
+/** Checks the optional semester dates, timezone and days off used for calendar export. Missing is fine. */
 function readSemester(input: unknown, errors: string[]): SemesterConfig | null {
   if (input == null) return null;
   if (

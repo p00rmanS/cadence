@@ -5,6 +5,12 @@ import { findIssues } from "../features/scheduling/issues";
 import { initialState, reducer } from "../hooks/useShiftFitStore";
 import type { Action, NewStudentInput, State } from "../hooks/useShiftFitStore";
 
+/**
+ * Tests for the app's central state (`hooks/useShiftFitStore.ts`): adding and editing students,
+ * assigning shifts, auto-fill, undo/redo and overrides. Each test sends actions to the reducer
+ * (the function that turns "current state + action" into the next state) and checks the result.
+ */
+
 const noa: NewStudentInput = {
   name: "Noa K.",
   preference: "any",
@@ -16,6 +22,7 @@ const noa: NewStudentInput = {
   needsOpeningShift: false,
 };
 
+/** Runs several store actions in a row, starting from `state`, and returns the final state. */
 function apply(state: State, ...actions: Action[]): State {
   return actions.reduce(reducer, state);
 }
@@ -58,6 +65,7 @@ describe("students", () => {
 });
 
 describe("clicking the schedule", () => {
+  // An empty schedule with one student, Noa, already added.
   const withNoa = () => apply(empty, { type: "ADD_STUDENT", id: "n1", input: noa });
 
   it("assigns then unassigns the same slot", () => {
@@ -104,6 +112,7 @@ describe("clicking the schedule", () => {
 });
 
 describe("ranges", () => {
+  // An empty schedule with one student, Noa, already added.
   const withNoa = () => apply(empty, { type: "ADD_STUDENT", id: "n1", input: noa });
 
   it("fills a stretch and clears it again", () => {
@@ -226,6 +235,7 @@ describe("other actions", () => {
 });
 
 describe("adding several students", () => {
+  // `n` new students named "Student 0", "Student 1", ... ready to add in one go.
   const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `b${i}`, input: { ...noa, name: `Student ${i}`, classText: "MWF 9:00am-9:50am" } }));
 
   it("adds them all as one undo step, with different colors", () => {

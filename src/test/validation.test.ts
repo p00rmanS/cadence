@@ -4,6 +4,13 @@ import { DEFAULT_SETTINGS } from "../features/scheduling/constants";
 import { makeStudent, slot } from "./testkit";
 import type { PersistedStateV1 } from "../features/scheduling/types";
 
+/**
+ * Tests for the backup-file / saved-data gatekeeper (`features/scheduling/validation.ts`). Every
+ * test hands it something hand-made (good, broken, or deliberately sneaky) and checks it either
+ * returns a clean, safe copy or refuses with a readable message.
+ */
+
+/** A small, valid saved state; each test changes only the part it is about. */
 function state(overrides: Partial<PersistedStateV1> = {}): PersistedStateV1 {
   return {
     version: 1,
@@ -16,6 +23,7 @@ function state(overrides: Partial<PersistedStateV1> = {}): PersistedStateV1 {
   };
 }
 
+/** Asserts that `input` is refused, and returns the error text so a test can check the wording. */
 function fails(input: unknown): string {
   const result = validatePersistedState(input);
   expect(result.ok).toBe(false);
@@ -52,6 +60,18 @@ describe("validatePersistedState", () => {
     fails(state({ students: [{ ...makeStudent(), daysPerWeek: 9 }] }));
     fails(state({ students: [{ ...makeStudent(), busy: [{ day: "sun", start: 1, end: 2, source: "class" }] as never }] }));
     fails(state({ students: [{ ...makeStudent(), busy: [{ day: "mon", start: 600, end: 500, source: "class" }] }] }));
+  });
+
+  it("turns hidden characters in a name into spaces instead of throwing away the whole backup", () => {
+    const result = validatePersistedState(state({ students: [{ ...makeStudent(), name: "Noa\rBEGIN:VEVENT\u0000K." }] }));
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.students[0].name).toBe("Noa BEGIN:VEVENT K.");
+    // A name made of nothing but hidden characters is still "no name".
+    expect(fails(state({ students: [{ ...makeStudent(), name: "\n\t\r" }] }))).toMatch(/Student #1.*name/);
+  });
+
+  it("rejects a student id containing hidden characters (ids link shifts to people, so they can't be repaired)", () => {
+    fails(state({ students: [{ ...makeStudent(), id: "s1\n" }] }));
   });
 
   it("rejects duplicate student ids", () => {

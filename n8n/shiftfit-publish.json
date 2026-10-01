@@ -6,18 +6,26 @@
         "httpMethod": "POST",
         "path": "shiftfit/publish",
         "responseMode": "responseNode",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "webhook-publish",
       "name": "Webhook: /shiftfit/publish",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [220, 320]
+      "position": [220, 320],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "SECURITY: only the ShiftFit gateway (src/server/gateway.ts) may call this, never a browser. Create an n8n Header Auth credential with Name = Authorization and Value = Bearer <AUTOMATION_SECRET> (the same secret set on Netlify) and select it here. The gateway has already checked the manager passcode, re-checked the schedule's rules and rebuilt these events before calling. See docs/N8N_ARCHITECTURE.md, Authentication."
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Never trust a webhook body blindly (same rule as contracts.ts's validatePublishResponse,\n// applied here to what's coming IN instead of what's going out). A malformed or truncated\n// request must not reach the Google Calendar node.\nconst body = $input.first().json.body || {};\nconst scheduleVersion = body.scheduleVersion;\nconst events = body.events;\nconst DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];\nconst inDay = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;\n\nif (typeof scheduleVersion !== 'string' || !scheduleVersion || !Array.isArray(events)) {\n  throw new Error('Malformed publish request: scheduleVersion and events are required.');\n}\n\n// TODO once Workflow B is standing up: compare `scheduleVersion` against the last version this\n// workflow actually approved (persisted by that step) and reject a stale/changed schedule here.\n// Today the frontend's own approval dialog is the only gate, so this step only checks shape.\n\nconst clean = [];\nfor (const e of events) {\n  const ok =\n    e && typeof e.studentId === 'string' && typeof e.studentName === 'string' && DAYS.includes(e.day) &&\n    inDay(e.start) && inDay(e.end) && e.end > e.start && typeof e.shiftId === 'string' && e.shiftId;\n  if (ok) clean.push({ studentId: e.studentId, studentName: e.studentName, day: e.day, start: e.start, end: e.end, shiftId: e.shiftId });\n}\nif (!clean.length) throw new Error('No valid events in the publish request.');\n\n// One item per event from here on, each carrying the schedule version so later nodes\n// (and the final response) don't need to look it up again.\nreturn clean.map((e) => ({ json: { ...e, scheduleVersion } }));"
+        "jsCode": "// Never trust a webhook body blindly (same rule as contracts.ts's validatePublishResponse,\n// applied here to what's coming IN instead of what's going out). A malformed, oversized or\n// tampered request must never reach the Google Calendar node.\nconst body = $input.first().json.body || {};\nconst scheduleVersion = body.scheduleVersion;\nconst events = body.events;\nconst DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];\n\n// Size limits, matching src/features/scheduling/validation.ts, so one request can never ask\n// Google for more calendar work than a real ShiftFit schedule could need.\nconst MAX_EVENTS = 5000; // same as MAX_ASSIGNMENTS\nconst MAX_NAME_LENGTH = 80; // same as the student name limit\nconst MAX_ID_LENGTH = 200;\nconst MAX_SKIPPED_DAYS = 100; // same as MAX_SKIP_DATES\nconst MAX_TIME_ZONE_LENGTH = 64;\n\n// A whole number of minutes between midnight (0) and the next midnight (1440).\nconst inDay = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;\n// Non-empty text up to `max` characters with no hidden control characters. A line break inside a\n// name or timezone could otherwise smuggle extra lines (extra repeat rules) into the calendar event.\nconst safeText = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max && !/[\\u0000-\\u001f\\u007f]/.test(v);\n// A local date-time exactly like buildPublishRequest sends, e.g. 2026-10-06T09:00:00.\nconst LOCAL_DATE_TIME = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:00$/;\n// A timezone name such as Pacific/Honolulu: up to three parts of letters, digits, _ + or -, split by a slash.\nconst TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\\/[A-Za-z0-9_+-]+){0,2}$/;\n// The only repeat rule ShiftFit ever sends: weekly, 1 to 999 times.\nconst WEEKLY_RULE = /^FREQ=WEEKLY;COUNT=[1-9][0-9]{0,2}$/;\n\nif (!safeText(scheduleVersion, MAX_ID_LENGTH) || !Array.isArray(events)) {\n  throw new Error('Malformed publish request: scheduleVersion and events are required.');\n}\nif (events.length > MAX_EVENTS) throw new Error('Too many events in one publish request.');\n\n// The ShiftFit gateway has already re-checked the rules and refused any schedule that changed after\n// the manager approved it, so this step checks the shape again as a second line of defense.\n\n// Checks one event's real-dates block (PublishRecurrence in src/services/automation/contracts.ts)\n// and returns a clean copy holding only the known fields, or null if anything is off.\nfunction cleanRecurrence(r) {\n  if (!r || typeof r !== 'object') return null;\n  const ok =\n    typeof r.startIso === 'string' && LOCAL_DATE_TIME.test(r.startIso) &&\n    typeof r.endIso === 'string' && LOCAL_DATE_TIME.test(r.endIso) && r.endIso > r.startIso &&\n    typeof r.timeZone === 'string' && r.timeZone.length <= MAX_TIME_ZONE_LENGTH && TIME_ZONE.test(r.timeZone) &&\n    typeof r.rrule === 'string' && WEEKLY_RULE.test(r.rrule) &&\n    Array.isArray(r.exdates) && r.exdates.length <= MAX_SKIPPED_DAYS &&\n    r.exdates.every((d) => typeof d === 'string' && LOCAL_DATE_TIME.test(d));\n  return ok ? { startIso: r.startIso, endIso: r.endIso, timeZone: r.timeZone, rrule: r.rrule, exdates: [...r.exdates] } : null;\n}\n\nconst clean = [];\nconst seenShiftIds = new Set();\nfor (const e of events) {\n  const ok =\n    e && typeof e === 'object' && safeText(e.studentId, MAX_ID_LENGTH) && safeText(e.studentName, MAX_NAME_LENGTH) &&\n    DAYS.includes(e.day) && inDay(e.start) && inDay(e.end) && e.end > e.start &&\n    // The shift id must be built exactly the way ShiftFit builds it (student-day-start) and appear\n    // only once, so one request can't create the same event twice.\n    e.shiftId === `${e.studentId}-${e.day}-${e.start}` && !seenShiftIds.has(e.shiftId);\n  if (!ok) continue;\n  // Keep the real dates. An earlier version of this step dropped `recurrence`, so every event would\n  // have reached Google Calendar with no date at all. An event without valid dates is skipped, never\n  // sent dateless; ShiftFit then shows it to the manager as not sent (summarizePublish counts it as missing).\n  const recurrence = cleanRecurrence(e.recurrence);\n  if (!recurrence) continue;\n  seenShiftIds.add(e.shiftId);\n  clean.push({ studentId: e.studentId, studentName: e.studentName, day: e.day, start: e.start, end: e.end, shiftId: e.shiftId, recurrence });\n}\nif (!clean.length) throw new Error('No valid events in the publish request.');\n\n// One item per event from here on, each carrying the schedule version so later nodes\n// (and the final response) don't need to look it up again.\nreturn clean.map((e) => ({ json: { ...e, scheduleVersion } }));"
       },
       "id": "revalidate-version",
       "name": "Validate request shape",
@@ -45,7 +53,7 @@
         "end": "={{ $json.recurrence ? $json.recurrence.endIso : null }}",
         "summary": "={{$json.studentName}} — shift",
         "additionalFields": {
-          "recurrence": "={{ $json.recurrence ? ['RRULE:' + $json.recurrence.rrule, ...($json.recurrence.exdates.length ? ['EXDATE;TZID=' + $json.recurrence.timeZone + ':' + $json.recurrence.exdates.join(',')] : [])] : [] }}"
+          "recurrence": "={{ $json.recurrence ? ['RRULE:' + $json.recurrence.rrule, ...($json.recurrence.exdates.length ? ['EXDATE;TZID=' + $json.recurrence.timeZone + ':' + $json.recurrence.exdates.map((d) => d.replace(/[-:]/g, '')).join(',')] : [])] : [] }}"
         }
       },
       "id": "google-calendar-upsert",
@@ -53,18 +61,19 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1,
       "position": [880, 320],
+      "onError": "continueRegularOutput",
       "credentials": {
         "googleCalendarOAuth2Api": {
           "id": "REPLACE_WITH_CREDENTIAL_ID",
           "name": "REPLACE_WITH_CREDENTIAL_NAME"
         }
       },
-      "notes": "operation/start/end/recurrence are set FROM the item's own fields (existingEventId from 'Diff vs. previously synced events', recurrence from ShiftFit's publish request — see PublishRecurrence in src/services/automation/contracts.ts). The exact parameter names (operation, eventId, additionalFields.recurrence) depend on your n8n Google Calendar node version — check them against your instance before relying on this; it has never been run live. Items without $json.recurrence mean no semester dates were configured when ShiftFit built the request, which the frontend now prevents (SaveShareDialog requires saved semester dates before 'Approve and send' is enabled) — if you see one anyway, skip it rather than sending a dateless event."
+      "notes": "operation/start/end/recurrence are set FROM the item's own fields (existingEventId from 'Diff vs. previously synced events', recurrence from ShiftFit's publish request — see PublishRecurrence in src/services/automation/contracts.ts). The exact parameter names (operation, eventId, additionalFields.recurrence) depend on your n8n Google Calendar node version — check them against your instance before relying on this; it has never been run live. On error this node carries on (onError: continueRegularOutput), so one rejected event is reported as failed instead of stopping every other shift. Every item reaching this node has a checked $json.recurrence ('Validate request shape' skips events without real dates). Skipped days (EXDATE) are rewritten from 2026-10-06T09:00:00 to 20261006T090000, the only date-time format the calendar standard (RFC 5545) accepts there; sending the dashed form meant holidays would not be skipped. Google Calendar needs the timezone for a repeating event: if your node version has a start/end timezone option, set it to {{ $json.recurrence.timeZone }}."
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Write shiftId -> googleEventId into the same static-data map 'Diff vs. previously synced\n// events' read from, so the NEXT publish (or a retry of this one) recognizes these events\n// as already-synced instead of creating duplicates. Then build the response contracts.ts\n// expects (see PublishResponse / PublishEventResult in src/services/automation/contracts.ts).\nconst store = $getWorkflowStaticData('global');\nif (!store.shiftfitSyncMap) store.shiftfitSyncMap = {};\n\nconst results = [];\nlet scheduleVersion = null;\nfor (const item of $input.all()) {\n  // The Google Calendar node's own output usually replaces $json with the calendar event it\n  // returned, so the original shiftId/scheduleVersion are read back from the node BEFORE it\n  // (n8n keeps this linkage via paired items). Adjust the referenced node name here if you\n  // rename 'Diff vs. previously synced events'.\n  const original = $('Diff vs. previously synced events').itemMatching(item.pairedItem?.item ?? 0)?.json ?? {};\n  const shiftId = original.shiftId;\n  scheduleVersion = scheduleVersion || original.scheduleVersion;\n  const googleEventId = item.json.id || item.json.googleEventId;\n  if (shiftId && googleEventId) {\n    store.shiftfitSyncMap[shiftId] = googleEventId;\n    results.push({ shiftId, status: original.existingEventId ? 'updated' : 'created', googleEventId });\n  } else if (shiftId) {\n    // The calendar node didn't return an id — treat as failed rather than silently dropping it.\n    results.push({ shiftId, status: 'failed', error: 'Google Calendar did not return an event id.' });\n  }\n}\nreturn [{ json: { scheduleVersion, results } }];"
+        "jsCode": "// Write shiftId -> googleEventId into the same static-data map 'Diff vs. previously synced\n// events' read from, so the NEXT publish (or a retry of this one) recognizes these events\n// as already-synced instead of creating duplicates. Then build the response contracts.ts\n// expects (see PublishResponse / PublishEventResult in src/services/automation/contracts.ts).\nconst store = $getWorkflowStaticData('global');\nif (!store.shiftfitSyncMap) store.shiftfitSyncMap = {};\nconst MAX_STALE_REPORTED = 5000; // same as MAX_REMOVALS in src/services/automation/contracts.ts\n\nconst results = [];\nlet scheduleVersion = null;\nfor (const item of $input.all()) {\n  // The Google Calendar node's own output usually replaces $json with the calendar event it\n  // returned, so the original shiftId/scheduleVersion are read back from the node BEFORE it\n  // (n8n keeps this linkage via paired items). Adjust the referenced node name here if you\n  // rename 'Diff vs. previously synced events'.\n  const original = $('Diff vs. previously synced events').itemMatching(item.pairedItem?.item ?? 0)?.json ?? {};\n  const shiftId = original.shiftId;\n  scheduleVersion = scheduleVersion || original.scheduleVersion;\n  const googleEventId = item.json.id || item.json.googleEventId;\n  if (shiftId && googleEventId && !item.json.error) {\n    store.shiftfitSyncMap[shiftId] = googleEventId;\n    results.push({ shiftId, status: original.existingEventId ? 'updated' : 'created', googleEventId });\n  } else if (shiftId) {\n    // The calendar node failed for this shift or returned no id (it is set to carry on, so one bad\n    // event can't stop the rest). Report it as failed rather than silently dropping it.\n    results.push({ shiftId, status: 'failed', error: 'Google Calendar did not accept this event.' });\n  }\n}\n\n// Events this workflow created EARLIER for shifts that are not in this schedule any more (moved or\n// removed). They are only reported, never deleted here: ShiftFit asks the manager first, then calls\n// the /shiftfit/remove webhook below.\nconst current = new Set($('Diff vs. previously synced events').all().map((i) => i.json.shiftId));\nconst staleShiftIds = Object.keys(store.shiftfitSyncMap).filter((id) => !current.has(id)).slice(0, MAX_STALE_REPORTED);\nreturn [{ json: { scheduleVersion, results, staleShiftIds } }];"
       },
       "id": "persist-sync-state",
       "name": "Persist sync state",
@@ -75,13 +84,110 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { scheduleVersion: $json.scheduleVersion, results: $json.results } }}"
+        "responseBody": "={{ { scheduleVersion: $json.scheduleVersion, results: $json.results, staleShiftIds: $json.staleShiftIds } }}"
       },
       "id": "respond-publish",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [1320, 320]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shiftfit/remove",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "webhook-remove",
+      "name": "Webhook: /shiftfit/remove",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 620],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "Deletes old events for shifts the manager moved or removed, ONLY after the manager confirmed it in ShiftFit. It lives in this same workflow on purpose: n8n keeps workflow static data per workflow, and removal needs the same shiftId -> googleEventId records the publish path writes. Same Header Auth credential as the publish webhook."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Only events THIS workflow created can be removed: each shift id is looked up in the same\n// shiftId -> googleEventId records the publish path keeps. An unknown id deletes nothing and is\n// reported back as not_found, so a made-up id can never delete someone else's calendar event.\nconst body = $input.first().json.body || {};\nconst ids = body.shiftIds;\nconst MAX_REMOVALS = 5000; // same as MAX_REMOVALS in src/services/automation/contracts.ts\nconst MAX_ID_LENGTH = 200;\nif (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_REMOVALS) {\n  throw new Error('Malformed removal request: shiftIds must be a non-empty list.');\n}\n\nconst store = $getWorkflowStaticData('global');\nconst records = store.shiftfitSyncMap || {};\nconst seen = new Set();\nconst toDelete = [];\nconst notFound = [];\nfor (const id of ids) {\n  if (typeof id !== 'string' || !id || id.length > MAX_ID_LENGTH || seen.has(id)) continue;\n  seen.add(id);\n  if (records[id]) toDelete.push({ shiftId: id, googleEventId: records[id] });\n  else notFound.push(id);\n}\n\n// n8n stops a path that has no items, and then nothing would answer the request. So when there is\n// nothing to delete, ONE placeholder item goes down the 'nothing to delete' path instead.\nif (!toDelete.length) return [{ json: { placeholder: true, notFound } }];\nreturn toDelete.map((row) => ({ json: { ...row, notFound } }));"
+      },
+      "id": "validate-removal",
+      "name": "Validate removal request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 620]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "nothing-to-delete",
+              "leftValue": "={{ $json.placeholder === true }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "anything-to-delete",
+      "name": "Nothing to delete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 620]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": "REPLACE_WITH_CALENDAR_ID",
+        "eventId": "={{ $json.googleEventId }}",
+        "options": {}
+      },
+      "id": "google-calendar-delete",
+      "name": "Google Calendar: delete event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [880, 700],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "Deletes the whole repeating event (every week of that shift). Use the same calendar and Google credential as 'Google Calendar: create/update event'. Carries on after an error so one failure is reported instead of stopping the rest. Never run live yet: check the parameter names against your n8n version."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Forget the events that were really deleted, so they stop being reported as old, and build the\n// reply ShiftFit expects (RemoveResponse in src/services/automation/contracts.ts).\nconst store = $getWorkflowStaticData('global');\nif (!store.shiftfitSyncMap) store.shiftfitSyncMap = {};\n// Google answers 404 or 410 when the event is already gone (for example someone deleted it by hand).\n// That still counts as removed: the goal was for it not to be on the calendar.\nconst ALREADY_GONE = /404|410|not found|deleted/i;\n\nconst results = [];\nlet notFound = [];\nfor (const item of $input.all()) {\n  if (item.json.placeholder) {\n    notFound = item.json.notFound || [];\n    continue;\n  }\n  // The delete node's output doesn't include our fields, so read them back from the step before it.\n  const original = $('Validate removal request').itemMatching(item.pairedItem?.item ?? 0)?.json ?? {};\n  notFound = original.notFound || notFound;\n  if (!original.shiftId) continue;\n  const error = item.json.error ? String(item.json.error.message || item.json.error) : null;\n  if (error && !ALREADY_GONE.test(error)) {\n    results.push({ shiftId: original.shiftId, status: 'failed', error: 'Google Calendar did not delete this event.' });\n  } else {\n    delete store.shiftfitSyncMap[original.shiftId];\n    results.push({ shiftId: original.shiftId, status: 'removed' });\n  }\n}\nfor (const shiftId of notFound) results.push({ shiftId, status: 'not_found' });\nreturn [{ json: { results } }];"
+      },
+      "id": "forget-removed",
+      "name": "Forget removed events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 620]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { results: $json.results } }}"
+      },
+      "id": "respond-remove",
+      "name": "Respond (removal)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 620]
     }
   ],
   "connections": {
@@ -89,9 +195,19 @@
     "Validate request shape": { "main": [[{ "node": "Diff vs. previously synced events", "type": "main", "index": 0 }]] },
     "Diff vs. previously synced events": { "main": [[{ "node": "Google Calendar: create/update event", "type": "main", "index": 0 }]] },
     "Google Calendar: create/update event": { "main": [[{ "node": "Persist sync state", "type": "main", "index": 0 }]] },
-    "Persist sync state": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Persist sync state": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Webhook: /shiftfit/remove": { "main": [[{ "node": "Validate removal request", "type": "main", "index": 0 }]] },
+    "Validate removal request": { "main": [[{ "node": "Nothing to delete?", "type": "main", "index": 0 }]] },
+    "Nothing to delete?": {
+      "main": [
+        [{ "node": "Forget removed events", "type": "main", "index": 0 }],
+        [{ "node": "Google Calendar: delete event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar: delete event": { "main": [[{ "node": "Forget removed events", "type": "main", "index": 0 }]] },
+    "Forget removed events": { "main": [[{ "node": "Respond (removal)", "type": "main", "index": 0 }]] }
   },
   "meta": {
-    "note": "Starting-point template only — not a tested workflow. No real credentials included. See docs/N8N_ARCHITECTURE.md Workflow C. The shiftId->googleEventId idempotency map now uses n8n's own workflow static data, so it works out of the box for a pilot with no external database — see the notes on 'Diff vs. previously synced events' and 'Persist sync state'."
+    "note": "Starting-point template only — not a tested workflow. No real credentials included. See docs/N8N_ARCHITECTURE.md Workflow C. Two webhooks share one workflow: /shiftfit/publish creates or updates events, and /shiftfit/remove deletes old ones the manager confirmed. Both use n8n's own workflow static data for the shiftId->googleEventId records, so a pilot needs no external database. Only the ShiftFit gateway may call either webhook (Header Auth)."
   }
 }

@@ -139,6 +139,7 @@ type Candidate = {
   gain: number;
 };
 
+/** How many of these slots go against the student's morning/afternoon wish (0 if they said "any"). */
 function preferenceMismatches(student: Student, slotStarts: Minutes[]): number {
   const noon = 12 * 60;
   if (student.preference === "morning") return slotStarts.filter((s) => s >= noon).length;
@@ -151,6 +152,10 @@ function dayCapHours(student: Student, settings: ScheduleSettings): number {
   return Math.ceil(settings.weeklyTargetHours / student.daysPerWeek) + settings.slotMinutes / 60;
 }
 
+/**
+ * Sort order for possible blocks: lower score wins. Ties are broken by roster order, then day,
+ * then start time, then length, so the same input always picks the same block (deterministic).
+ */
 function compareCandidates(a: Candidate, b: Candidate): number {
   return (
     a.score - b.score ||
@@ -189,11 +194,13 @@ export function autoFill(
   const maxSlots = Math.max(minSlots, Math.floor(MAX_SHIFT_MINUTES / settings.slotMinutes));
   const explanations: AutoFillExplanation[] = [];
 
+  // How many back-to-back slots the student already works right BEFORE `startSlot` (used to extend a shift).
   const runBefore = (student: Student, day: Day, startSlot: Minutes): number => {
     let n = 0;
     while (plan.has(student.id, day, startSlot - (n + 1) * settings.slotMinutes)) n++;
     return n;
   };
+  // How many back-to-back slots the student already works starting right AT `endSlot` (just after a new block).
   const runAfter = (student: Student, day: Day, endSlot: Minutes): number => {
     let n = 0;
     while (plan.has(student.id, day, endSlot + n * settings.slotMinutes)) n++;

@@ -5,6 +5,11 @@ import { initialState, reducer } from "../hooks/useShiftFitStore";
 import type { Action, NewStudentInput, State } from "../hooks/useShiftFitStore";
 import { makeStudent } from "./testkit";
 
+/**
+ * Tests for pasting existing shifts (`features/scheduling/shift-import.ts`): matching names to
+ * students, reading days and times, and adding the shifts through the store without breaking rules.
+ */
+
 const students = [makeStudent({ id: "s1", name: "Noa K." }), makeStudent({ id: "s2", name: "Kai P." })];
 
 describe("parsing pasted shifts", () => {

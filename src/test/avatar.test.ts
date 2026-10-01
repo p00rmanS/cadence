@@ -6,6 +6,11 @@ import type { Action, NewStudentInput } from "../hooks/useShiftFitStore";
 import { centerSquare, checkAvatarFile, isValidAvatar } from "../lib/image";
 import { makeSettings, makeStudent } from "./testkit";
 
+/**
+ * Tests for student profile photos (`lib/image.ts`): which files may be chosen, how a photo is
+ * cropped to a square, and that a saved photo which isn't a small JPEG this app made is dropped.
+ */
+
 const GOOD = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD";
 
 describe("choosing a photo", () => {

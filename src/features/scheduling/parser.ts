@@ -55,6 +55,7 @@ function parseCompactDays(token: string): Day[] | null {
   return out;
 }
 
+/** Reads one word of a day list: a full day name ("Tuesday") first, otherwise letters like "MWF". */
 function parseDayToken(token: string): Day[] | null {
   for (const [re, day] of FULL_DAY_NAMES) if (re.test(token)) return [day];
   return parseCompactDays(token);
@@ -75,6 +76,7 @@ export function parseDays(input: string): Day[] | null {
   return days;
 }
 
+/** True if the text names Saturday or Sunday, so the parser can explain why that part was skipped. */
 export function mentionsWeekend(input: string): boolean {
   return input.split(DAY_SEPARATORS).some((t) => WEEKEND_NAME.test(t));
 }
@@ -82,8 +84,18 @@ export function mentionsWeekend(input: string): boolean {
 type Meridiem = "am" | "pm";
 type TimeParts = { hour: number; minute: number; meridiem: Meridiem | null; twentyFour: boolean };
 
+/**
+ * Matches one clock time. In words: either the word "noon", OR 1-2 digits for the hour, then
+ * optionally ":" and 2 digits for the minutes, then optionally "am"/"pm" (also "a.m.", "p. m.").
+ * Capture groups: 1 = "noon", 2 = hour, 3 = minutes, 4 = "a" or "p".
+ */
 const TIME_RE = /^(?:(noon)|(\d{1,2})(?::(\d{2}))?\s*(?:([ap])\.?\s*m\.?)?)$/i;
 
+/**
+ * Splits one clock time into its pieces (hour, minute, am/pm) without deciding yet what a bare
+ * "9" means. Hours 13-23 with no am/pm are read as 24-hour time. Returns null for anything that
+ * isn't a real time (e.g. "25:00" or "9:75").
+ */
 function parseTimeParts(str: string): TimeParts | null {
   const m = TIME_RE.exec(str.trim());
   if (!m) return null;
@@ -101,6 +113,7 @@ function parseTimeParts(str: string): TimeParts | null {
   return { hour, minute, meridiem: null, twentyFour: false };
 }
 
+/** Turns the pieces into minutes after midnight, using the given am/pm (12pm = noon, 12am = midnight). */
 function toMinutes(p: TimeParts, meridiem: Meridiem | null): Minutes {
   if (p.twentyFour) return p.hour * 60 + p.minute;
   let h = p.hour;
@@ -152,7 +165,9 @@ export function parseTimeRange(startStr: string, endStr: string): { start: Minut
   const e = parseTimeParts(endStr);
   if (!s || !e) return null;
 
+  // Every am/pm reading a time could have: the written one, none (24-hour time), or both if missing.
   const options = (p: TimeParts): (Meridiem | null)[] => (p.meridiem ? [p.meridiem] : p.twentyFour ? [null] : ["am", "pm"]);
+  // A "bare" time is like "9:00": no am/pm and not 24-hour, so it could be morning or evening.
   const isBare = (p: TimeParts) => p.meridiem === null && !p.twentyFour;
   const limit = isBare(s) || isBare(e) ? MAX_GUESSED_MINUTES : MAX_EXPLICIT_MINUTES;
 

@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { ImageUp, Wand2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { HelpTip } from "../help/HelpTip";
+import { ManagerSignIn } from "../app-shell/ManagerSignIn";
+import { useManagerSession } from "../../hooks/useManagerSession";
 import { extractSchedule, isRemoteExtractionAvailable } from "../../features/import/schedule-extractor";
 import type { ExtractionOutcome } from "../../features/import/schedule-extractor";
 
@@ -26,7 +28,9 @@ export function ImportPanel({
   const [status, setStatus] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const remoteAvailable = isRemoteExtractionAvailable();
+  const signedIn = useManagerSession();
 
+  // Sends the chosen screenshot to the reading service and hands back whatever it found for review.
   async function readScreenshot() {
     if (!image) return;
     setBusy(true);
@@ -81,7 +85,7 @@ export function ImportPanel({
             <Button variant="secondary" onClick={() => fileInput.current?.click()}>
               <ImageUp className="h-4 w-4" aria-hidden /> {image ? image.name : "Use a screenshot instead"}
             </Button>
-            {image && (
+            {image && signedIn && (
               <Button variant="primary" onClick={readScreenshot} disabled={busy}>
                 {busy ? "Reading…" : "Read the screenshot"}
               </Button>
@@ -91,6 +95,7 @@ export function ImportPanel({
           <p className="text-xs text-muted">Reading screenshots isn&apos;t set up here. Typing or pasting always works.</p>
         )}
       </div>
+      {remoteAvailable && image && !signedIn && <ManagerSignIn purpose="needed to read screenshots" />}
       {status && (
         <p role="status" className="text-xs text-muted">
           {status}

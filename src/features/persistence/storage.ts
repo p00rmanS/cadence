@@ -73,12 +73,17 @@ function migrate(raw: unknown): unknown {
 
 export const storage: StorageAdapter = createLocalStorageAdapter();
 
+/** The whole saved schedule as neatly indented JSON text, ready to download as a backup file. */
 export function exportBackup(state: PersistedStateV1): string {
   return JSON.stringify(state, null, 2);
 }
 
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 
+/**
+ * Reads a backup file the manager picked. Refuses files over 5 MB, then checks every field with the
+ * same strict validator used for saved data, so a broken or tampered file can't get into the app.
+ */
 export function parseBackup(json: string): ReturnType<typeof validatePersistedState> {
   if (json.length > MAX_BACKUP_BYTES) return { ok: false, errors: ["That file is too large to be a ShiftFit backup."] };
   try {

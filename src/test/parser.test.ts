@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { mentionsWeekend, parseClassText, parseDays, parseMeetingLine, parseTime, parseTimeRange } from "../features/scheduling/parser";
 
+/**
+ * Tests for the class-time reader (`features/scheduling/parser.ts`): day lists like "MWF" or
+ * "Tuesday/Thursday", clock times with or without am/pm, and whole pasted registration exports.
+ */
+
 describe("parseDays", () => {
   it.each([
     ["MWF", ["mon", "wed", "fri"]],

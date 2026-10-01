@@ -6,6 +6,7 @@ import { Avatar } from "../ui/Avatar";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import type { ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
+/** A small round picture or initials badge next to a student's name. */
 function Chip({ name, color, avatar }: { name: string; color: string; avatar?: string }) {
   return <Avatar name={name} color={color} avatar={avatar} size="sm" />;
 }
@@ -29,6 +30,7 @@ export function ScheduleList({
 }) {
   const empty = !students.length || !assignments.length;
 
+  // Copies the schedule as plain text so it can be pasted into a message or email.
   async function copy() {
     const text = scheduleToText(students, assignments, settings, mode);
     try {

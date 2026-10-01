@@ -29,6 +29,7 @@ export function busyBlockAt(student: Student, day: Day, slotStart: Minutes, slot
   return student.busy.find((b) => b.day === day && b.start < slotStart + slotMinutes && b.end > slotStart);
 }
 
+/** True if the student has a class or blocked time anywhere inside this half-hour slot. */
 export function isBusy(student: Student, day: Day, slotStart: Minutes, slotMinutes: number): boolean {
   return busyBlockAt(student, day, slotStart, slotMinutes) !== undefined;
 }
@@ -43,10 +44,12 @@ export function studentAssignments(studentId: string, assignments: ShiftBlock[])
   return assignments.filter((a) => a.studentId === studentId);
 }
 
+/** Total hours this student is scheduled for in the whole week (number of slots x slot length). */
 export function assignedHours(studentId: string, assignments: ShiftBlock[], settings: ScheduleSettings): number {
   return (studentAssignments(studentId, assignments).length * settings.slotMinutes) / 60;
 }
 
+/** Hours this student is scheduled for on one particular day. */
 export function assignedHoursOnDay(
   studentId: string,
   day: Day,
@@ -58,10 +61,15 @@ export function assignedHoursOnDay(
   );
 }
 
+/** How many different weekdays the student works at least one slot on. */
 export function workedDayCount(studentId: string, assignments: ShiftBlock[]): number {
   return new Set(studentAssignments(studentId, assignments).map((a) => a.day)).size;
 }
 
+/**
+ * May the student work on this day without going over their "days per week" limit? Yes if they
+ * already work that day (adding more hours doesn't add a day), or if they still have days to spare.
+ */
 export function canUseDay(student: Student, day: Day, assignments: ShiftBlock[], settings: ScheduleSettings): boolean {
   return (
     assignedHoursOnDay(student.id, day, assignments, settings) > 0 ||
@@ -69,10 +77,12 @@ export function canUseDay(student: Student, day: Day, assignments: ShiftBlock[],
   );
 }
 
+/** True if this exact student is already scheduled in this exact slot. */
 export function isAssigned(studentId: string, day: Day, slotStart: Minutes, assignments: ShiftBlock[]): boolean {
   return assignments.some((a) => a.studentId === studentId && a.day === day && a.start === slotStart);
 }
 
+/** The ids of everyone working this slot, each listed once. */
 export function staffAt(day: Day, slotStart: Minutes, assignments: ShiftBlock[]): string[] {
   const ids = assignments.filter((a) => a.day === day && a.start === slotStart).map((a) => a.studentId);
   return Array.from(new Set(ids));
@@ -146,6 +156,11 @@ export function softViolations(
   return out;
 }
 
+/**
+ * The main "can this student take this slot?" check used by clicks and auto-fill. Returns the
+ * FIRST rule it breaks (hard rules first: class, blocked time, cutoff, lunch, already there; then
+ * the soft limits: weekly hours, days per week), or null if the slot is fine.
+ */
 export function canAssign(
   student: Student,
   day: Day,

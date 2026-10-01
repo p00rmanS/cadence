@@ -9,21 +9,24 @@ import { describe, expect, it } from "vitest";
  * stops a brand-new file from arriving with no explanation at all.
  */
 
-/** Every .ts/.tsx file under `dir`, skipping tests and type-declaration files. */
+/** Every .ts/.tsx file under `dir` (tests included, since beginners read those too), skipping type-declaration files. */
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "test" ? [] : sourceFiles(path);
+    if (entry.isDirectory()) return sourceFiles(path);
     return /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts") ? [path] : [];
   });
 }
+
+/** The build and style settings files in the project folder, which need an explanation too. */
+const CONFIG_FILES = ["vite.config.ts", "tailwind.config.ts", "postcss.config.js"];
 
 /** A file "explains itself" if a block comment or line comment appears near the top. */
 const COMMENT_NEAR_TOP = /\/\*[\s\S]*?\*\/|^\s*\/\//m;
 const LINES_TO_CHECK = 60;
 
 describe("readable code for the whole team", () => {
-  const files = sourceFiles("src");
+  const files = [...sourceFiles("src"), ...sourceFiles("netlify"), ...CONFIG_FILES];
 
   it("finds the source files (so this check can never pass by looking at nothing)", () => {
     expect(files.length).toBeGreaterThan(40);

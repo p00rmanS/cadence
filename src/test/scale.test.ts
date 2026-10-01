@@ -6,6 +6,12 @@ import { buildBusy } from "../features/scheduling/parser";
 import { makeSettings, makeStudent } from "./testkit";
 import type { Student } from "../features/scheduling/types";
 
+/**
+ * Stress tests: auto-fill on large, randomly made rosters (up to the 200-student limit) must still
+ * break no rule and finish quickly. The "random" numbers come from a fixed seed, so every run
+ * builds exactly the same rosters and a failure can always be reproduced.
+ */
+
 /** A small deterministic random generator so this test is reproducible. */
 function rng(seed: number) {
   let s = seed;
@@ -18,6 +24,7 @@ function rng(seed: number) {
 const PATTERNS = ["MWF", "TTh", "MW", "TR", "MWF", "TTh"];
 const HOURS = ["8:00-8:50", "9:00-9:50", "10:00-10:50", "11:00-11:50", "1:00pm-1:50pm", "2:00pm-2:50pm", "3:00pm-3:50pm"];
 
+/** `n` made-up students, each with 3-5 random class meetings, always the same for the same `seed`. */
 function roster(n: number, seed: number): Student[] {
   const rand = rng(seed);
   return Array.from({ length: n }, (_, i) => {

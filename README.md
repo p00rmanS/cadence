@@ -113,16 +113,26 @@ original build brief; AUDIT Part 7 checks the finished app against its acceptanc
 n8n can orchestrate screenshot reading and Google Calendar publishing. It never replaces the
 frontend or the scheduler. See [`docs/N8N_ARCHITECTURE.md`](docs/N8N_ARCHITECTURE.md) and the
 templates in [`n8n/`](n8n/). The templates are starting points, have never been run against a live
-n8n, and contain no credentials. Set `VITE_AUTOMATION_API_URL` to enable it.
+n8n, and contain no credentials. The browser never calls n8n directly: it goes through the ShiftFit
+gateway (`src/server/gateway.ts`), which checks a manager passcode. Set `VITE_AUTOMATION_API_URL` to the
+gateway's address to enable it.
 
 ## Deploy
 
-Any static host works (Cloudflare Pages, Netlify, Vercel, GitHub Pages): build command
-`npm run build`, output directory `dist`. The build needs Node 20.19 or newer.
+The **website** and the **server** are deployed separately, because GitHub Pages can only host websites:
 
-For Netlify these settings are already in [`netlify.toml`](netlify.toml) (build command, `dist`, Node 22).
-Deploy the `master` branch. No environment variables are needed; leave `VITE_AUTOMATION_API_URL` unset
-until an n8n server exists.
+| Part | Where | How |
+| --- | --- | --- |
+| Website | **GitHub Pages**: `https://p00rmans.github.io/cadence/` | Automatic: `.github/workflows/deploy-pages.yml` runs the type check and tests, builds, and publishes every time `master` changes. One-time setup in [`docs/GITHUB-SETTINGS.md`](docs/GITHUB-SETTINGS.md), "GitHub Pages". |
+| Server (gateway + scheduler service) | **Netlify** Functions (`netlify/functions/`) | Netlify deploys `master` using [`netlify.toml`](netlify.toml). The functions stay switched off until their secrets are set (see [`.env.example`](.env.example)). |
+
+Without a server the github.io site still works fully; "Send to Google Calendar" then does an honest practice run.
+To connect them: set `ALLOWED_ORIGINS=https://p00rmans.github.io` on Netlify, and the GitHub repository
+**variable** `VITE_AUTOMATION_API_URL` to the Netlify site's address. Every pull request is also checked
+automatically by `.github/workflows/ci.yml` (type check, tests, build).
+
+Any other static host works too: build command `npm run build`, output directory `dist`, Node 20.19 or newer.
+For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when building.
 
 ## Privacy
 

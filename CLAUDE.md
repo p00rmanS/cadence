@@ -81,7 +81,7 @@ Some of us are new to programming and must be able to read every file. So:
 - `npm run dev` — start the dev server (http://localhost:5173)
 - `npm run build` — type-check and build for production
 - `npm test` — run the test suite (`src/test/`)
-- `npm run lint` — type-check only (`tsc --noEmit`)
+- `npm run lint` — type-check only (checks the app code and the config; run it before every commit)
 
 Run `npm test` and `npm run lint` before considering any change finished. Both should report no
 failures.

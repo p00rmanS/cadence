@@ -19,7 +19,7 @@ Last set up: 2026-09-24, by the repository owner using the GitHub command-line t
 | Dependabot security updates | On | GitHub opens a pull request that fixes such a hole. Review it like any other pull request. |
 | Secret scanning + push protection | On (GitHub enables these for public repositories) | A commit containing a password or key is blocked before it reaches GitHub. |
 
-Netlify publishes `master`, so protecting it also protects the live website.
+GitHub Pages and Netlify both publish `master`, so protecting it also protects the live website.
 
 ## One-time tool setup (Windows, macOS or Linux)
 
@@ -95,10 +95,49 @@ gh api -X PUT repos/p00rmanS/cadence/automated-security-fixes
   **Enforcement status** to *Disabled*.
 - Delete it: `gh api -X DELETE repos/p00rmanS/cadence/rulesets/<id>`
 
+## GitHub Pages (the public website)
+
+The website is published to **https://p00rmans.github.io/cadence/** by `.github/workflows/deploy-pages.yml`,
+every time `master` changes. GitHub Pages can only host the website; the server parts (gateway, scheduler
+service) run on Netlify. See the README's "Deploy" section.
+
+**One-time setup** (repository admin): Settings -> **Pages** -> Build and deployment -> Source: **GitHub Actions**.
+Or with the command-line tool:
+
+```bash
+gh api -X POST repos/p00rmanS/cadence/pages -f build_type=workflow
+```
+
+Then either merge a pull request into `master`, or start it by hand: Actions tab -> "Deploy to GitHub Pages" ->
+Run workflow. The first deploy takes a few minutes; the address appears on the run's summary page.
+
+**Connecting the website to the server (optional):** Settings -> Secrets and variables -> Actions -> **Variables**
+tab -> New repository variable: `VITE_AUTOMATION_API_URL` = the Netlify site's address (for example
+`https://cadence-test.netlify.app`). It is a *variable*, not a secret, because it ends up in the public website
+anyway; never put a password there. On Netlify, set `ALLOWED_ORIGINS=https://p00rmans.github.io` so the gateway
+accepts calls from the github.io site.
+
+**Security note:** GitHub Pages can't send security headers, so the security policy is written into the page
+itself (`src/lib/contentSecurityPolicy.ts`). One protection is lost compared with Netlify: other websites can
+show the github.io site inside a frame. Saved schedules are still safe, because browsers keep a framed site's
+saved data separate from the real one.
+
+## Automatic checks on every pull request
+
+`.github/workflows/ci.yml` runs the type check, every test and the build on GitHub's computers for every pull
+request and every change to `master`. A pull request shows a green tick or a red X next to "Checks".
+
+To make the checks **required** (a pull request can't be merged while they fail), add this rule to the
+"Protect master" ruleset (Settings -> Rules -> Rulesets -> Protect master -> Require status checks to pass ->
+add `checks`), or add this to `ruleset.json` above and update the ruleset:
+
+```json
+{ "type": "required_status_checks", "parameters": { "strict_required_status_checks_policy": false, "required_status_checks": [{ "context": "checks" }] } }
+```
+
+Wait until the workflow has run at least once, so GitHub knows the `checks` name.
+
 ## Things this does not do
 
-- There are no automatic checks (GitHub Actions) yet, so nothing runs the tests for you on a pull request.
-  Reviewers and authors must run `npm test` and `npm run lint` themselves. Adding a checks workflow, and then
-  requiring it in this ruleset, is a sensible next step.
 - The repository is **public**. It contains no secrets or personal data (checked across the whole history), but
   anyone can read the code. Switching to private is under **Settings, General, Danger Zone**.

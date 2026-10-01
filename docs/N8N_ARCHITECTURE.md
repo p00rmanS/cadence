@@ -17,27 +17,59 @@ flowchart LR
     UI[Upload/paste + review UI]
     Scheduler["Deterministic TS scheduling engine\n(src/features/scheduling)"]
   end
+  subgraph Server["ShiftFit server (Netlify Functions)"]
+    GW["Gateway /api/*\n(passcode, rule re-check,\nrebuilds events)"]
+    SVC["Scheduler service\n/api/scheduler/*"]
+  end
   subgraph N8N["n8n orchestration"]
     A["Workflow A\nInterpret"]
     B["Workflow B\nGenerate/evaluate"]
-    C["Workflow C\nPublish"]
+    C["Workflow C\nPublish + remove"]
     D["Workflow D\nReconcile (later phase)"]
   end
   AI[("AI / vision provider")]
   GCal[("Google Calendar")]
-  DB[("Optional shared DB\n(Supabase)")]
 
-  UI -->|text/image| A
+  UI -->|image + manager passcode| GW
+  UI -->|approved schedule + passcode| GW
+  GW -->|secret header| A
+  GW -->|secret header| C
   A -->|calls when needed| AI
-  A -->|structured extraction| UI
   UI --> Scheduler
-  Scheduler -.optional server re-validate.-> B
-  UI -->|approved schedule| C
+  B -->|secret header| SVC
   C --> GCal
-  C --> DB
   D -.reconciles.-> GCal
-  D -.reconciles.-> DB
 ```
+
+**The browser never calls n8n.** Every request goes through the gateway
+([`src/server/gateway.ts`](../src/server/gateway.ts)), described next.
+
+## The gateway (built)
+
+`netlify/functions/gateway.ts` answers these addresses on the same website as the app. All are `POST` and need
+`Authorization: Bearer <manager passcode>`:
+
+| Address | What it does |
+| --- | --- |
+| `/api/session` | Says whether the passcode is right (used by the sign-in box). |
+| `/api/publish` | Takes the schedule (students without photos or pasted text, shifts, settings, semester) plus the `approvedVersion` the manager approved. Re-checks it with the strict validator and **every scheduling rule** (`evaluateSchedule`), refuses with `409` if it changed since approval, **rebuilds the events itself** with `buildPublishRequest`, sends them to Workflow C, checks the reply. |
+| `/api/remove` | Takes `{ "shiftIds": [...] }` the manager confirmed and asks Workflow C's remove path to delete them. |
+| `/api/interpret` | Passes a screenshot upload (max 5 MB + 64 KB) to Workflow A and checks the reading with `schemas.ts`. |
+
+Security: the passcode is compared in constant time; after 10 wrong tries from one address in 15 minutes that
+address gets `429` for the rest of the window (counted in the server's memory, so separate server copies count
+separately). It answers `503` until `MANAGER_PASSCODE` (12+ characters), `AUTOMATION_SECRET` (16+) and an
+`AUTOMATION_URL` using https (or http on localhost) are all set. Errors are short and never repeat student data.
+Tested in `src/test/gateway.test.ts`; the four key protections (passcode check, rule re-check, approval-version
+check, lock-out) were each deliberately removed once and the tests caught every one.
+
+**When the website is on GitHub Pages** (a different site from the Netlify gateway), the browser first asks the
+gateway "may I call you?" (a CORS preflight). The gateway says yes, and lets the page read its answers, only for
+sites listed in `ALLOWED_ORIGINS`; it never answers with a wildcard. CORS is not the login: the passcode is still
+required on every request.
+
+In the browser, the passcode is held only in memory for the open tab (`services/automation/managerSession.ts`),
+never in localStorage or a cookie, and is forgotten if the server ever answers `401`.
 
 **Hard rule enforced by this architecture:** AI never has authority over
 scheduling rules (class overlap, cutoff, lunch, 19-hour cap, max days,
@@ -63,10 +95,9 @@ tested, and are the only code path allowed to produce a `ShiftBlock`.
 
 `POST /webhook/shiftfit/interpret`
 
-Called by [`schedule-extractor.ts`](../src/features/import/schedule-extractor.ts)
-only when `VITE_AUTOMATION_API_URL` is configured **and** an image is
-attached. Text-only input is always parsed locally first and never leaves the
-browser.
+Called by the gateway's `/api/interpret`, which [`schedule-extractor.ts`](../src/features/import/schedule-extractor.ts)
+calls only when `VITE_AUTOMATION_API_URL` is configured, a manager has signed in, **and** an image is
+attached. Text-only input is always parsed locally first and never leaves the browser.
 
 Request (multipart form — see `extractSchedule`):
 
@@ -128,27 +159,83 @@ backend runtime, or expose it behind a small Node/edge function and have n8n
 call that function. Do not re-implement the rules inside n8n Code nodes; they
 will drift from the frontend's copy.
 
-Request: `{ students, assignments, settings }` (same shapes as
-`src/features/scheduling/types.ts`).
+### The scheduler service (built)
 
-Response: same shape as `AutoFillResult` in `types.ts`, plus a stable
-`scheduleVersion` string for idempotency in Workflow C.
+The "small function n8n calls" now exists: [`src/server/handler.ts`](../src/server/handler.ts). It is one
+function, `handleRequest(Request) -> Response`, that reuses the app's own rule code
+(`src/features/scheduling`), so the browser and the server cannot disagree. It is tested in
+`src/test/server.test.ts` (in a plain Node environment with no browser) and `src/test/evaluate.test.ts`.
+It is wired to Netlify by `netlify/functions/scheduler.ts` at `/api/scheduler/*` and stays switched off until
+`SCHEDULER_SECRET` is set; see "Switching it on" below.
+
+| Endpoint | Login | What it does |
+| --- | --- | --- |
+| `GET /health` | none | `{ "status": "ok" }`. Returns no data. |
+| `POST /evaluate` | yes | Re-checks a schedule with every rule and reports coverage. Use this to re-validate before publishing. |
+| `POST /generate` | yes | Runs the same auto-fill as the app and returns the result, checked with the same report. |
+
+Request body for both (the same shapes as `src/features/scheduling/types.ts`; unknown fields are ignored and every
+field is validated with the strict backup-file validator):
+
+```json
+{ "students": [ ... ], "assignments": [ ... ], "settings": { ... }, "semester": null, "replaceAutoFilled": false }
+```
+
+(`assignments`, `semester` and `replaceAutoFilled` are optional; `replaceAutoFilled` only applies to `/generate`.)
+
+`/evaluate` returns `{ "evaluation": { ... }, "notes": [] }`. `/generate` returns `assignments`, `unmet`,
+`openingShiftUnmet`, `explanations`, `deterministic: true`, the same `evaluation`, and `notes`. The
+`evaluation` (built by `evaluateSchedule` in `src/features/scheduling/evaluate.ts`) is:
+
+| Field | Meaning |
+| --- | --- |
+| `ok` | `true` when no rule is broken. Do not publish a schedule that is not `ok`. |
+| `scheduleVersion` | The same fingerprint the app sends when publishing, so "did it change since approval?" is a comparison. |
+| `blockingIssues` / `overriddenWarnings` | Rules broken now / limits the manager knowingly passed. |
+| `coverage`, `gaps` | The two labeled coverage numbers and the understaffed stretches. |
+| `uncoveredStaffHours` | Total person-hours still missing. 2 people needed and 1 working for an hour is 1 missing hour. |
+| `openingShiftMissing` | Students who need a real opening shift and lack one. |
+| `students` | Each student's hours and whether they reached the weekly target. |
+
+Errors are short JSON (`{ "error": "...", "message": "..." }`) with these codes: `401` wrong or missing password,
+`503` not configured, `413` body too large, `400` not valid JSON, `422` the schedule failed validation (with a
+generic list of problems), `404`/`405` wrong address or method, `500` unexpected. **Errors never contain anything the caller
+sent, and student data is never logged.**
+
+**Security model.** Every data endpoint needs `Authorization: Bearer <secret>`. The secret is compared in constant
+time. If no secret is configured, or it is shorter than 16 characters, the service answers `503` to everything (it
+"fails closed"). Nothing is stored, and every response is marked `Cache-Control: no-store`. It does no rate limiting
+of its own: its secret is long and random (not typed by people), and only n8n calls it.
+
+### Switching it on
+
+1. The Netlify function already exists (`netlify/functions/scheduler.ts`), so it deploys with the site.
+2. Create a long random secret (32+ characters) and store it as the Netlify environment variable
+   `SCHEDULER_SECRET`. Never put it in the repo or in a `VITE_*` variable.
+3. In n8n, create a **Header Auth** credential named `Authorization` with the value `Bearer <that secret>`, and
+   point the "Call deterministic scheduler service" node in `n8n/shiftfit-generate.json` at
+   `https://<your-site>/api/scheduler/generate`.
+4. Check it: `GET /api/scheduler/health` should answer `ok`, and `POST /api/scheduler/evaluate` without the header
+   should answer `401`.
+
+**Rule re-check before publishing: built, in the gateway.** Instead of n8n calling `/evaluate`, the gateway runs the
+same `evaluateSchedule` itself before anything reaches n8n, so the schedule only travels browser -> our own server.
+n8n still receives only the events (names and times), as before.
 
 ## Workflow C — Human approval / publish to Google Calendar
 
 `POST /webhook/shiftfit/publish`
 
-Called by [`n8nClient.ts`](../src/services/automation/n8nClient.ts) via
-`getAutomationClient().publishSchedule(...)`, with the request built by
-[`contracts.ts`](../src/services/automation/contracts.ts)'s `buildPublishRequest`.
-The UI is the **Save & share** dialog (`SaveShareDialog.tsx`, section "Send to Google
-Calendar"), and it enforces the approval gate itself:
+Called only by the gateway's `/api/publish`, with the request the gateway rebuilt using
+[`contracts.ts`](../src/services/automation/contracts.ts)'s `buildPublishRequest`. The browser side is
+[`n8nClient.ts`](../src/services/automation/n8nClient.ts) (`getAutomationClient().publishSchedule(...)`), and the
+UI is the **Save & share** dialog (`SaveShareDialog.tsx`, section "Send to Google Calendar"):
 
+- a manager must sign in with the passcode first;
 - the manager must press "Approve and send" and confirm a dialog that says how many events
   for how many students will be created or updated;
-- publishing is **refused while the schedule breaks a rule** (class conflict, over the weekly
-  limit without an override, missing opening shift);
-- the UI says ShiftFit only sends shifts and never asks the calendar to delete anything.
+- publishing is **refused while the schedule breaks a rule**, in the UI and again by the gateway;
+- publishing never deletes anything. Old events (see below) are removed only after a separate confirmation.
 
 Request. Events are one per **contiguous shift** (adjacent half-hours are merged), and
 `shiftId` is stable (`<studentId>-<day>-<startMinute>`), so a retry updates instead of
@@ -195,9 +282,22 @@ Response:
   "scheduleVersion": "v6-e95b3dd7",
   "results": [
     { "shiftId": "s1-mon-480", "status": "created", "googleEventId": "abc123" }
-  ]
+  ],
+  "staleShiftIds": ["s1-tue-540"]
 }
 ```
+
+`staleShiftIds` lists events this workflow created in an EARLIER publish for shifts that are no longer in the
+schedule (moved or removed; moving a shift changes its `shiftId`). They are only reported. The UI then says "N
+older events are still on the calendar" with a **Remove old events** button and a confirmation dialog.
+
+### Removing old events
+
+`POST /webhook/shiftfit/remove` with `{ "shiftIds": [...] }`, a second webhook in the **same** workflow file (n8n
+keeps workflow static data per workflow, and removal needs the publish path's `shiftId -> googleEventId` records).
+It only deletes ids found in those records, so a made-up id deletes nothing. Response:
+`{ "results": [{ "shiftId": "...", "status": "removed" | "not_found" | "failed" }] }`. An event Google says is
+already gone (404/410) counts as removed. Tested by running the Code nodes in `src/test/automation.test.ts`.
 
 `status` is one of `created | updated | unchanged | failed | dry_run`. The frontend **never
 trusts the response**: `validatePublishResponse` rejects anything malformed, and any result for a
@@ -215,24 +315,19 @@ UI shows as "Practice run finished... Nothing was sent, so this is still 'not sy
 never produce "Synced". If the schedule changes after a publish, the UI says it must be sent
 again. The client has a 30-second timeout and sends no cookies or credentials.
 
-Pipeline requirements for the real n8n workflow:
+Pipeline requirements, and where each one is handled:
 
-1. Re-validate the schedule hasn't changed since approval (compare
-   `scheduleVersion`).
-2. Diff proposed events against previously synced ShiftFit-owned events
-   (store the mapping — see Persistence below).
-3. Create/update/skip per event; delete/cancel only with explicit permission.
-4. Persist Google event IDs so retries are idempotent — **retrying a failed
-   execution must never create duplicate calendar events.**
-5. Return per-event status, log the publish action.
+1. Re-validate the schedule hasn't changed since approval: **the gateway** (`409` on a different version).
+2. Diff proposed events against previously synced ShiftFit-owned events: **n8n** ("Diff vs. previously synced events").
+3. Create/update/skip per event; delete only with explicit permission: **n8n**, with deletion on the separate
+   remove path the manager confirms.
+4. Persist Google event IDs so retries are idempotent (**retrying must never create duplicate calendar
+   events**): **n8n** ("Persist sync state").
+5. Return per-event status: **n8n**, checked by the gateway and again by the browser.
 
-`n8n/shiftfit-publish.json` now implements steps 1, 2 and 4 as real logic rather than
-placeholder stubs: request-shape validation, a shiftId→googleEventId diff, and persistence, all
-using n8n's own workflow static data (`$getWorkflowStaticData('global')`) so a pilot needs no
-external database to get real idempotency. Step 3 (the actual Google Calendar node) still needs
-your calendar id and OAuth credential filled in, and — like every file in `n8n/` — none of this
-has been run against a live n8n instance; verify it there before trusting it with a real
-calendar. See the `notes` field on each node in that file for exactly what to check.
+The Google Calendar nodes still need your calendar id and OAuth credential filled in, and like every file in
+`n8n/`, none of this has been run against a live n8n instance; verify it there before trusting it with a real
+calendar. See the `notes` field on each node for exactly what to check.
 
 ## Workflow D — Reconciliation (later phase)
 
@@ -243,12 +338,18 @@ proven reliable in Draft + Review mode.
 
 ## Authentication
 
-Webhook endpoints must be authenticated (n8n webhook auth, a shared secret
-header, or a fronting API gateway) — this repository does not ship
-credentials or auth logic, only the client calls. `n8nClient.ts` sends no
-secrets; any auth header should be added server-side (e.g., via an API
-gateway in front of n8n) rather than embedded in `VITE_*` variables, since
-anything prefixed `VITE_` is bundled into client-visible JavaScript.
+Two layers, and neither password ever reaches the browser's code:
+
+1. **Manager -> gateway:** the manager passcode (`MANAGER_PASSCODE` on Netlify), typed into the sign-in box and
+   sent as `Authorization: Bearer <passcode>`. This is a shared passcode, not per-person accounts: anyone who knows
+   it can publish. It was chosen because it needs no outside login service and stores no new personal data. To
+   switch to personal Google sign-in later, only the passcode check in `handleGateway` and `managerSession.ts`
+   change.
+2. **Gateway -> n8n:** every n8n webhook (`publish`, `remove`, `interpret`, `generate`) is set to **Header Auth**.
+   In n8n create one Header Auth credential: Name `Authorization`, Value `Bearer <AUTOMATION_SECRET>` (the same
+   value stored on Netlify), and select it on each webhook node.
+
+Anything prefixed `VITE_` is bundled into public JavaScript, so no secret may ever go in one.
 
 ## Error / retry behavior
 
@@ -263,29 +364,35 @@ anything prefixed `VITE_` is bundled into client-visible JavaScript.
 Each publish event's `shiftId` is `<studentId>-<day>-<startMinute>` for one contiguous shift (see
 `buildPublishRequest` in `services/automation/contracts.ts`), so it is stable across retries and
 across auto-filled vs manual shifts. Store `shiftId → googleEventId` in your persistence layer so
-re-publishing the same schedule version is a no-op diff, not a duplicate-event generator. Note
-that moving a shift changes its `shiftId` (new start), which the workflow should treat as
-"update or replace the old event", not "add a second one".
+re-publishing the same schedule version is a no-op diff, not a duplicate-event generator. Moving a
+shift changes its `shiftId` (new start): the new time gets a new event, and the old one is reported
+in `staleShiftIds` for the manager to remove.
 
 ## Environment variables
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `VITE_AUTOMATION_API_URL` | frontend (`.env`) | Base URL for Workflows A/C. Omit to run fully local (mock client, text-only import). |
+| `VITE_AUTOMATION_API_URL` | frontend (Netlify build setting or `.env`) | Address of the ShiftFit server. Use `/` when the functions run on the same site. Omit to run fully local (mock client, text-only import). Not a secret. |
+| `MANAGER_PASSCODE` | Netlify (server only) | The passcode managers type. 12+ characters. |
+| `AUTOMATION_URL` | Netlify (server only) | The n8n server's address, https. |
+| `AUTOMATION_SECRET` | Netlify (server only) and n8n credential | Password the n8n webhooks require. 16+ random characters. |
+| `SCHEDULER_SECRET` | Netlify (server only) and n8n credential | Password for `/api/scheduler/*`. 16+ random characters. |
+| `ALLOWED_ORIGINS` | Netlify (server only) | Other websites allowed to call the gateway from a browser, e.g. `https://p00rmans.github.io` when the app is on GitHub Pages. https site addresses only; `*` and paths are ignored. |
+| `BASE_PATH` | build (set by the Pages workflow) | The folder the site is served from, `/cadence/` on GitHub Pages. |
 
-No other secrets belong in frontend environment variables. n8n credentials,
-AI provider keys, and Google OAuth secrets live in n8n's own credential
-store or your backend, never in `VITE_*` variables.
+No secrets belong in `VITE_*` variables. AI provider keys and Google OAuth secrets live in n8n's own credential
+store.
 
 ## What's proven vs. assumed
 
 - **Proven** (covered by tests in this repo): the request/response shapes, validation of the
   webhook responses and of AI output, the honest sync states (a practice run can never show
-  "Synced"), stable ids and versions, the approval and rule-check gates in the UI, and the
-  deterministic scheduler used identically for local preview.
-- **Assumed** (you must build and verify when standing up n8n): the actual n8n workflows, the AI
-  provider call, the Google Calendar node configuration, authentication, and the Workflow B
-  server-side scheduler port. The JSON files under `n8n/` are starting-point templates with
-  placeholder credentials. They have **never been run against a live n8n instance**. The
-  interpret template returns an honest "nothing was read" error until you connect your own AI
-  provider, rather than pretending to have read a screenshot.
+  "Synced"), stable ids and versions, the approval and rule-check gates in the UI **and in the
+  gateway**, the gateway's passcode and lock-out, the scheduler service, the whole sign-in -> send ->
+  remove-old-events flow in the app (against a pretend server), and the n8n Code nodes' JavaScript
+  (run under Vitest with stand-ins for n8n).
+- **Assumed** (you must verify when standing up n8n): the n8n workflows running inside real n8n, the
+  AI provider call, the Google Calendar node parameter names, and Netlify's handling of the function
+  `config.path` settings. The JSON files under `n8n/` have **never been run against a live n8n
+  instance**. The interpret template returns an honest "nothing was read" error until you connect
+  your own AI provider, rather than pretending to have read a screenshot.

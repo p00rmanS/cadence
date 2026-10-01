@@ -51,6 +51,11 @@ function splitLine(raw: string): { name: string; times: string } | null {
   return { name: raw.slice(0, colon).trim(), times: raw.slice(colon + 1).trim() };
 }
 
+/**
+ * Reads pasted existing shifts, one "Name: days times" line each, into rows the manager reviews
+ * before anything is added. Each row is matched to a student by name and checked for problems;
+ * blank lines and lines starting with # are ignored.
+ */
 export function parseShiftText(text: string, students: Student[], slotMinutes: number): ShiftImportParse {
   const rows: ShiftImportRow[] = [];
   const lines = text.split(/\r?\n/);
