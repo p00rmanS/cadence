@@ -2,7 +2,8 @@
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { addCspToHtml } from "./src/lib/contentSecurityPolicy";
+// The ".ts" ending is required here: Vite loads this settings file with Node's own module rules, which need it.
+import { addCspToHtml } from "./src/lib/contentSecurityPolicy.ts";
 
 /**
  * Settings for Vite, the tool that runs the dev server (`npm run dev`) and builds the website
