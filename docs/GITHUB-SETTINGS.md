@@ -19,7 +19,7 @@ Last set up: 2026-09-24, by the repository owner using the GitHub command-line t
 | Dependabot security updates | On | GitHub opens a pull request that fixes such a hole. Review it like any other pull request. |
 | Secret scanning + push protection | On (GitHub enables these for public repositories) | A commit containing a password or key is blocked before it reaches GitHub. |
 
-GitHub Pages and Netlify both publish `master`, so protecting it also protects the live website.
+GitHub Pages publishes `master`, so protecting it also protects the live website.
 
 ## One-time tool setup (Windows, macOS or Linux)
 
@@ -98,11 +98,12 @@ gh api -X PUT repos/p00rmanS/cadence/automated-security-fixes
 ## GitHub Pages (the public website)
 
 The website is published to **https://p00rmans.github.io/cadence/** by `.github/workflows/deploy-pages.yml`,
-every time `master` changes. GitHub Pages can only host the website; the server parts (gateway, scheduler
-service) run on Netlify. See the README's "Deploy" section.
+every time `master` changes. This is the team's only deployment (no Netlify for now). GitHub Pages can only host
+the website, so the server parts (gateway, scheduler service) are not running anywhere; the app works fully in the
+browser, with Google Calendar in practice-run mode. See the README's "Deploy" section.
 
-**One-time setup** (repository admin): Settings -> **Pages** -> Build and deployment -> Source: **GitHub Actions**.
-Or with the command-line tool:
+**One-time setup** (repository admin), **done 2026-09-30**: Settings -> **Pages** -> Build and deployment ->
+Source: **GitHub Actions**. Or with the command-line tool:
 
 ```bash
 gh api -X POST repos/p00rmanS/cadence/pages -f build_type=workflow
@@ -111,16 +112,29 @@ gh api -X POST repos/p00rmanS/cadence/pages -f build_type=workflow
 Then either merge a pull request into `master`, or start it by hand: Actions tab -> "Deploy to GitHub Pages" ->
 Run workflow. The first deploy takes a few minutes; the address appears on the run's summary page.
 
-**Connecting the website to the server (optional):** Settings -> Secrets and variables -> Actions -> **Variables**
-tab -> New repository variable: `VITE_AUTOMATION_API_URL` = the Netlify site's address (for example
-`https://cadence-test.netlify.app`). It is a *variable*, not a secret, because it ends up in the public website
-anyway; never put a password there. On Netlify, set `ALLOWED_ORIGINS=https://p00rmans.github.io` so the gateway
-accepts calls from the github.io site.
+**Later, if a server host is chosen:** Settings -> Secrets and variables -> Actions -> **Variables** tab -> New
+repository variable: `VITE_AUTOMATION_API_URL` = the server's address. It is a *variable*, not a secret, because it
+ends up in the public website anyway; never put a password there. On the server, set
+`ALLOWED_ORIGINS=https://p00rmans.github.io` so it accepts calls from the github.io site. Until then, leave the
+variable unset.
 
 **Security note:** GitHub Pages can't send security headers, so the security policy is written into the page
-itself (`src/lib/contentSecurityPolicy.ts`). One protection is lost compared with Netlify: other websites can
-show the github.io site inside a frame. Saved schedules are still safe, because browsers keep a framed site's
-saved data separate from the real one.
+itself (`src/lib/contentSecurityPolicy.ts`). One protection is lost: other websites can show the github.io site
+inside a frame. Saved schedules are still safe from that, because browsers keep a framed site's saved data
+separate from the real one.
+
+### Shared address (important for student data)
+
+Every GitHub Pages site of one account lives under the same address, `https://p00rmans.github.io`. Browsers treat
+that as **one website**, so code on any of those sites can read what Cadence saved in the browser (student names,
+class times, photos). Checked 2026-09-30: the account has one other Pages site, `p00rmans.github.io/netmon/`; it
+loads no outside scripts, so there is no known problem today. To keep it that way:
+
+- Never add outside scripts (analytics, chat widgets, ads) to **any** Pages site on this account.
+- Better, when the team is ready: give Cadence its own address. Either create a free GitHub **organization** for
+  the team (for example `cadence-team`) and move the repository there, so the site becomes
+  `https://cadence-team.github.io/cadence/` (a separate address; this also suits a team project), or connect a
+  custom domain in Settings -> Pages.
 
 ## Automatic checks on every pull request
 

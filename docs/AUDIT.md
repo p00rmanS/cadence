@@ -376,6 +376,24 @@ Closes the two decisions Part 9 left open (webhook login, deleting old events) a
 
 ---
 
+## Part 12: GitHub Pages only, and a check of the live setup (2026-09-30)
+
+The team decided: **GitHub Pages is the only deployment, no Netlify for now.** The server code stays in the repo,
+tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMAP, DECISIONS, `.env.example`,
+`netlify.toml`, the deploy workflow's comments) now say so.
+
+| Check | Result |
+| --- | --- |
+| Checks workflow on GitHub (pull request #3) | **Passed twice** on GitHub's own computers (Node 22). |
+| Deploy workflow on GitHub | Not run yet: GitHub only registers it once it is on `master`. No YAML checker was available locally, so its first real test is the merge. |
+| Library security (`npm audit`) | 0 known vulnerabilities. |
+| The github.io build used as a visitor, no server | Built with `BASE_PATH=/cadence/`, served at `/cadence/`: sample students, "Fill schedule for me" (31 missing hours -> "every hour is covered"), semester dates saved, practice run reported "Nothing was sent... not synced", no sign-in box (correct: no server). After a reload: 6 students, 228 half-hour shifts and the semester dates were all still there. No console errors. |
+| **Finding: shared web address** | Every Pages site of one GitHub account is the same website to a browser (`p00rmans.github.io`). The account has another Pages site, `/netmon/`, which could read Cadence's saved student data. Today it loads no outside scripts, so there's no known exposure. Can't be fixed in code; options (a team GitHub organization or a custom domain) are in `docs/GITHUB-SETTINGS.md`, "Shared address", and on the ROADMAP. |
+
+`npm test` (490 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
 ## Readability pass (2026-09-22)
 
 Every file under `src/` now has a plain-language comment explaining what it's for and, in the

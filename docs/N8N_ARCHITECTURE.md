@@ -44,6 +44,11 @@ flowchart LR
 **The browser never calls n8n.** Every request goes through the gateway
 ([`src/server/gateway.ts`](../src/server/gateway.ts)), described next.
 
+> **Current status (2026-09-30): no server is running.** The team deploys the website to GitHub Pages only,
+> which can't run servers, so the gateway and scheduler service are built and tested but not hosted. The
+> website works fully without them (Google Calendar in practice-run mode). The "Netlify" instructions below
+> apply whenever a host is chosen; the server code itself is host-neutral.
+
 ## The gateway (built)
 
 `netlify/functions/gateway.ts` answers these addresses on the same website as the app. All are `POST` and need

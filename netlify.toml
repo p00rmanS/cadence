@@ -1,3 +1,7 @@
+# NOT IN USE FOR NOW: the team deploys to GitHub Pages (.github/workflows/deploy-pages.yml).
+# This file is kept so a Netlify site (for example one that runs the server in netlify/functions/
+# later) builds the same way, and because src/test/privacy.test.ts checks its security headers.
+#
 # Netlify build settings for ShiftFit, kept in the repository so nobody has to remember them.
 # Values here override the same settings typed into the Netlify website.
 

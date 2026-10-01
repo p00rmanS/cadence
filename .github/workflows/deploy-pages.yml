@@ -8,11 +8,11 @@
 # One-time setup (see docs/GITHUB-SETTINGS.md, "GitHub Pages"):
 #   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 #
-# GitHub Pages only hosts the website. The ShiftFit server (the gateway, for Google Calendar and
-# screenshots) can't run there; it runs on Netlify. To connect them, set the repository VARIABLE
-# (not secret: it is public anyway) VITE_AUTOMATION_API_URL to the gateway's address, e.g.
-# https://your-site.netlify.app, under Settings -> Secrets and variables -> Actions -> Variables.
-# Without it the github.io site works fully, with Google Calendar in practice-run mode.
+# This is the team's only deployment. GitHub Pages only hosts the website; the ShiftFit server (the
+# gateway, for Google Calendar and screenshots) can't run here and isn't hosted anywhere yet, so the
+# site works fully in the browser with Google Calendar in practice-run mode. If a server host is
+# chosen later, set the repository VARIABLE (not secret: it is public anyway) VITE_AUTOMATION_API_URL
+# to its address under Settings -> Secrets and variables -> Actions -> Variables.
 name: Deploy to GitHub Pages
 
 on:

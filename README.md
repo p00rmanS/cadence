@@ -119,17 +119,17 @@ gateway's address to enable it.
 
 ## Deploy
 
-The **website** and the **server** are deployed separately, because GitHub Pages can only host websites:
+**The team deploys to GitHub Pages only:** `https://p00rmans.github.io/cadence/`.
+`.github/workflows/deploy-pages.yml` runs the type check and every test, builds, and publishes each time `master`
+changes (one-time setup: [`docs/GITHUB-SETTINGS.md`](docs/GITHUB-SETTINGS.md), "GitHub Pages"). Every pull request is
+also checked automatically by `.github/workflows/ci.yml`.
 
-| Part | Where | How |
-| --- | --- | --- |
-| Website | **GitHub Pages**: `https://p00rmans.github.io/cadence/` | Automatic: `.github/workflows/deploy-pages.yml` runs the type check and tests, builds, and publishes every time `master` changes. One-time setup in [`docs/GITHUB-SETTINGS.md`](docs/GITHUB-SETTINGS.md), "GitHub Pages". |
-| Server (gateway + scheduler service) | **Netlify** Functions (`netlify/functions/`) | Netlify deploys `master` using [`netlify.toml`](netlify.toml). The functions stay switched off until their secrets are set (see [`.env.example`](.env.example)). |
-
-Without a server the github.io site still works fully; "Send to Google Calendar" then does an honest practice run.
-To connect them: set `ALLOWED_ORIGINS=https://p00rmans.github.io` on Netlify, and the GitHub repository
-**variable** `VITE_AUTOMATION_API_URL` to the Netlify site's address. Every pull request is also checked
-automatically by `.github/workflows/ci.yml` (type check, tests, build).
+GitHub Pages only serves files; it can't run servers. So on github.io the whole app runs in the browser: scheduling,
+saving, backups, spreadsheets and calendar files all work, while "Send to Google Calendar" does an honest practice
+run and screenshot reading is off. The server code (`src/server/`, wrapped for Netlify in `netlify/functions/`) is
+kept, tested and switched off, ready for when the team picks a host for it. Connecting it then is two settings:
+`ALLOWED_ORIGINS=https://p00rmans.github.io` on the server, and the GitHub repository **variable**
+`VITE_AUTOMATION_API_URL` set to the server's address.
 
 Any other static host works too: build command `npm run build`, output directory `dist`, Node 20.19 or newer.
 For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when building.
@@ -139,6 +139,9 @@ For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when
 - Only meeting times are kept. Course names, instructors and rooms are ignored.
 - Everything is saved in this browser's `localStorage`. Backup files contain student names and
   class times, so keep them private.
+- On GitHub Pages, every Pages site of the same GitHub account shares one web address
+  (`p00rmans.github.io`), and browsers let all of them read each other's saved data. Never add outside scripts
+  to any other Pages site on that account. See `docs/GITHUB-SETTINGS.md`, "Shared address".
 - Profile photos are optional. A chosen photo (up to 5 MB) is shrunk to a small square in the browser and
   saved with the student; the original is never stored or uploaded. A photo of a student is personal
   data, so treat backup files as private and check with your instructor before using real photos.
