@@ -21,6 +21,7 @@ import { nextStep } from "../features/scheduling/guidance";
 import type { GuidanceAction } from "../features/scheduling/guidance";
 import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
 import { useFirstRun } from "../hooks/useFirstRun";
+import { useBackupStatus } from "../hooks/useBackupStatus";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useShiftFitStore } from "../hooks/useShiftFitStore";
 import { useTheme } from "../hooks/useTheme";
@@ -86,9 +87,11 @@ export function App() {
     () => students.filter((s) => assignedHours(s.id, assignments, settings) < settings.weeklyTargetHours).length,
     [students, assignments, settings],
   );
+  // There's no database: remind the manager to save a backup file when the schedule changed since the last one.
+  const { backupDue } = useBackupStatus({ settings, students, assignments, semester: store.semester });
   const guidance = useMemo(
-    () => nextStep({ studentCount: students.length, shiftCount: assignments.length, blockingIssues: blockingIssues.length, gapSlots, studentsBelowTarget: belowTarget }),
-    [students.length, assignments.length, blockingIssues.length, gapSlots, belowTarget],
+    () => nextStep({ studentCount: students.length, shiftCount: assignments.length, blockingIssues: blockingIssues.length, gapSlots, studentsBelowTarget: belowTarget, backupDue }),
+    [students.length, assignments.length, blockingIssues.length, gapSlots, belowTarget, backupDue],
   );
 
   const showHealth = useCallback(() => {

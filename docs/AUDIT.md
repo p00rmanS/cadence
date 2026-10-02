@@ -394,6 +394,26 @@ tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMA
 
 ---
 
+## Part 13: protecting schedules without a database (2026-10-01)
+
+With GitHub Pages only and no database (both decided), each schedule exists in one browser. Two real ways to lose it:
+**Safari deletes a site's saved data after about 7 days without a visit**, and any browser may clear it when the disk
+is full or history is cleared. A downloaded backup file is the only other copy.
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| Backup tracking (`features/persistence/backupStatus.ts`, `hooks/useBackupStatus.ts`) | Remembers when the last backup was saved (or loaded) and a fingerprint of the schedule at that moment. A reminder is due when the schedule has real work in it (not empty, not the untouched sample), changed since the last backup, and that backup is missing or 7+ days old. | `backup-status.test.ts` (11 tests): fingerprints, every due/not-due case including the untouched sample and a broken stored record. |
+| Reminder in the "next step" banner (`guidance.ts`) | "Save a backup of this schedule", after rule problems and empty hours (finishing a schedule matters more mid-build), before "Looks great". | Banner tests; the whole-app test now walks: fill -> reminder -> Save & share shows "Last backup: never. The schedule has changed since then." -> save -> "Last backup: today." -> banner "Looks great". |
+| "Last backup" line in Save & share | Plain words ("never", "today", "5 days ago"), with a warning icon (not just color) when one is due. | Whole-app test above, and seen in a real browser on the `/cadence/` build. |
+| Asking the browser to keep the data | `navigator.storage.persist()` after the manager saves a backup (Firefox may show a question, so it is only asked right after they act); the line says so if the browser agreed. | Not testable in jsdom; the call is wrapped so a browser without it changes nothing. Not confirmed in Safari. |
+
+Five whole-app tests expected "Looks great" right after auto-filling the sample; they now expect the backup reminder,
+which is the intended behavior (the sample was changed and never backed up).
+
+`npm test` (500 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
 ## Readability pass (2026-09-22)
 
 Every file under `src/` now has a plain-language comment explaining what it's for and, in the

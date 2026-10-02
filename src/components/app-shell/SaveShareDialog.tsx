@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Download, FileSpreadsheet, RotateCcw, Save, Send, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, RotateCcw, Save, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Modal } from "../ui/Modal";
@@ -13,6 +13,8 @@ import { buildPublishRequest, scheduleForServer, summarizePublish } from "../../
 import type { PublishSummary } from "../../services/automation/contracts";
 import { getAutomationClient } from "../../services/automation/n8nClient";
 import { useManagerSession } from "../../hooks/useManagerSession";
+import { useBackupStatus } from "../../hooks/useBackupStatus";
+import { describeLastBackup, recordBackup, requestPersistentStorage } from "../../features/persistence/backupStatus";
 import { ManagerSignIn } from "./ManagerSignIn";
 import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from "../../features/scheduling/types";
 
@@ -96,6 +98,9 @@ export function SaveShareDialog(props: Props) {
   // With a real server, nothing can be sent until a manager has signed in on this tab.
   const needsSignIn = client.kind === "server" && !signedIn;
   const oldEvents = lastPublish?.summary.staleShiftIds ?? [];
+  const { lastBackup, backupDue } = useBackupStatus({ settings, students, assignments, semester });
+  // null until known; true once the browser has agreed to keep this site's saved data.
+  const [storageKept, setStorageKept] = useState<boolean | null>(null);
 
   const dateProblem =
     startDate && !isIsoDate(startDate)
@@ -128,11 +133,14 @@ export function SaveShareDialog(props: Props) {
   }
   const calendarReady = isSemesterConfigured(semester) && draftMatchesSaved;
 
-  // Downloads the whole schedule as a backup file.
+  // Downloads the whole schedule as a backup file, remembers that it was backed up, and asks the
+  // browser to keep this site's saved data (asked here because it's right after the manager acted).
   function handleBackup() {
     const state: PersistedStateV1 = { version: 1, settings, students, assignments, selectedStudentId, semester };
     downloadTextFile(`shiftfit-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
+    recordBackup({ settings, students, assignments, semester });
     setMessage({ tone: "ok", text: "Backup saved to your Downloads folder. It contains student names and class times, so keep it private." });
+    void requestPersistentStorage().then(setStorageKept);
   }
 
   // Opens a backup file the manager picked, checks it, and asks before replacing the current schedule.
@@ -224,6 +232,14 @@ export function SaveShareDialog(props: Props) {
                 <Upload className="h-4 w-4" aria-hidden /> Load a backup file
               </Button>
             </div>
+            {/* When the last backup was made. Highlighted when a new one is due, so it isn't only said in the banner. */}
+            <p className={`mt-2 flex items-start gap-1.5 text-xs ${backupDue ? "font-medium text-ink" : "text-muted"}`}>
+              {backupDue && <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-warn" aria-hidden />}
+              <span>
+                Last backup: {describeLastBackup(lastBackup)}.{backupDue && " The schedule has changed since then."}
+                {storageKept === true && " This browser has agreed to keep your schedule."}
+              </span>
+            </p>
           </Section>
 
           <Section icon={<FileSpreadsheet className="h-4 w-4" aria-hidden />} title="Spreadsheet" help="A simple table of who works when, one row per shift. Opens in Excel or Google Sheets.">
@@ -452,6 +468,8 @@ export function SaveShareDialog(props: Props) {
           onCancel={() => setPendingImport(null)}
           onConfirm={() => {
             onImport(pendingImport.state, pendingImport.notes);
+            // The file on disk now matches the app exactly, so it counts as a backup.
+            recordBackup({ ...pendingImport.state, semester: pendingImport.state.semester ?? null });
             setPendingImport(null);
             onClose();
           }}

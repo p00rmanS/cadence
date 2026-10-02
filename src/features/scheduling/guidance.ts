@@ -17,6 +17,12 @@ export type GuidanceInput = {
   /** Half-hour boxes that still have too few people. */
   gapSlots: number;
   studentsBelowTarget: number;
+  /**
+   * True when the schedule changed since the last backup file and that backup is missing or a week
+   * old (see `features/persistence/backupStatus.ts`). There is no database, so a backup file is the
+   * only copy outside this browser.
+   */
+  backupDue?: boolean;
 };
 
 export type GuidanceAction = "add-student" | "auto-fill" | "show-health" | "save-share";
@@ -30,7 +36,8 @@ export type Guidance = {
 
 /**
  * Picks the single most useful next thing to tell a first-time user, in order of
- * importance: get started, then fix broken rules, then fill gaps, then finish.
+ * importance: get started, then fix broken rules, then fill gaps, then save a backup
+ * (if one is due), then finish.
  * Kept as a pure function so the advice is easy to test and change.
  */
 export function nextStep(input: GuidanceInput): Guidance {
@@ -65,6 +72,16 @@ export function nextStep(input: GuidanceInput): Guidance {
       title: `${hours} ${hours === 1 ? "hour" : "hours"} still ${hours === 1 ? "needs" : "need"} someone`,
       body: "Pink boxes have too few people. Pick a student on the left, then click a pink box to add them. The list on the right shows who is free.",
       action: { label: "See who is free", kind: "show-health" },
+    };
+  }
+  // Once the schedule works, protecting it comes next. This sits after problems and gaps on purpose:
+  // in the middle of building a schedule, finishing it is more useful advice than saving it.
+  if (input.backupDue) {
+    return {
+      tone: "todo",
+      title: "Save a backup of this schedule",
+      body: "It's only kept in this browser. Some browsers (like Safari) clear saved data after a week without a visit. A backup file keeps a safe copy.",
+      action: { label: "Save & share", kind: "save-share" },
     };
   }
   if (input.studentsBelowTarget > 0) {
