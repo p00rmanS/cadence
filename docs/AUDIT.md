@@ -414,6 +414,21 @@ which is the intended behavior (the sample was changed and never backed up).
 
 ---
 
+## Part 14: installable, offline app (2026-10-06)
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| App description and icons (`public/manifest.webmanifest`, 4 PNG icons, links in `index.html`) | Name, colors, standalone window, relative addresses (works in `/cadence/`). Icons drawn from `favicon.svg` by a script (no image library added), including a "maskable" one for Android and the iPhone home-screen icon. | `pwa.test.ts` checks every listed icon exists and addresses are relative; the icons were looked at. |
+| Offline helper (`src/pwa/serviceWorker.ts` -> `sw.js` written by `vite.config.ts` after each build) | Pages: internet first, saved copy only offline (updates always arrive). Build files: saved copy first (their names change every build). Only this app's own files: never other sites, `/api/`, or other github.io projects like `/netmon/`. One storage box per build; old ones deleted, other apps' never. | `pwa.test.ts` **runs the generated `sw.js`** in a pretend service-worker world (10 tests). In a real browser: installed at `/cadence/` with 17 files saved, then the web server was **switched off** and the page reloaded: the full app drew (110 buttons, fonts, banner), no failed files. |
+| **Bug found by the real-browser test** | The first offline reload showed the page but no app. Cause: servers can label files `Vary: Origin`; the page requests its script and stylesheet with an Origin note (`crossorigin`), the saved copies were made without one, so the browser treated them as different files and went online. Fixed with `ignoreVary` (safe: each saved file belongs to one exact build). | A test reproduces it (fails without the fix); the real-browser offline reload then worked. |
+| Switched on only in the published site (`registerServiceWorker.ts`) | Not in `npm run dev`, so old saved files never hide new changes while developing. | Test. |
+
+Not verified: installing on a real iPhone or Android phone; how GitHub Pages labels its files (the fix covers either way).
+
+`npm test` (510 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
 ## Readability pass (2026-09-22)
 
 Every file under `src/` now has a plain-language comment explaining what it's for and, in the

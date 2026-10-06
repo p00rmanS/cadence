@@ -131,6 +131,11 @@ kept, tested and switched off, ready for when the team picks a host for it. Conn
 `ALLOWED_ORIGINS=https://p00rmans.github.io` on the server, and the GitHub repository **variable**
 `VITE_AUTOMATION_API_URL` set to the server's address.
 
+**Install it as an app.** The published site can be installed: on a phone, *Share -> Add to Home Screen* (iPhone)
+or *Install app* (Android/Chrome); on a computer, the install icon in the address bar. It then opens in its own
+window and **works offline** (`src/pwa/`). On an iPhone this also matters for safety: an installed app keeps its own
+saved data, so Safari's "erase a website's data after 7 days without a visit" rule doesn't wipe the schedule.
+
 Any other static host works too: build command `npm run build`, output directory `dist`, Node 20.19 or newer.
 For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when building.
 
