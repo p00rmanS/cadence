@@ -28,6 +28,8 @@ const validState: PersistedStateV1 = {
     },
   ],
   assignments: [{ id: "a1", studentId: "s1", day: "mon", start: 9 * 60, source: "manual" }],
+  // The schedule that isn't showing (here, the break schedule) must survive a save and reload too.
+  otherTermAssignments: [{ id: "b1", studentId: "s1", day: "tue", start: 11 * 60, source: "manual" }],
   selectedStudentId: "s1",
   semester: null,
 };

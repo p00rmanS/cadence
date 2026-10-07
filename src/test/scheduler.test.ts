@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignedHours, hasOpeningShift, workedDayCount } from "../features/scheduling/availability";
+import { assignedHours, hasOpeningShift, shiftRuns, workedDayCount } from "../features/scheduling/availability";
 import { mergeContiguousBlocks } from "../features/scheduling/blocks";
 import { buildCoverageSlots, summarizeCoverage } from "../features/scheduling/coverage";
 import { buildDemoData } from "../features/scheduling/demo-data";
@@ -19,6 +19,20 @@ describe("autoFill on the sample roster", () => {
   it("brings every student to their weekly hours", () => {
     for (const s of students) expect(assignedHours(s.id, result.assignments, settings), s.name).toBe(19);
     expect(result.unmet).toEqual([]);
+  });
+
+  it("reaches 19 for Troy by moving part of a shift someone else also covers", () => {
+    // Troy (3 days, lunch at noon, 4pm cutoff) would otherwise stop at 18.5, because a 30-minute shift isn't allowed.
+    expect(result.explanations.some((e) => /^Moved .* of Troy C\.'s .* shift \(someone else covers it\)/.test(e.reason))).toBe(true);
+  });
+
+  it("never makes a shift shorter than 2 hours, and leaves Tuesday devotional empty", () => {
+    for (const s of students) {
+      for (const day of ["mon", "tue", "wed", "thu", "fri"] as const) {
+        for (const r of shiftRuns(s.id, day, result.assignments, settings)) expect(r.end - r.start, `${s.name} ${day}`).toBeGreaterThanOrEqual(120);
+      }
+    }
+    expect(result.assignments.filter((a) => a.day === "tue" && a.start >= 11 * 60 && a.start < 12 * 60)).toEqual([]);
   });
 
   it("never exceeds a student's days per week", () => {
@@ -63,6 +77,22 @@ describe("autoFill on the sample roster", () => {
   });
 });
 
+describe("autoFill during a semester break", () => {
+  const { students } = buildDemoData();
+  const settings = makeSettings({ term: "break" });
+  const result = autoFill(students, [], settings);
+
+  it("aims for 40 hours each, breaking no rule", () => {
+    expect(findIssues(students, result.assignments, settings)).toEqual([]);
+    for (const s of students) {
+      // Troy only works 3 days and must leave by 4pm, so 25.5 hours is the most he can do.
+      expect(assignedHours(s.id, result.assignments, settings), s.name).toBe(s.name === "Troy C." ? 25.5 : 40);
+    }
+    expect(result.unmet.map((u) => u.studentId)).toEqual(["s1"]);
+    expect(result.unmet[0].reason).toMatch(/only 25\.5 of 40 hours/);
+  });
+});
+
 describe("autoFill rules", () => {
   const settings = makeSettings({ openTime: 8 * 60, closeTime: 12 * 60, weeklyTargetHours: 4 });
 
@@ -96,10 +126,10 @@ describe("autoFill rules", () => {
   });
 
   it("reports, in plain words, when the target can't be reached", () => {
-    const student = makeStudent({ latestEnd: 8 * 60 + 30 });
+    const student = makeStudent({ latestEnd: 10 * 60, daysPerWeek: 1 });
     const r = autoFill([student], [], makeSettings({ openTime: 8 * 60, closeTime: 12 * 60, weeklyTargetHours: 10 }));
     expect(r.unmet).toHaveLength(1);
-    expect(r.unmet[0].reason).toMatch(/only 2\.5 of 10 hours/);
+    expect(r.unmet[0].reason).toMatch(/only 2 of 10 hours/);
   });
 
   it("is a no-op with nobody to schedule", () => {
@@ -140,7 +170,7 @@ describe("required opening shift", () => {
     const busy = (["mon", "tue", "wed", "thu", "fri"] as const).map((day) => ({ day, start: 7 * 60, end: 8 * 60, source: "class" as const }));
     const student = makeStudent({ needsOpeningShift: true, busy });
     const r = autoFill([student], [], makeSettings());
-    expect(r.openingShiftUnmet[0].reason).toMatch(/free hour in a row/);
+    expect(r.openingShiftUnmet[0].reason).toMatch(/2 hours free in a row/);
   });
 
   it("keeps a 7:00am shift counted toward hours when the view starts at 8:00am", () => {

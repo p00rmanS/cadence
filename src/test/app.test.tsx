@@ -46,7 +46,7 @@ beforeEach(() => {
 describe("first visit", () => {
   it("welcomes a new person once, in plain words, and remembers", async () => {
     const { user, unmount } = boot({ welcomed: false });
-    const dialog = screen.getByRole("dialog", { name: /welcome to shiftfit/i });
+    const dialog = screen.getByRole("dialog", { name: /welcome to cadence/i });
     expect(within(dialog).getByText(/Add your students/)).toBeTruthy();
     expect(within(dialog).getByText(/Fix the pink spots/)).toBeTruthy();
     await user.click(within(dialog).getByRole("button", { name: /try it with sample students/i }));
@@ -80,12 +80,12 @@ describe("first visit", () => {
 describe("guidance banner", () => {
   it("tells you what to do next as the schedule changes", async () => {
     const { user } = boot();
-    expect(banner().textContent).toMatch(/31 hours still need someone/);
+    expect(banner().textContent).toMatch(/65 hours still need someone/);
     await fillSchedule(user);
     expect(banner().textContent).toMatch(/Looks great: every hour is covered/);
     await user.click(screen.getByRole("button", { name: /clear all shifts/i }));
     await user.click(screen.getByRole("button", { name: /yes, clear them/i }));
-    expect(banner().textContent).toMatch(/let ShiftFit fill the week/i);
+    expect(banner().textContent).toMatch(/let Cadence fill the week/i);
   });
 
   it("asks a brand-new user to add their first student", async () => {
@@ -109,7 +109,7 @@ describe("filling and undoing", () => {
 
     await user.click(screen.getByRole("button", { name: /^undo/i }));
     expect(toast().textContent).toMatch(/Undid: Auto-filled shifts/);
-    expect(banner().textContent).toMatch(/31 hours still need someone/);
+    expect(banner().textContent).toMatch(/65 hours still need someone/);
     await user.click(screen.getByRole("button", { name: /^redo/i }));
     expect(banner().textContent).toMatch(/Looks great/);
   });
@@ -218,7 +218,7 @@ describe("the schedule grid with a keyboard", () => {
     const { user } = boot();
     const grid = screen.getByRole("grid");
     const cells = within(grid).getAllByRole("button");
-    expect(cells).toHaveLength(100);
+    expect(cells).toHaveLength(170);
     expect(cells.filter((c) => c.tabIndex === 0)).toHaveLength(1);
 
     const start = cell(/^Monday 7:00am to 7:30am/);
@@ -285,23 +285,25 @@ describe("the schedule grid with a keyboard", () => {
 
   it("asks before going over someone's weekly hours, then keeps a visible warning", async () => {
     const { user } = boot();
-    await user.click(cell(/^Tuesday 11:00am to 11:30am/)); // Troy is already at 19 hours
+    await user.click(cell(/^Tuesday 2:00pm to 2:30pm/)); // Troy is already at 19 hours
     const dialog = screen.getByRole("dialog", { name: /assign anyway/i });
     // it must own up to EVERY limit it is about to break, not just the first
     expect(dialog.textContent).toMatch(/Troy C\. is already at 19 hours and only works 3 days a week/);
     await user.click(within(dialog).getByRole("button", { name: /yes, assign anyway/i }));
-    expect(cell(/^Tuesday 11:00am to 11:30am/).getAttribute("aria-pressed")).toBe("true");
+    expect(cell(/^Tuesday 2:00pm to 2:30pm/).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/scheduled 19.5 hours, over the weekly limit of 19 hours/)).toBeTruthy();
     expect(screen.getByText(/scheduled on 4 days but only works 3 days a week/)).toBeTruthy();
     expect(screen.getAllByText(/\(You chose to allow this\.\)/)).toHaveLength(2);
-    expect(banner().textContent).not.toMatch(/problem/i); // an allowed override is a warning, not a blocker
+    // The allowed limits are warnings, not blockers. The only problem left is the 30-minute shift itself.
+    expect(screen.getByText(/shift on Tue 2:00pm–2:30pm is too short/)).toBeTruthy();
+    expect(banner().textContent).toMatch(/^1 problem/);
   });
 
   it("declining the override changes nothing", async () => {
     const { user } = boot();
-    await user.click(cell(/^Tuesday 11:00am to 11:30am/));
+    await user.click(cell(/^Tuesday 2:00pm to 2:30pm/));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(cell(/^Tuesday 11:00am to 11:30am/).getAttribute("aria-pressed")).toBe("false");
+    expect(cell(/^Tuesday 2:00pm to 2:30pm/).getAttribute("aria-pressed")).toBe("false");
   });
 });
 
@@ -875,21 +877,23 @@ describe("quick fixes for empty times", () => {
 
   it("offers one-click buttons for students who can really cover a gap", () => {
     boot();
-    const buttons = within(panel()).getAllByRole("button", { name: /^Add .* to Mon 7:00am–8:00am/ });
+    const buttons = within(panel()).getAllByRole("button", { name: /^Add .* to Tue 7:00am–11:00am/ });
     expect(buttons.length).toBeGreaterThanOrEqual(1);
     expect(buttons.length).toBeLessThanOrEqual(3);
-    // Troy already works Monday 8:00, and Leilani has no hours yet, so she is offered first
+    // Leilani is free the whole stretch and has no hours yet, so she is offered first
     expect(buttons[0].textContent).toContain("Leilani P.");
+    // Monday 7–8am is only 1 hour and Troy is at his limit, so nobody can take it as a full shift
+    expect(within(panel()).queryByRole("button", { name: /^Add .* to Mon 7:00am–8:00am/ })).toBeNull();
   });
 
   it("fills the gap in one click, explains what happened, and can be undone", async () => {
     const { user } = boot();
-    await user.click(within(panel()).getByRole("button", { name: /^Add Leilani P\. to Mon 7:00am–8:00am/ }));
-    expect(toast().textContent).toBe("Added 2 slots on Mon 7:00am–8:00am.");
-    expect(cell(/^Monday 7:00am to 7:30am/).getAttribute("aria-label")).toMatch(/Working: Leilani P\./);
-    expect(within(panel()).queryByRole("button", { name: /^Add .* to Mon 7:00am–8:00am/ })).toBeNull();
+    await user.click(within(panel()).getByRole("button", { name: /^Add Leilani P\. to Tue 7:00am–11:00am/ }));
+    expect(toast().textContent).toBe("Added 8 slots on Tue 7:00am–11:00am.");
+    expect(cell(/^Tuesday 7:00am to 7:30am/).getAttribute("aria-label")).toMatch(/Working: Leilani P\./);
+    expect(within(panel()).queryByRole("button", { name: /^Add .* to Tue 7:00am–11:00am/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: /^undo/i }));
-    expect(cell(/^Monday 7:00am to 7:30am/).getAttribute("aria-label")).toMatch(/Nobody is working/);
+    expect(cell(/^Tuesday 7:00am to 7:30am/).getAttribute("aria-label")).toMatch(/Nobody is working/);
   });
 
   it("says when someone can only take part of a gap", async () => {
@@ -932,7 +936,7 @@ describe("office hours and people needed", () => {
   it("switching to 8am hides the 7am row but never changes anyone's hours", async () => {
     const { user } = boot();
     expect(screen.getByRole("row", { name: /7:00am/ })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "8:00am–5:00pm" }));
+    await user.click(screen.getByRole("button", { name: "8:00am–12:00am" }));
     expect(screen.queryByRole("row", { name: /^7:00am/ })).toBeNull();
     expect(screen.getByText("Has their 7:00am opening shift", { exact: false })).toBeTruthy();
     expect(screen.getAllByText(/At their hours/)).toHaveLength(1);
@@ -954,7 +958,7 @@ describe("safety nets", () => {
     });
     boot({ welcomed: false });
     spy.mockRestore();
-    expect(screen.getByRole("alert").textContent).toMatch(/won't let ShiftFit save automatically/);
+    expect(screen.getByRole("alert").textContent).toMatch(/won't let Cadence save automatically/);
   });
 
   it("warns when another tab saved, instead of silently overwriting it later", async () => {
@@ -1028,7 +1032,7 @@ describe("audit round 3 fixes", () => {
     const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "huge.json", { type: "application/json" });
     const read = vi.spyOn(huge, "text");
     await user.upload(input, huge);
-    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/too big to be a ShiftFit backup/));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/too big to be a Cadence backup/));
     expect(read).not.toHaveBeenCalled();
   });
 

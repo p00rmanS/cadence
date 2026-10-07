@@ -100,6 +100,13 @@ export type Student = {
   needsOpeningShift: boolean;
 };
 
+/**
+ * Whether classes are in session. During the "semester" nobody works during Tuesday devotional
+ * and the normal weekly limit applies; during a "break" that hour is open and students may work
+ * up to BREAK_WEEKLY_HOURS (see `term.ts`).
+ */
+export type Term = "semester" | "break";
+
 /** The office-wide rules that apply to every student (as opposed to per-student rules, which live on `Student`). Editable in the app's "Rules" dialog. */
 export type ScheduleSettings = {
   /** When the visible schedule grid starts each day. */
@@ -112,6 +119,8 @@ export type ScheduleSettings = {
   slotMinutes: number;
   /** Default weekly hour cap offered to each new student (BYU–Hawaii's student-employment limit; see `docs/DECISIONS.md`). */
   weeklyTargetHours: number;
+  /** Semester or break. Missing (older saved schedules) means "semester". */
+  term?: Term;
 };
 
 /** Explicit dates + timezone are required for recurring calendar export; nothing is guessed. */
@@ -148,7 +157,7 @@ export type GapRange = {
 /**
  * Why a specific assignment attempt was rejected (used when the manager clicks a grid box,
  * or auto-fill tries a placement). Each code maps to one plain-language message in `availability.ts`.
- * "Hard" rules (class_conflict, unavailable, after_cutoff, lunch_conflict, already_assigned) can
+ * "Hard" rules (class_conflict, unavailable, after_cutoff, lunch_conflict, devotional, already_assigned) can
  * never be overridden. "Soft" rules (over_weekly_target, over_max_days) can be, with a confirmation.
  */
 export type ConstraintViolationCode =
@@ -156,6 +165,7 @@ export type ConstraintViolationCode =
   | "unavailable"
   | "after_cutoff"
   | "lunch_conflict"
+  | "devotional"
   | "over_weekly_target"
   | "over_max_days"
   | "already_assigned";
@@ -171,6 +181,8 @@ export type ScheduleIssueCode =
   | "unavailable"
   | "after_cutoff"
   | "lunch_conflict"
+  | "devotional"
+  | "shift_too_short"
   | "over_weekly_target"
   | "over_max_days"
   | "opening_shift_missing";
@@ -240,7 +252,13 @@ export type PersistedStateV1 = {
   version: 1;
   settings: ScheduleSettings;
   students: Student[];
+  /** Shifts of the schedule that is showing (semester or break, whichever `settings.term` says). */
   assignments: ShiftBlock[];
+  /**
+   * Shifts of the OTHER schedule, set aside while it isn't showing. The semester and break
+   * schedules are kept separately; switching swaps them. Missing in older saved data.
+   */
+  otherTermAssignments?: ShiftBlock[];
   selectedStudentId: string | null;
   /** Optional: only present once the manager configures calendar export. */
   semester?: SemesterConfig | null;

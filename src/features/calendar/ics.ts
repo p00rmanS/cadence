@@ -103,7 +103,7 @@ export function excludedOccurrences(semester: SemesterConfig, first: Date, count
  */
 export function icsFileName(student: Student): string {
   const slug = student.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "student";
-  return `shiftfit-${slug}.ics`;
+  return `cadence-${slug}.ics`;
 }
 
 /**
@@ -137,7 +137,7 @@ export function buildStudentIcs(
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//ShiftFit//Shift Coverage Planner//EN",
+    "PRODID:-//Cadence//Shift Coverage Planner//EN",
     "CALSCALE:GREGORIAN",
     `X-WR-CALNAME:${escapeText(`${student.name} — work shifts`)}`,
     `X-WR-TIMEZONE:${semester.timeZone}`,
@@ -156,7 +156,7 @@ export function buildStudentIcs(
       `RRULE:FREQ=WEEKLY;COUNT=${occurrences.count}`,
       ...exdate(semester, occurrences.first, occurrences.count, block.start),
       `SUMMARY:${escapeText(`Work shift — ${student.name}`)}`,
-      `DESCRIPTION:${escapeText("Created by ShiftFit. Ask your manager before changing this shift.")}`,
+      `DESCRIPTION:${escapeText("Created by Cadence. Ask your manager before changing this shift.")}`,
       "END:VEVENT",
     );
   }

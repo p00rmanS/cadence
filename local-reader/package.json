@@ -1,0 +1,12 @@
+{
+  "name": "shiftfit-local-reader",
+  "private": true,
+  "type": "module",
+  "description": "Runs on your own computer so Cadence can read schedule screenshots with Claude, keeping the API key out of the app.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0"
+  }
+}

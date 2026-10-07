@@ -5,7 +5,7 @@ import { validatePersistedState } from "../scheduling/validation";
  * ============================================================================
  *  SAVING TO (AND LOADING FROM) THE BROWSER
  * ============================================================================
- * ShiftFit has no server and no database — everything lives in this one
+ * Cadence has no server and no database — everything lives in this one
  * browser, in a feature called `localStorage` (a small key/value store every
  * browser gives each website). This file is the only place that talks to it.
  * Whatever comes back out is re-validated (`validatePersistedState`, see
@@ -36,12 +36,12 @@ function createLocalStorageAdapter(): StorageAdapter {
         if (!raw) return null;
         const result = validatePersistedState(migrate(JSON.parse(raw)));
         if (!result.ok) {
-          console.warn("ShiftFit: ignoring unreadable saved data.");
+          console.warn("Cadence: ignoring unreadable saved data.");
           return null;
         }
         return result.value;
       } catch {
-        console.warn("ShiftFit: could not read saved data.");
+        console.warn("Cadence: could not read saved data.");
         return null;
       }
     },
@@ -85,7 +85,7 @@ export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
  * same strict validator used for saved data, so a broken or tampered file can't get into the app.
  */
 export function parseBackup(json: string): ReturnType<typeof validatePersistedState> {
-  if (json.length > MAX_BACKUP_BYTES) return { ok: false, errors: ["That file is too large to be a ShiftFit backup."] };
+  if (json.length > MAX_BACKUP_BYTES) return { ok: false, errors: ["That file is too large to be a Cadence backup."] };
   try {
     return validatePersistedState(migrate(JSON.parse(json)));
   } catch {

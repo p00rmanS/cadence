@@ -33,6 +33,8 @@ type Props = {
   settings: ScheduleSettings;
   students: Student[];
   assignments: ShiftBlock[];
+  /** The schedule that isn't showing (semester or break), so a backup keeps both. */
+  otherTermAssignments: ShiftBlock[];
   semester: SemesterConfig | null;
   selectedStudentId: string | null;
   blockingIssues: number;
@@ -73,7 +75,7 @@ const zoneList: string[] = (() => {
 
 /** Save & share: backups, spreadsheet, semester dates, per-student calendar files, and sending to Google Calendar. */
 export function SaveShareDialog(props: Props) {
-  const { settings, students, assignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
+  const { settings, students, assignments, otherTermAssignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ state: PersistedStateV1; notes: string[] } | null>(null);
@@ -130,8 +132,8 @@ export function SaveShareDialog(props: Props) {
 
   // Downloads the whole schedule as a backup file.
   function handleBackup() {
-    const state: PersistedStateV1 = { version: 1, settings, students, assignments, selectedStudentId, semester };
-    downloadTextFile(`shiftfit-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
+    const state: PersistedStateV1 = { version: 1, settings, students, assignments, otherTermAssignments, selectedStudentId, semester };
+    downloadTextFile(`cadence-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
     setMessage({ tone: "ok", text: "Backup saved to your Downloads folder. It contains student names and class times, so keep it private." });
   }
 
@@ -139,7 +141,7 @@ export function SaveShareDialog(props: Props) {
   async function handleFile(file: File) {
     // Check the size first: reading a huge file into memory would freeze the page.
     if (file.size > MAX_BACKUP_BYTES) {
-      setMessage({ tone: "error", text: "That file is too big to be a ShiftFit backup, so it wasn't opened." });
+      setMessage({ tone: "error", text: "That file is too big to be a Cadence backup, so it wasn't opened." });
       return;
     }
     const result = parseBackup(await file.text());
@@ -230,7 +232,7 @@ export function SaveShareDialog(props: Props) {
             <Button
               variant="secondary"
               disabled={!hasShifts}
-              onClick={() => downloadTextFile(`shiftfit-schedule-${todayStamp()}.csv`, shiftsToCsv(students, assignments, settings.slotMinutes), "text/csv")}
+              onClick={() => downloadTextFile(`cadence-schedule-${todayStamp()}.csv`, shiftsToCsv(students, assignments, settings.slotMinutes), "text/csv")}
             >
               <Download className="h-4 w-4" aria-hidden /> Download spreadsheet
             </Button>
@@ -240,7 +242,7 @@ export function SaveShareDialog(props: Props) {
           <Section
             icon={<Send className="h-4 w-4" aria-hidden />}
             title="Calendar files for students"
-            help="Gives each student a file that puts their weekly shifts on their own phone or computer calendar. ShiftFit needs the semester dates and timezone from you. It never guesses."
+            help="Gives each student a file that puts their weekly shifts on their own phone or computer calendar. Cadence needs the semester dates and timezone from you. It never guesses."
           >
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
@@ -378,9 +380,15 @@ export function SaveShareDialog(props: Props) {
             icon={<Send className="h-4 w-4" aria-hidden />}
             title="Send to Google Calendar"
             help={
+ christroi-cadence-schedule-updates
+              client.kind === "n8n"
+                ? "Sends the approved schedule to the shared Google Calendar through your n8n workflow. Running it again updates the same events instead of making duplicates."
+                : "This copy of Cadence isn't connected to Google Calendar, so this only does a practice run: it checks your schedule and shows what would be sent. Nothing leaves your computer."
+
               client.kind === "server"
                 ? "Sends the approved schedule to the shared Google Calendar. Running it again updates the same events instead of making duplicates."
                 : "This copy of ShiftFit isn't connected to Google Calendar, so this only does a practice run: it checks your schedule and shows what would be sent. Nothing leaves your computer."
+ master
             }
           >
             {/* With a real server: the passcode box, which becomes "Signed in as manager" + Sign out once accepted. */}
@@ -483,6 +491,9 @@ export function SaveShareDialog(props: Props) {
           }}
         >
           <p>
+christroi-cadence-schedule-updates
+            This will create or update {request.events.length} calendar events for {new Set(request.events.map((e) => e.studentId)).size} students. Cadence only sends these shifts. It never asks the calendar to delete anything.
+
             This will create or update {request.events.length} calendar events for {new Set(request.events.map((e) => e.studentId)).size} students. It
             doesn&apos;t delete anything. If older events are left over from shifts you moved, you&apos;ll be asked about them separately.
           </p>
@@ -502,6 +513,7 @@ export function SaveShareDialog(props: Props) {
           <p>
             This deletes {oldEvents.length} {oldEvents.length === 1 ? "event" : "events"} (every week of each) that ShiftFit made earlier for shifts that
             are no longer in the schedule. Students will no longer see them. This can&apos;t be undone from ShiftFit.
+master
           </p>
         </ConfirmDialog>
       )}

@@ -16,6 +16,7 @@ import type { StudentSummary } from "../../features/scheduling/selectors";
 export function StudentCard({
   summary,
   targetHours,
+  limitHours,
   selected,
   issueCount,
   onSelect,
@@ -24,6 +25,8 @@ export function StudentCard({
 }: {
   summary: StudentSummary;
   targetHours: number;
+  /** Most hours allowed (higher than targetHours during a semester break). */
+  limitHours: number;
   selected: boolean;
   issueCount: number;
   onSelect: () => void;
@@ -31,9 +34,9 @@ export function StudentCard({
   onRemove: () => void;
 }) {
   const { student, hours, pctOfTarget, atTarget, needsOpeningShift, openingShiftSatisfied } = summary;
-  const over = hours > targetHours;
+  const over = hours > limitHours;
   const status = over
-    ? { text: `Over by ${hoursLabel(hours - targetHours)}`, icon: AlertTriangle, cls: "text-warn" }
+    ? { text: `Over by ${hoursLabel(hours - limitHours)}`, icon: AlertTriangle, cls: "text-warn" }
     : atTarget
       ? { text: "At their hours", icon: CheckCircle2, cls: "text-ok" }
       : { text: `Needs ${hoursLabel(targetHours - hours)} more`, icon: Clock, cls: "text-warn" };
@@ -82,18 +85,18 @@ export function StudentCard({
           onClick={onEdit}
           aria-label={`Edit ${student.name}`}
           title="Edit"
-          className="rounded-md p-1.5 text-muted hover:bg-line/40 hover:text-ink"
+          className="rounded-md p-2 text-muted hover:bg-line/40 hover:text-ink"
         >
-          <Pencil className="h-3.5 w-3.5" aria-hidden />
+          <Pencil className="h-4 w-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${student.name}`}
           title="Remove"
-          className="rounded-md p-1.5 text-muted hover:bg-gap-bg hover:text-gap"
+          className="rounded-md p-2 text-muted hover:bg-gap-bg hover:text-gap"
         >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          <Trash2 className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </li>

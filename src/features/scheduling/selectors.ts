@@ -1,4 +1,5 @@
 import { assignedHours, hasOpeningShift, workedDayCount } from "./availability";
+import { weeklyLimit } from "./term";
 import type { ScheduleSettings, ShiftBlock, Student } from "./types";
 
 /**
@@ -39,8 +40,8 @@ export function summarizeStudent(student: Student, assignments: ShiftBlock[], se
   return {
     student,
     hours,
-    pctOfTarget: Math.min(100, (hours / settings.weeklyTargetHours) * 100),
-    atTarget: hours >= settings.weeklyTargetHours,
+    pctOfTarget: Math.min(100, (hours / weeklyLimit(settings)) * 100),
+    atTarget: hours >= weeklyLimit(settings),
     daysWorked: workedDayCount(student.id, assignments),
     needsOpeningShift: student.needsOpeningShift,
     openingShiftSatisfied: hasOpeningShift(student.id, assignments, settings),

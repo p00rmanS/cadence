@@ -20,19 +20,20 @@ describe("suggestFillers", () => {
 
   it("suggests only students who can really work the stretch, best coverage first", () => {
     const full = makeStudent({ id: "a", name: "Ana" });
-    const partial = makeStudent({ id: "b", name: "Ben", busy: busyAt("mon", 10 * 60, 11 * 60) });
-    const none = makeStudent({ id: "c", name: "Cy", busy: busyAt("mon", 9 * 60, 11 * 60) });
-    const out = suggestFillers([partial, none, full], [], settings, "mon", 9 * 60, 11 * 60);
+    const partial = makeStudent({ id: "b", name: "Ben", busy: busyAt("mon", 11 * 60, 12 * 60) });
+    // Cy is free only 11–12, which would make a 1-hour shift, so Cy is not suggested.
+    const tooShort = makeStudent({ id: "c", name: "Cy", busy: busyAt("mon", 9 * 60, 11 * 60) });
+    const out = suggestFillers([partial, tooShort, full], [], settings, "mon", 9 * 60, 12 * 60);
     expect(out.map((o) => [o.student.name, o.slots, o.total])).toEqual([
-      ["Ana", 4, 4],
-      ["Ben", 2, 4],
+      ["Ana", 6, 6],
+      ["Ben", 4, 6],
     ]);
   });
 
   it("plays the stretch forward, so the weekly limit stops a student partway", () => {
-    const tight = makeSettings({ weeklyTargetHours: 1 });
-    const out = suggestFillers([makeStudent({ id: "a", name: "Ana" })], [], tight, "mon", 9 * 60, 11 * 60);
-    expect(out[0]).toMatchObject({ slots: 2, total: 4 }); // 1 hour = 2 boxes, then she is at her limit
+    const tight = makeSettings({ weeklyTargetHours: 3 });
+    const out = suggestFillers([makeStudent({ id: "a", name: "Ana" })], [], tight, "mon", 9 * 60, 13 * 60);
+    expect(out[0]).toMatchObject({ slots: 6, total: 8 }); // 3 hours = 6 boxes, then she is at her limit
   });
 
   it("respects the days-per-week limit", () => {
@@ -45,16 +46,16 @@ describe("suggestFillers", () => {
     const b = makeStudent({ id: "b", name: "Ben" });
     const c = makeStudent({ id: "c", name: "Cy" });
     const shifts = run("a", "tue", 540, 660); // Ana already has 2 hours
-    const out = suggestFillers([a, b, c], shifts, settings, "mon", 9 * 60, 10 * 60);
+    const out = suggestFillers([a, b, c], shifts, settings, "mon", 9 * 60, 11 * 60);
     expect(out.map((o) => o.student.name)).toEqual(["Ben", "Cy", "Ana"]);
   });
 
   it("skips boxes a student already works and honours the limit", () => {
     const a = makeStudent({ id: "a", name: "Ana" });
-    const out = suggestFillers([a], [slot("a", "mon", 9 * 60)], settings, "mon", 9 * 60, 10 * 60);
-    expect(out[0].slots).toBe(1); // only 9:30 is new
+    const out = suggestFillers([a], run("a", "mon", 9 * 60, 10 * 60), settings, "mon", 9 * 60, 11 * 60);
+    expect(out[0].slots).toBe(2); // only 10:00 and 10:30 are new
     const many = Array.from({ length: 6 }, (_, i) => makeStudent({ id: `s${i}`, name: `S${i}` }));
-    expect(suggestFillers(many, [], settings, "mon", 9 * 60, 10 * 60, 2)).toHaveLength(2);
+    expect(suggestFillers(many, [], settings, "mon", 9 * 60, 11 * 60, 2)).toHaveLength(2);
   });
 
   it("never suggests anyone for a stretch that is already gone", () => {

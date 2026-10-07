@@ -1,4 +1,5 @@
 import { daySlots, staffAt } from "./availability";
+import { isDevotional, weeklyLimit } from "./term";
 import { DAYS } from "./types";
 import type { CoverageSlot, Day, GapRange, ScheduleSettings, ShiftBlock } from "./types";
 
@@ -14,11 +15,13 @@ import type { CoverageSlot, Day, GapRange, ScheduleSettings, ShiftBlock } from "
  * the schedule changes, so it can never drift out of sync.
  */
 
+/** One entry per box that needs staff. Tuesday devotional (during the semester) needs nobody, so it is left out. */
 export function buildCoverageSlots(assignments: ShiftBlock[], settings: ScheduleSettings): CoverageSlot[] {
   const slots = daySlots(settings);
   const out: CoverageSlot[] = [];
   for (const day of DAYS) {
     for (const start of slots) {
+      if (isDevotional(day, start, settings)) continue;
       const assignedStudentIds = staffAt(day, start, assignments);
       out.push({
         day,
@@ -85,7 +88,7 @@ export function summarizeCoverage(coverage: CoverageSlot[], settings: ScheduleSe
     totalSlots,
     fullyStaffedSlots,
     theoreticalStaffingHours,
-    theoreticalMinimumStudents: Math.ceil(theoreticalStaffingHours / settings.weeklyTargetHours),
+    theoreticalMinimumStudents: Math.ceil(theoreticalStaffingHours / weeklyLimit(settings)),
   };
 }
 

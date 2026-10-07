@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { HelpTip } from "../help/HelpTip";
 import { assignedHours, canAssign, daySlots, isAssigned, staffAt } from "../../features/scheduling/availability";
 import { describeGap } from "../../features/scheduling/issues";
+import { isDevotional, isOnBreak, weeklyLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
 import { DAYS, DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
@@ -32,6 +33,8 @@ type Anchor = { day: Day; start: number; assign: boolean };
 type CellModel = {
   staffIds: string[];
   need: number;
+  /** Tuesday devotional during the semester: nobody works, nobody is needed. */
+  closed: boolean;
   mine: boolean;
   hardBlocked: boolean;
   label: string;
@@ -98,24 +101,27 @@ export function ScheduleGrid({
       for (const start of slots) {
         const staffIds = staffAt(day, start, assignments);
         const names = staffIds.map((id) => studentById.get(id)?.name ?? "Unknown");
-        const need = settings.minStaffPerSlot - staffIds.length;
+        const closed = isDevotional(day, start, settings);
+        const need = closed ? 0 : settings.minStaffPerSlot - staffIds.length;
         const mine = selectedStudent ? isAssigned(selectedStudent.id, day, start, assignments) : false;
         const violation = selectedStudent && !mine ? canAssign(selectedStudent, day, start, assignments, settings) : null;
         const hardBlocked = Boolean(
           violation && (violation.code === "class_conflict" ||
             violation.code === "unavailable" ||
             violation.code === "after_cutoff" ||
-            violation.code === "lunch_conflict"),
+            violation.code === "lunch_conflict" ||
+          violation.code === "devotional"),
         );
 
         let label = `${DAY_LONG[day]} ${formatMinutes(start)} to ${formatMinutes(start + settings.slotMinutes)}.`;
         label += names.length ? ` ${endSentence(`Working: ${names.join(", ")}`)}` : " Nobody is working.";
-        label += need > 0 ? ` Needs ${need} more. ${describeGap(students, assignments, settings, day, start)}` : " Enough people.";
+        if (closed) label += " Tuesday devotional. Nobody works now.";
+        else label += need > 0 ? ` Needs ${need} more. ${describeGap(students, assignments, settings, day, start)}` : " Enough people.";
         if (selectedStudent) {
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
           else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, mine, hardBlocked, label });
+        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label });
       }
     }
     return out;
@@ -234,11 +240,13 @@ export function ScheduleGrid({
   return (
     <section aria-labelledby="grid-heading" className="flex h-full min-h-0 flex-col gap-2 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="grid-heading" className="font-display text-base font-semibold">
-          This week&apos;s schedule
-          <HelpTip label="This week's schedule">
-            Each box is 30 minutes. Green means enough people are working. Pink means someone is still needed. Pick a student on
-            the left, then click a box to give them that half hour. Click again to take it away.
+        <h2 id="grid-heading" className="font-display text-lg font-semibold">
+          {isOnBreak(settings) ? "Break schedule" : "Semester schedule"}
+          <HelpTip label="Weekly schedule">
+            Each box is 30 minutes. Pick a student on the left, then click a box to give them that half hour. Click again to take
+            it away. To fill a stretch, drag down a column or hold Shift and click. A blue outline means the picked student works
+            that box, and a ⚠ means a rule is broken there. Shifts must be at least 2 hours. The semester and break schedules
+            are kept separately: the Semester / Break switch at the top chooses which one you see and change.
           </HelpTip>
         </h2>
         <p className="text-sm" aria-live="polite">
@@ -246,7 +254,7 @@ export function ScheduleGrid({
             <>
               Scheduling <strong>{selectedStudent.name}</strong>{" "}
               <span className="text-muted">
-                ({selectedHours} of {settings.weeklyTargetHours} hours)
+                ({selectedHours} of {weeklyLimit(settings)} hours)
               </span>
             </>
           ) : (
@@ -255,21 +263,16 @@ export function ScheduleGrid({
         </p>
       </div>
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="What the boxes mean">
+      {/* Only the three things a manager looks for; the rest is explained behind the "?" above. */}
+      <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted" aria-label="What the boxes mean">
         <li className="flex items-center gap-1.5">
-          <span className="h-3.5 w-3.5 rounded-sm bg-ok-bg ring-1 ring-inset ring-ok/40" aria-hidden /> Enough people
+          <span className="h-4 w-4 rounded-sm bg-ok-bg ring-1 ring-inset ring-ok/40" aria-hidden /> Enough people
         </li>
         <li className="flex items-center gap-1.5">
-          <span className="h-3.5 w-3.5 rounded-sm bg-gap-bg ring-1 ring-inset ring-gap" aria-hidden /> Needs someone
+          <span className="h-4 w-4 rounded-sm bg-gap-bg ring-1 ring-inset ring-gap" aria-hidden /> Needs someone
         </li>
         <li className="flex items-center gap-1.5">
-          <span className={clsx("h-3.5 w-3.5 rounded-sm bg-panel ring-1 ring-inset ring-line", STRIPES)} aria-hidden /> Picked student can&apos;t work
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className="h-3.5 w-3.5 rounded-sm ring-2 ring-inset ring-accent" aria-hidden /> Picked student is working
-        </li>
-        <li className="flex items-center gap-1.5">
-          <AlertTriangle className="h-3.5 w-3.5 text-gap" aria-hidden /> A rule is broken
+          <span className={clsx("h-4 w-4 rounded-sm bg-panel ring-1 ring-inset ring-line", STRIPES)} aria-hidden /> Picked student can&apos;t work
         </li>
       </ul>
 
@@ -347,8 +350,8 @@ export function ScheduleGrid({
                           activate(day, slot, e.shiftKey);
                         }}
                         className={clsx(
-                          "relative flex h-9 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-md px-1 text-left transition-colors",
-                          cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg",
+                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-md px-1 text-left transition-colors",
+                          cell.closed ? "bg-line/40" : cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg",
                           cell.mine && "ring-2 ring-inset ring-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
@@ -357,7 +360,12 @@ export function ScheduleGrid({
                           cell.hardBlocked ? "cursor-not-allowed" : "hover:brightness-95",
                         )}
                       >
-                        {cell.hardBlocked && <span className={clsx("pointer-events-none absolute inset-0", STRIPES)} aria-hidden />}
+                        {cell.hardBlocked && !cell.closed && <span className={clsx("pointer-events-none absolute inset-0", STRIPES)} aria-hidden />}
+                        {cell.closed && !cell.staffIds.length && (
+                          <span className="relative text-xs font-semibold text-muted" aria-hidden>
+                            Devotional
+                          </span>
+                        )}
                         {cell.staffIds.map((id) => {
                           const s = studentById.get(id);
                           if (!s) return null;
@@ -365,7 +373,7 @@ export function ScheduleGrid({
                           return (
                             <span
                               key={id}
-                              className="relative inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded px-1 text-[11px] font-bold text-white"
+                              className="relative inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded px-1 text-xs font-bold text-white"
                               style={{ backgroundColor: s.color }}
                               aria-hidden
                             >
@@ -375,7 +383,7 @@ export function ScheduleGrid({
                           );
                         })}
                         {cell.need > 0 && (
-                          <span className="relative ml-auto pr-0.5 text-[11px] font-semibold text-gap" aria-hidden>
+                          <span className="relative ml-auto pr-0.5 text-xs font-semibold text-gap" aria-hidden>
                             Need {cell.need}
                           </span>
                         )}
@@ -390,8 +398,8 @@ export function ScheduleGrid({
       </div>
 
       {/* Sighted helper text. Screen readers already hear the same words from the focused box. */}
-      <p aria-hidden className="min-h-9 rounded-lg bg-bg px-3 py-1.5 text-xs leading-snug">
-        {infoCell ? infoCell.label : "Hover over a box to see who is working and why. To fill a stretch, drag down a column or hold Shift and click."}
+      <p aria-hidden className="min-h-10 rounded-lg bg-bg px-3 py-2 text-sm leading-snug">
+        {infoCell ? infoCell.label : "Point at a box to see who is working."}
       </p>
     </section>
   );
