@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizontal, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizontal, Undo2, Wand2 } from "lucide-react";
 import { clsx } from "../../lib/clsx";
 import { Segmented } from "../ui/Segmented";
 import { Button } from "../ui/Button";
+import { CadenceLogo } from "../ui/CadenceLogo";
 import { HelpTip } from "../help/HelpTip";
 import { ThemeControl } from "./ThemeControl";
 import type { ThemeChoice } from "../../hooks/useTheme";
@@ -75,9 +76,7 @@ export function TopBar({
     <header className="border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-accent-ink">
-            <Sparkles className="h-5 w-5" aria-hidden />
-          </div>
+          <CadenceLogo className="h-9 w-9 shrink-0" />
           <div>
             <h1 className="font-display text-lg font-semibold leading-none">Cadence</h1>
             <p className="hidden text-xs text-muted sm:block">Work schedules that fit around classes</p>

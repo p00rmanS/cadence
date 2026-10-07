@@ -23,7 +23,7 @@ import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, St
  * The biggest dialog in the app — it's really five features bundled behind
  * one button, each in its own `<Section>` below: backup file (save/load),
  * spreadsheet export, per-student calendar (.ics) files, publishing to
- * Google Calendar through the ShiftFit server (after a manager signs in), or a
+ * Google Calendar through the Cadence server (after a manager signs in), or a
  * harmless "practice run" if no server is connected — see `client.kind` and
  * `../../services/automation`, and the
  * "start over" reset/clear actions. Read each `Section` block independently;
