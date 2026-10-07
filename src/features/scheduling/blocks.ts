@@ -48,6 +48,11 @@ export function scheduleVersion(assignments: ShiftBlock[]): string {
   return `v${keys.length}-${hash.toString(16).padStart(8, "0")}`;
 }
 
+/**
+ * Makes one spreadsheet cell safe: a value that starts like a formula gets a ' in front so the
+ * spreadsheet shows it as text, and a value containing a comma, quote or line break is wrapped
+ * in quotes (with inner quotes doubled) so it stays in one cell.
+ */
 function csvCell(value: string | number): string {
   const text = String(value);
   // Leading = + - @ can be run as a formula by spreadsheet apps; prefix a quote to neutralize.
@@ -55,6 +60,7 @@ function csvCell(value: string | number): string {
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
+/** Minutes after midnight as a 24-hour clock time, e.g. 780 -> "13:00" (spreadsheets sort these correctly). */
 function clock(minutes: Minutes): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }

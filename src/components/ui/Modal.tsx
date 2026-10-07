@@ -50,6 +50,7 @@ export function Modal({ title, description, onClose, children, footer, variant =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Escape closes the dialog. Tab and Shift+Tab loop inside it, so keyboard users can't wander behind it.
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Escape") {
       e.stopPropagation();

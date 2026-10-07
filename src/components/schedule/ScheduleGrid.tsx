@@ -43,6 +43,10 @@ type CellModel = {
 const STRIPES =
   "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_5px,rgb(var(--busy)/0.55)_5px,rgb(var(--busy)/0.55)_7px)]";
 
+/**
+ * The week grid: one row per half hour, one column per weekday. Clicking a box adds or removes
+ * the selected student; dragging (or Shift+click) fills a stretch; arrow keys move around.
+ */
 export function ScheduleGrid({
   settings,
   students,
@@ -130,6 +134,7 @@ export function ScheduleGrid({
     anchor.current = null;
   }, [selectedStudent?.id]);
 
+  // Moves keyboard focus to a box, keeping the row and column inside the grid's edges.
   function focusCell(r: number, c: number) {
     const rr = Math.max(0, Math.min(slots.length - 1, r));
     const cc = Math.max(0, Math.min(visibleDays.length - 1, c));
@@ -137,6 +142,7 @@ export function ScheduleGrid({
     cells.current.get(`${cc}-${rr}`)?.focus();
   }
 
+  // Arrow keys, Home and End move between boxes, like in a spreadsheet.
   function onCellKeyDown(e: KeyboardEvent<HTMLButtonElement>, r: number, c: number) {
     const move: Record<string, [number, number]> = {
       ArrowUp: [r - 1, c],
@@ -155,6 +161,7 @@ export function ScheduleGrid({
     }
   }
 
+  // Mouse pressed on a box: remember where the drag started and whether it adds or removes shifts.
   function beginDrag(e: PointerEvent<HTMLButtonElement>, day: Day, start: number) {
     // Mouse and pen only. Touch keeps scrolling the page, and the keyboard has its own range keys.
     if (e.button !== 0 || e.pointerType === "touch" || !selectedStudent) return;
@@ -163,6 +170,7 @@ export function ScheduleGrid({
     dragLast.current = { day, start };
   }
 
+  // Mouse moved over another box on the same day while dragging: stretch the highlighted range to it.
   function extendDrag(day: Day, start: number) {
     const from = dragStart.current;
     if (!from || from.day !== day) return;
@@ -204,9 +212,11 @@ export function ScheduleGrid({
     };
   }, []);
 
+  // True if this box is inside the range currently being dragged (so it can be highlighted).
   const inDrag = (day: Day, slot: number) =>
     drag !== null && drag.day === day && slot >= Math.min(drag.from, drag.to) && slot <= Math.max(drag.from, drag.to);
 
+  // A box was clicked or pressed with Enter/Space. With Shift held, fill from the last box to this one.
   function activate(day: Day, start: number, shift: boolean) {
     if (!selectedStudent) {
       onToggle(day, start); // the store explains "pick a student first"

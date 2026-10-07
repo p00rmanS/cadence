@@ -1,8 +1,19 @@
 import { parseClassText } from "../scheduling/parser";
 import type { ParseResult } from "../scheduling/types";
 import { createId } from "../../lib/id";
+import { currentPasscode, problemFromStatus, serverBaseUrl, signOutManager } from "../../services/automation/managerSession";
 import { validateExtractedSchedule } from "./schemas";
 import type { ExtractedSchedule } from "./schemas";
+
+/**
+ * ============================================================================
+ *  TURNING PASTED TEXT OR A SCREENSHOT INTO CLASS TIMES
+ * ============================================================================
+ * Text is always read right here in the browser (`parser.ts`). A screenshot is sent to the ShiftFit
+ * server only when one is configured AND a manager has signed in; the server passes it to the
+ * reading service (n8n + an AI provider). Whatever comes back is checked by `schemas.ts` and shown
+ * for review before anything is saved.
+ */
 
 export type ExtractionSource = "local-text" | "remote-ai";
 
@@ -17,14 +28,16 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const TIMEOUT_MS = 60_000;
 
+/** A plain-language problem with a chosen screenshot (wrong type or over 5 MB), or null if it's fine. */
 export function checkImageFile(file: File): string | null {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return "Please use a PNG, JPG or WebP screenshot.";
   if (file.size > MAX_IMAGE_BYTES) return "That image is bigger than 5 MB. Try a smaller screenshot.";
   return null;
 }
 
+/** True only when a screenshot-reading server address has been configured (VITE_AUTOMATION_API_URL). */
 export function isRemoteExtractionAvailable(): boolean {
-  return Boolean(import.meta.env.VITE_AUTOMATION_API_URL);
+  return serverBaseUrl() !== null;
 }
 
 /**
@@ -43,14 +56,17 @@ export async function extractSchedule(input: { text: string; image?: File | null
   const imageProblem = checkImageFile(input.image);
   if (imageProblem) return { source: "local-text", parse, error: imageProblem };
 
-  const endpoint = import.meta.env.VITE_AUTOMATION_API_URL;
-  if (!endpoint) {
+  const endpoint = serverBaseUrl();
+  if (endpoint === null) {
     return {
       source: "local-text",
       parse,
       error: "Reading screenshots isn't set up here yet. You can type or paste the class times instead — that always works.",
     };
   }
+  // The server only reads screenshots for a signed-in manager (each read can cost money at the AI provider).
+  const passcode = currentPasscode();
+  if (!passcode) return { source: "local-text", parse, error: "Sign in with the manager passcode first, then read the screenshot." };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -59,13 +75,16 @@ export async function extractSchedule(input: { text: string; image?: File | null
     form.append("requestId", createId("req"));
     form.append("image", input.image);
     form.append("text", input.text.slice(0, 4000));
-    const res = await fetch(`${endpoint.replace(/\/$/, "")}/webhook/shiftfit/interpret`, {
+    // Goes to the ShiftFit server (src/server/gateway.ts), which checks the passcode and passes it on to n8n.
+    const res = await fetch(`${endpoint}/api/interpret`, {
       method: "POST",
+      headers: { authorization: `Bearer ${passcode}` },
       body: form,
       credentials: "omit",
       signal: controller.signal,
     });
-    if (!res.ok) return { source: "remote-ai", parse, error: `The reading service had a problem (${res.status}). Try typing the times instead.` };
+    if (res.status === 401) signOutManager();
+    if (!res.ok) return { source: "remote-ai", parse, error: `${problemFromStatus(res.status)} You can type the times instead.` };
     const validated = validateExtractedSchedule(await res.json());
     if (!validated.ok) {
       return { source: "remote-ai", parse, error: "The reading service sent back something we couldn't trust, so we ignored it. Try typing the times instead." };

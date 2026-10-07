@@ -9,12 +9,14 @@ import { useCallback, useEffect, useState } from "react";
 export type ThemeChoice = "system" | "light" | "dark";
 const STORAGE_KEY = "shiftfit:theme";
 
+/** Switches the page's colors by setting (or removing) `data-theme` on the <html> tag; the CSS does the rest. */
 function applyTheme(choice: ThemeChoice) {
   const root = document.documentElement;
   if (choice === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", choice);
 }
 
+/** The current theme choice and a way to change it; loads the saved choice and saves every change. */
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeChoice>(() => {
     try {

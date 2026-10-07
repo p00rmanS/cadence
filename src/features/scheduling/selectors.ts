@@ -34,6 +34,7 @@ export type StudentSummary = {
   openingShiftSatisfied: boolean;
 };
 
+/** Everything a student card shows at a glance: hours so far, how close to target, opening-shift status. */
 export function summarizeStudent(student: Student, assignments: ShiftBlock[], settings: ScheduleSettings): StudentSummary {
   const hours = assignedHours(student.id, assignments, settings);
   return {

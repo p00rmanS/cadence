@@ -50,6 +50,8 @@ import type {
 
 export type NewStudentInput = {
   name: string;
+  /** Saved thumbnail (data URL) or null/undefined for none. */
+  avatar?: string | null;
   preference: Student["preference"];
   daysPerWeek: number;
   classText: string;
@@ -100,6 +102,7 @@ export type Action =
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
+  | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
   | { type: "SET_SEMESTER"; semester: SemesterConfig | null }
   | { type: "AUTOFILL"; replace: boolean }
@@ -113,9 +116,12 @@ export type Action =
   | { type: "SAVE_STATUS"; failed: boolean }
   | { type: "OTHER_TAB_CHANGED" };
 
+/** How many undo steps are kept; older ones are forgotten so memory doesn't grow forever. */
 const HISTORY_LIMIT = 100;
+/** Counts up for every message, so showing the same text twice still counts as a new message. */
 let toastSeq = 0;
 
+/** A short pop-up message (a "toast") with a fresh id. */
 function toast(message: string): State["toast"] {
   toastSeq += 1;
   return { id: toastSeq, message };
@@ -126,11 +132,13 @@ function manualId(studentId: string, day: Day, start: number): string {
   return `manual-${studentId}-${day}-${start}`;
 }
 
+/** Turns what the manager typed in the student form into a full student record. */
 function toStudent(id: string, input: NewStudentInput, color: string): Student {
   return {
     id,
     name: input.name.trim(),
     color,
+    ...(input.avatar ? { avatar: input.avatar } : {}),
     preference: input.preference,
     daysPerWeek: input.daysPerWeek,
     classText: input.classText,
@@ -148,6 +156,7 @@ function nextColor(students: Student[]): string {
   return STUDENT_COLORS.find((c) => !used.has(c)) ?? STUDENT_COLORS[students.length % STUDENT_COLORS.length];
 }
 
+/** What the app starts with: the schedule saved in this browser if there is one, otherwise the demo data. */
 export function initialState(): State {
   const saved = storage.load();
   const base = { past: [], future: [], toast: null, pendingOverride: null, lastAutofill: null, saveFailed: false, otherTabChanged: false };
@@ -172,6 +181,10 @@ export function initialState(): State {
   };
 }
 
+/**
+ * Applies a change to the schedule and records the old version as an undo step (named by
+ * `label`, e.g. "Auto-fill"). Any "redo" steps are cleared, since the history has now branched.
+ */
 function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {}): State {
   return {
     ...state,
@@ -182,10 +195,12 @@ function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {
   };
 }
 
+/** Keeps the selected student if they still exist; otherwise selects the first student (or nobody). */
 function fixSelection(doc: Doc, selected: string | null): string | null {
   return selected && doc.students.some((s) => s.id === selected) ? selected : (doc.students[0]?.id ?? null);
 }
 
+/** A count with the right word form, e.g. plural(1, "shift") -> "1 shift", plural(3, "shift") -> "3 shifts". */
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -224,7 +239,7 @@ function fillRange(doc: Doc, student: Student, day: Day, from: number, to: numbe
     skipped > 0
       ? `${verb} ${plural(changed, "slot")} on ${range}. Skipped ${plural(skipped, "slot")} (${firstSkip}).`
       : `${verb} ${plural(changed, "slot")} on ${range}.`;
-  return { assignments, changed, message, verb };
+  return { assignments, changed, skipped, firstSkip, message, verb };
 }
 
 /**
@@ -350,6 +365,7 @@ export function reducer(state: State, action: Action): State {
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
     }
+christroi-cadence-schedule-updates
     case "SET_SETTINGS": {
       const settings = { ...doc.settings, ...action.settings };
       const termChanged = (settings.term ?? "semester") !== (doc.settings.term ?? "semester");
@@ -365,6 +381,36 @@ export function reducer(state: State, action: Action): State {
         toast: toast(message),
       });
     }
+    case "IMPORT_SHIFTS": {
+      // Each pasted shift goes through the same rule checks as a click on the grid. A shift that
+      // breaks a hard rule (class, lunch, cutoff) or a limit is skipped and counted, never forced.
+      let assignments = doc.assignments;
+      let placed = 0;
+      let skipped = 0;
+      let firstSkip = "";
+      for (const entry of action.entries) {
+        const student = doc.students.find((s) => s.id === entry.studentId);
+        if (!student) continue;
+        const from = entry.start;
+        const to = entry.end - doc.settings.slotMinutes;
+        if (to < from) continue;
+        const outcome = fillRange({ ...doc, assignments }, student, entry.day, from, to, true);
+        assignments = outcome.assignments;
+        placed += outcome.changed;
+        skipped += outcome.skipped;
+        if (!firstSkip && outcome.firstSkip) firstSkip = outcome.firstSkip;
+      }
+      if (!placed) {
+        return { ...state, toast: toast(skipped ? `Nothing was added: every shift broke a rule (${firstSkip}).` : "Nothing new to add — those shifts are already on the schedule.") };
+      }
+      const tail = skipped ? ` Skipped ${plural(skipped, "half hour")} that broke a rule (${firstSkip}).` : "";
+      return commit(state, { ...doc, assignments }, "Imported pasted shifts", {
+        toast: toast(`Added ${plural((placed * doc.settings.slotMinutes) / 60, "hour")} of pasted shifts.${tail}`),
+      });
+    }
+    case "SET_SETTINGS":
+      return commit(state, { ...doc, settings: { ...doc.settings, ...action.settings } }, "Changed settings");
+     master
     case "SET_SEMESTER":
       return commit(state, { ...doc, semester: action.semester }, "Changed calendar dates");
     case "AUTOFILL": {
@@ -546,6 +592,7 @@ export function useShiftFitStore() {
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
+      importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
       confirmOverride: () => dispatch({ type: "CONFIRM_OVERRIDE" }),
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
       setSettings: (settings: Partial<ScheduleSettings>) => dispatch({ type: "SET_SETTINGS", settings }),

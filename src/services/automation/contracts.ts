@@ -65,15 +65,76 @@ export type PublishEventResult = {
 export type PublishResponse = {
   scheduleVersion: string;
   results: PublishEventResult[];
+  /**
+   * Shifts that are still on Google Calendar from an EARLIER publish but are no longer in this
+   * schedule (moved or removed). They are only reported here, never deleted automatically: the
+   * manager is asked first, then `removeEvents` deletes them.
+   */
+  staleShiftIds?: string[];
 };
 
 export type SyncState = "not_synced" | "syncing" | "synced" | "partially_synced" | "sync_failed";
 
-export type AutomationClient = {
-  /** "n8n" when VITE_AUTOMATION_API_URL is set, "mock" otherwise. The UI must never imply a mock run reached Google Calendar. */
-  kind: "n8n" | "mock";
-  publishSchedule(request: PublishRequest): Promise<PublishResponse>;
+/** What happened to one old calendar event the manager asked to remove. */
+export type RemoveEventStatus = "removed" | "not_found" | "failed" | "dry_run";
+
+export type RemoveResponse = {
+  results: { shiftId: string; status: RemoveEventStatus; error?: string }[];
 };
+
+/**
+ * Only the schedule facts the server needs to re-check the rules and rebuild the calendar events.
+ * Photos and the raw pasted class text are left out on purpose: the server doesn't need them, and
+ * personal data that is never sent can never leak.
+ */
+export type ScheduleForServer = {
+  students: Omit<Student, "avatar" | "classText" | "blockedText">[];
+  assignments: ShiftBlock[];
+  settings: ScheduleSettings;
+  semester: SemesterConfig | null;
+};
+
+export type AutomationClient = {
+  /** "server" when VITE_AUTOMATION_API_URL is set, "mock" otherwise. The UI must never imply a mock run reached Google Calendar. */
+  kind: "server" | "mock";
+  /**
+   * Sends the schedule the manager approved. `request` is the same publish request built here in the
+   * browser; the server rebuilds its own copy from `schedule` and refuses if they don't match.
+   */
+  publishSchedule(schedule: ScheduleForServer, request: PublishRequest): Promise<PublishResponse>;
+  /** Deletes old calendar events (by shift id) that the manager has confirmed should go. */
+  removeEvents(shiftIds: string[]): Promise<RemoveResponse>;
+};
+
+/** Largest number of old events one removal request may name (same as the most shifts a schedule can hold). */
+export const MAX_REMOVALS = 5000;
+/** Longest shift id accepted from a server (real ones are about 30 characters). */
+const MAX_SHIFT_ID_LENGTH = 200;
+
+/** The part of the schedule to send to the server: everything it needs, nothing it doesn't (see ScheduleForServer). */
+export function scheduleForServer(
+  students: Student[],
+  assignments: ShiftBlock[],
+  settings: ScheduleSettings,
+  semester: SemesterConfig | null,
+): ScheduleForServer {
+  return {
+    students: students.map((s) => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+      preference: s.preference,
+      daysPerWeek: s.daysPerWeek,
+      busy: s.busy,
+      latestEnd: s.latestEnd,
+      lunchStart: s.lunchStart,
+      needsOpeningShift: s.needsOpeningShift,
+    })),
+    assignments,
+    settings,
+    semester,
+  };
+}
 
 /** "2026-10-06" + 540 minutes -> "2026-10-06T09:00:00" (no timezone offset — paired with a separate `timeZone` field, same convention as the .ics export). */
 function isoLocal(date: Date, minutes: number): string {
@@ -100,6 +161,11 @@ function buildRecurrence(semester: SemesterConfig | null, day: Day, start: numbe
   };
 }
 
+/**
+ * Builds what gets sent to the calendar server: one event per whole shift (back-to-back half
+ * hours joined), each with a stable `shiftId` so re-sending updates the same event instead of
+ * making a copy, plus real dates (`recurrence`) once semester dates are saved.
+ */
 export function buildPublishRequest(
   students: Student[],
   assignments: ShiftBlock[],
@@ -151,7 +217,48 @@ export function validatePublishResponse(
       ...(typeof row.error === "string" ? { error: row.error.slice(0, 300) } : {}),
     });
   }
-  return { ok: true, value: { scheduleVersion: body.scheduleVersion, results } };
+  const stale = readShiftIdList(body.staleShiftIds);
+  if (stale === null) return { ok: false, error: "The publish service sent a malformed list of old events." };
+  // A shift we just sent can't also be "old", so anything in both lists is ignored rather than risk deleting it.
+  const staleShiftIds = stale.filter((id) => !sent.has(id));
+  return { ok: true, value: { scheduleVersion: body.scheduleVersion, results, ...(staleShiftIds.length ? { staleShiftIds } : {}) } };
+}
+
+/**
+ * Reads an optional list of shift ids from a server reply: missing means an empty list; anything
+ * other than a list of short strings (or a list far too long) means null ("don't trust this").
+ */
+function readShiftIdList(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_REMOVALS) return null;
+  if (!value.every((id) => typeof id === "string" && id.length > 0 && id.length <= MAX_SHIFT_ID_LENGTH)) return null;
+  return Array.from(new Set(value as string[]));
+}
+
+const REMOVE_STATUSES: RemoveEventStatus[] = ["removed", "not_found", "failed", "dry_run"];
+
+/** Never trust a server's removal reply: every result must be about a shift we asked to remove, with a known status. */
+export function validateRemoveResponse(
+  json: unknown,
+  sentShiftIds: string[],
+): { ok: true; value: RemoveResponse } | { ok: false; error: string } {
+  if (typeof json !== "object" || json === null || !Array.isArray((json as { results?: unknown }).results)) {
+    return { ok: false, error: "The calendar service sent back something unexpected." };
+  }
+  const sent = new Set(sentShiftIds);
+  const results: RemoveResponse["results"] = [];
+  for (const r of (json as { results: unknown[] }).results) {
+    const row = (typeof r === "object" && r !== null ? r : {}) as Record<string, unknown>;
+    if (typeof row.shiftId !== "string" || !sent.has(row.shiftId) || !REMOVE_STATUSES.includes(row.status as RemoveEventStatus)) {
+      return { ok: false, error: "A removal result did not match the events we asked to remove." };
+    }
+    results.push({
+      shiftId: row.shiftId,
+      status: row.status as RemoveEventStatus,
+      ...(typeof row.error === "string" ? { error: row.error.slice(0, 300) } : {}),
+    });
+  }
+  return { ok: true, value: { results } };
 }
 
 export type PublishSummary = {
@@ -163,10 +270,13 @@ export type PublishSummary = {
   /** Shifts we sent that the service never reported on. */
   missing: number;
   dryRun: boolean;
+  /** Old events still on the calendar that are no longer in the schedule (the manager may remove them). */
+  staleShiftIds: string[];
 };
 
 /** Turns a validated response into an honest sync state — a mock run is never "synced". */
 export function summarizePublish(request: PublishRequest, response: PublishResponse): PublishSummary {
+  // How many results came back with this status (e.g. how many were "created").
   const count = (s: PublishEventStatus) => response.results.filter((r) => r.status === s).length;
   const reported = new Set(response.results.map((r) => r.shiftId));
   const missing = request.events.filter((e) => !reported.has(e.shiftId)).length;
@@ -181,5 +291,14 @@ export function summarizePublish(request: PublishRequest, response: PublishRespo
   else if (request.events.length === 0) state = "not_synced";
   else state = "sync_failed";
 
-  return { state, created: count("created"), updated: count("updated"), unchanged: count("unchanged"), failed, missing, dryRun };
+  return {
+    state,
+    created: count("created"),
+    updated: count("updated"),
+    unchanged: count("unchanged"),
+    failed,
+    missing,
+    dryRun,
+    staleShiftIds: response.staleShiftIds ?? [],
+  };
 }

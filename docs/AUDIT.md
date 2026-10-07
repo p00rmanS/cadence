@@ -1,6 +1,6 @@
 # Audit
 
-Six audits are recorded here. Everything listed was confirmed by reading code, running it, or
+Eight audits are recorded here. Everything listed was confirmed by reading code, running it, or
 writing a test that failed first. Nothing here is generic advice.
 
 - **Part 1**: bugs in the original single-file prototype
@@ -13,8 +13,12 @@ writing a test that failed first. Nothing here is generic advice.
   (2026-09-22) — what's actually built vs. what the course deliverables (D1–D6) still need.
 - **Part 6**: hardening the n8n publish/interpret workflow templates (2026-09-23) — a real bug
   in the publish contract (no calendar dates were ever sent) found and fixed along the way.
+- **Part 7**: a check of the finished app against every acceptance criterion in the original build
+  brief, plus every markdown file against the code (2026-09-24). Two real bugs fixed.
+- **Part 8**: the server side (Workflow B: check and generate a schedule), two missing headline numbers, and a `lint` script that checked nothing (2026-09-26).
 
-Run `npm test` to re-check all of it (387 tests in 20 suites).
+Run `npm test` to re-check all of it (410 tests in 22 suites as of 2026-09-24; earlier parts quote the
+counts from when they were written).
 
 ---
 
@@ -210,6 +214,183 @@ inputs (see the commands used, not kept in the repo), not by executing the workf
 n8n instance. `npm test` (389/389), `npm run lint` and `npm run build` were re-run clean after
 this pass, and the "Send to Google Calendar" flow (including the new date gate) was re-verified
 in a live browser.
+
+---
+
+## Part 7: the finished app against the original brief, and the docs against the code (2026-09-24)
+
+Every acceptance criterion in [`CLAUDE_CODE_SHIFTfit_N8N_MASTER_PROMPT_v2.md`](../CLAUDE_CODE_SHIFTfit_N8N_MASTER_PROMPT_v2.md)
+was checked, and every markdown file was compared with the code it describes.
+
+### Bugs found and fixed
+
+| Area | Bug | Consequence | Fix |
+| --- | --- | --- | --- |
+| Parser | A course with no meeting time (`Online - Asynchronous`, `TBA`, `Arranged`) was reported as an **error**, and the student form refuses to save while any line has an error. A test even locked this in. | Pasting a normal registration export that contains an online course made the manager delete that line by hand before they could save the student. The same happened in "Add several at once". | Recognized as understood: it blocks nothing, invents no time, and shows a gentle note instead of an error. Only lines with **no clock time** qualify, so `Online MWF 9:00am-9:50am` or `TBA 9:00-9:50` are still reported, never silently skipped. 3 tests replace the old one. |
+| Profile photos | If two photos were chosen quickly, a slow first one could finish **after** the second and silently replace it. | The saved photo could be a different one from the last one picked. | Only the most recent choice may update the form. A test reproduces the slow-first case and was confirmed to **fail without the fix**. |
+| Docs | README, AUDIT and TEAM-WORKFLOW quoted test counts that were out of date (387/389 vs. 410); the README did not mention paste-shifts, photos, online courses, `lib/`, or `shift-import.ts`; the README **Team table was empty**; nothing pointed teammates to `TEAM-WORKFLOW.md` or `CLAUDE.md`. | A teammate reading the README would be told the wrong things. | Updated; hard-coded counts removed where they would go stale again (`npm test` prints the real number). Team table filled from the team's project document. |
+
+### The 17 acceptance criteria
+
+| # | Criterion | Status |
+| --- | --- | --- |
+| 1 | `npm install` succeeds | Yes. `npm ci --dry-run` is clean and the lockfile is in sync. |
+| 2 | `npm run dev` starts the app | Yes, run in a real browser this round. |
+| 3 | `npm run build` succeeds | Yes. |
+| 4 | Unit tests pass | Yes, 410/410. |
+| 5 | Schedule survives refresh | Yes, tested, and re-checked live for photos too. |
+| 6 | Add, edit, remove a student | Yes, tested. |
+| 7 | Paste common formats and review the result | Yes. 31 real-world lines were tried by hand this round (24-hour times, `a.m.`, en-dashes, room names, weekend and overnight rejection); the online-course case above was the only miss. |
+| 8 | Manually assign and unassign | Yes. |
+| 9 | Auto-fill respects hard rules, favors long shifts | Yes, measured in Part 2 and Part 4. |
+| 10 | Switching open hours cannot alter hour totals | Yes, tested. |
+| 11 | Gap ranges group correctly | Yes, tested. |
+| 12 | Coverage metrics correct and labeled | Yes, two labeled numbers. |
+| 13 | Works with keyboard only | Tested with real keyboard events in jsdom; **not** re-done with a real screen reader (see "not verified"). |
+| 14 | Light and dark polished | Contrast is measured for both themes. "Polished" is a judgment; the visual redesign is ongoing (ROADMAP). |
+| 15 | Mobile does not need a 5-column grid | Yes, one day at a time; checked in an emulated viewport only. |
+| 16 | No API secret in source or built assets | Yes. A scan of `src/` and `dist/` found none (the one hit is the test that contains the scanning pattern itself). |
+| 17 | Works with no AI provider and no Supabase | Yes; both are absent. |
+
+### Things the brief asked for that are **not** built (deliberately or not yet)
+
+- **The five-step import flow** (`Upload / Paste → AI Review → Draft → Manager Review → Sync`) as a visible stepper.
+  The pieces exist (paste, review before saving, auto-fill draft, approval dialog, honest sync state) but
+  they are separate screens, not one guided flow.
+- **Shifts drawn as one continuous block** in the grid (still one chip per half hour; ROADMAP).
+- **"Uncovered staff-hours" and "required early shifts still missing"** as summary tiles. The information is
+  shown per gap and per student card, not as two headline numbers.
+- **Supabase and `supabase/migrations/`.** Not added, on purpose: the brief says not to add a database "just to
+  say the project has one". The future tables and the photo-storage question are on the ROADMAP.
+- **A collapsible right panel on medium screens.** Below 1024 px the three panels become tabs; there is no
+  in-between collapse.
+- **Tailwind 4 and React 19.** The app uses Tailwind 3 and React 18 (both work and have 0 known
+  vulnerabilities). Upgrading is a project of its own, not a bug.
+
+### What this audit did not verify
+
+Nothing new was verified with a real screen reader, a physical phone, real paper for printing, a live n8n, or real
+first-year students. Those limits from earlier parts still stand.
+
+---
+
+## Part 8: the server side (Workflow B) and two missing numbers (2026-09-26)
+
+Built the scheduler service the architecture doc called for and the original brief listed as Workflow B, plus the
+two headline numbers Part 7 said were missing. Also found that `npm run lint` had never checked any code.
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| `evaluateSchedule` (`src/features/scheduling/evaluate.ts`) | One report answering "is this schedule allowed and how good is it": `ok`, blocking issues, overridden warnings, coverage, gaps, **`uncoveredStaffHours`**, **`openingShiftMissing`**, per-student hours, and the publish fingerprint. It calls the existing rule code and repeats none of it. | 8 tests, including 2 people needed with 1 working (99 missing hours, not 100) and a lone 7:00 half hour not counting as an opening shift. |
+| Scheduler service (`src/server/handler.ts`) | `GET /health`, `POST /evaluate`, `POST /generate`, as one host-neutral `Request -> Response` function. Login by shared secret (constant-time compare, refuses to run if none is set or it is under 16 characters), size limit, the strict backup validator on all input, generic errors that never echo the caller's data, `no-store` caching. | 18 tests run in a plain Node environment (no browser). The three most important behaviors were **deliberately broken one at a time and each break was caught**: a password check that always says yes, a service that runs with no secret, and an error that echoes the caller's data. |
+| n8n template `shiftfit-generate.json` | Now calls `/generate` with Header Auth (placeholder credential only). | The existing template checks (valid JSON, connected nodes, no secrets) pass. |
+| **`npm run lint` checked nothing** | The script was `tsc --noEmit`, but the root `tsconfig.json` lists no files (it only points to other configs), so it type-checked **zero files** and always passed. Earlier "type check clean" statements that relied on `lint` alone (including in Parts 5 and 6) were empty assurance; `npm run build` (`tsc -b`) did check types and was run in those rounds, so no broken code shipped. | Teammates were told to "run npm test and npm run lint" and would have got false comfort. | `lint` now runs `tsc -p tsconfig.app.json --noEmit` and the node config too. Verified by adding a deliberate type error (it is caught) and removing it (clean). It also caught a real type error in this round's new test that the old script missed. |
+| Shared test setup | `src/test/setup.ts` skips its browser-only steps when there is no browser, so server tests run as a real server would. | Full suite passes. |
+
+**Not done, and why**
+- **Nothing is deployed.** No `netlify/functions` folder exists, on purpose, so merging this cannot publish a live endpoint. The doc's
+  "Switching it on" steps are untested against a real host.
+- **No rate limiting** in the handler.
+- **`/evaluate` is not yet used inside the publish workflow.** The publish request carries only events, not the students and classes
+  the check needs. Sending them means more student data leaving the browser, which is a team decision.
+- The screens do not show `uncoveredStaffHours` or `openingShiftMissing` yet; that is front-end work.
+
+---
+
+## Part 9: security and backend tightening (2026-09-28)
+
+Found by reading the n8n templates, the server, the calendar export and the Netlify setup, then
+confirmed by **running the n8n Code nodes' real JavaScript** in new tests (`automation.test.ts`, "run for
+real"). All 7 new workflow tests were checked to **fail against the old templates** and pass after the fix.
+
+| Area | Bug | Consequence | Fix |
+| --- | --- | --- | --- |
+| n8n publish | "Validate request shape" copied only some fields of each event and **dropped `recurrence`** (the real dates). Part 6 said this was wired up, but each node was tested alone, so nobody saw the first node discard what the later ones needed. | Every event would reach Google Calendar with no start/end date. Publishing (D4) could not have worked. | `recurrence` is kept and checked field by field (date-time shape, timezone name, only `FREQ=WEEKLY;COUNT=1..999`, at most 100 skipped days). Events without valid dates are skipped, never sent dateless. |
+| n8n publish | No size or content limits on incoming events. Names and timezones could contain line breaks. | One request could trigger thousands of Google API calls; a line break in a timezone could add repeat rules nobody asked for. | Max 5000 events, name max 80 chars, no control characters, `shiftId` must equal `student-day-start`, duplicates dropped. |
+| n8n publish | Skipped days were sent as `2026-09-21T08:00:00`; the calendar standard (RFC 5545) only accepts `20260921T080000` in an `EXDATE`. | Holidays and breaks would not be skipped. | Converted in the calendar node's expression; covered by a test that runs the expression. |
+| n8n interpret | The 5 MB image check used `Number(image.fileSize)`, but n8n's `fileSize` is display text such as `"1.2 MB"` (`NaN`). | The size limit never blocked anything. | Measures the real bytes with `getBinaryDataBuffer`; a refused image is removed before the AI step; `requestId` is cleaned. |
+| n8n webhooks (all three) | No login on any webhook. The address goes into the public site (`VITE_AUTOMATION_API_URL`). `generate` forwards to the secret-protected scheduler service, adding the secret for any caller. | Anyone who reads the site could write to the library's Google Calendar, or use n8n to reach the protected service. | **Not fully fixable in code: needs a team decision** (manager sign-in, or a server function that checks sign-in and holds the n8n secret). Added `allowedOrigins` placeholders (stops other websites, not scripts) and a SECURITY note on each webhook saying not to activate it until callers must log in. |
+| Calendar file (.ics) | `escapeText` handled `\n` and `\r\n` but not a lone `\r`, and kept other control characters. | A name with a hidden `\r` (only possible via a hand-edited backup) could add lines to a student's calendar file. | Every line-break form is escaped and other control characters removed. Test added. |
+| Backup / saved data | Names and ids could contain control characters. | Same injection route as above, and into publish requests. | Names: hidden characters become spaces (not rejected, so one odd name can't wipe a saved schedule). Ids: rejected (they link shifts to people, so can't be repaired). Tests added. |
+| Website | Netlify sent no security headers (checked on the live test site too). | No protection against clickjacking or injected scripts. | `netlify.toml` now sends a Content Security Policy (own scripts only, no framing), `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`. `privacy.test.ts` checks they stay, and that `index.html` has no inline script the policy would block. |
+
+**Also this round:** every function and component now has a plain-language comment, and
+`readability.test.ts` now also checks test files and the three config files for a top comment.
+`.env` safety was checked: `.gitignore` blocks every `.env*` except `.env.example`; git history on all
+branches contains only `.env.example` files (blank), and a scan of all history found no API keys.
+
+**Not done, and why**
+- **Webhook login** (above): needs the team to choose how managers sign in.
+- **Moved or removed shifts are never deleted from Google Calendar.** The `shiftId` includes the start time, so
+  moving a shift leaves the old event behind. The architecture doc says deletes need explicit permission, so this
+  needs a "these N old events will be removed, OK?" step. Design decision first.
+- **Security headers were not seen live.** They take effect on the next Netlify deploy from this branch; the test
+  site (Christroi's branch) does not have `netlify.toml` yet.
+- The n8n changes are still **not run in a real n8n**; the Code nodes' JavaScript was run under Vitest with
+  stand-ins for `$input`, `$execution` and `this.helpers`.
+
+`npm test` (451 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
+## Part 10: finishing the backend (2026-09-28)
+
+Closes the two decisions Part 9 left open (webhook login, deleting old events) and makes both servers deployable.
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| Gateway (`src/server/gateway.ts`, `netlify/functions/gateway.ts`) | The only server the browser talks to: `/api/session`, `/api/publish`, `/api/remove`, `/api/interpret`. Manager passcode (constant-time compare, 10 wrong tries per 15 minutes per address, then `429`); strict validation and **every scheduling rule re-checked**; events **rebuilt on the server** (the browser's own event list is never used); `409` if the schedule changed after approval; n8n called with a secret the browser never sees; n8n's reply checked. Off (`503`) until all three settings are set. | `gateway.test.ts` (18 tests, plain Node). Four protections were each **deliberately removed and every break was caught**: passcode check, rule re-check, approval-version check, lock-out. |
+| Shared server helpers (`src/server/http.ts`) | JSON answers, safe errors, constant-time compare, size limits and the lock-out counter, now shared by `handler.ts` and the gateway. | Existing `server.test.ts` passes unchanged. |
+| Scheduler service on Netlify (`netlify/functions/scheduler.ts`) | `/api/scheduler/*`, off until `SCHEDULER_SECRET` is set. | Type-checked (`tsconfig.app.json` now includes `netlify/`). Not run on Netlify. |
+| Sign-in in the app (`managerSession.ts`, `useManagerSession.ts`, `ManagerSignIn.tsx`) | Passcode box in "Send to Google Calendar" and next to screenshot reading; kept only in the tab's memory; forgotten on any `401`. The browser now sends only what the server needs: **no photos and no pasted class text**. | `manager-session.test.ts` (7 tests), plus a whole-app test: wrong passcode, right passcode with Enter, approve and send, "1 older event", remove, confirm. That test found a real bug: after signing in, the box vanished instead of showing "Signed in as manager / Sign out"; fixed. The box is not a nested `<form>` (it sits inside the student form). |
+| Removing old events | Publish replies now include `staleShiftIds` (events from earlier publishes no longer in the schedule). The UI offers "Remove old events" behind a confirmation. n8n's new `/shiftfit/remove` path (same workflow, same records) deletes only events it created; already-gone (404/410) counts as removed. | Code nodes run in `automation.test.ts` with stand-ins for `$input`, `$getWorkflowStaticData` and `$()`; contract validators tested. |
+| n8n webhooks | All four webhooks (`publish`, `remove`, `interpret`, `generate`) require Header Auth. Calendar nodes carry on after an error, so one bad event is reported as failed instead of stopping the rest. | A test checks every webhook node has `authentication: headerAuth`. |
+
+**Not done, and why**
+- **Database:** needs OIT's answer on where FERPA-covered records may live (`docs/DECISIONS.md`).
+- **Personal accounts:** the passcode is shared. Replacing it with Google sign-in changes only the passcode check.
+- **Not run live:** no Netlify secrets are set, and n8n still isn't running, so nothing here has talked to real
+  n8n or Google. Netlify's `config.path` handling for the functions is untested on a real deploy.
+- The lock-out counter lives in server memory, so separate copies of the function count separately.
+
+`npm test` (486 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
+## Part 11: moving the website to GitHub Pages (2026-09-30)
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| Deploy workflow (`.github/workflows/deploy-pages.yml`) | On every change to `master` (or by hand): type check, all tests, build with `BASE_PATH=/<repository>/`, publish to `https://p00rmans.github.io/cadence/`. The optional gateway address comes from the repository *variable* `VITE_AUTOMATION_API_URL`. | All four action versions (`checkout@v7`, `setup-node@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`) confirmed to exist. **Not run on GitHub yet**: Pages is not switched on and nothing is merged. |
+| Checks workflow (`.github/workflows/ci.yml`) | Type check, tests and build on every pull request: the "next step" `GITHUB-SETTINGS.md` listed. | Same commands pass locally (on Node 25; CI uses Node 22 like Netlify). Not run on GitHub yet. |
+| Sub-folder support (`vite.config.ts` `base`) | GitHub Pages serves this project from `/cadence/`, so every built link must start with it. | Built with `BASE_PATH=/cadence/` and served at `http://localhost:4173/cadence/` in a real browser: the app drew, 3 fonts loaded, no failed requests, no console errors. |
+| Security policy without headers (`src/lib/contentSecurityPolicy.ts`) | GitHub Pages can't send headers, so the same Content Security Policy is put into the **built** page as a `<meta>` tag (not in dev, where Vite's inline reload scripts would be blocked). `frame-ancestors` can't work in a `<meta>`, so framing protection exists only on Netlify. | `privacy.test.ts` checks the tag comes before anything else and that every rule matches the Netlify header word for word; the browser check above showed no policy violations. |
+| Gateway accepts the github.io site (CORS) | When the website (github.io) and the gateway (Netlify) are different sites, browsers ask first. The gateway answers yes, and adds the `access-control-allow-origin` header to every answer, only for sites in `ALLOWED_ORIGINS`; never `*`. `ALLOWED_ORIGINS` keeps only plain https site addresses (or localhost). | 3 new tests in `gateway.test.ts`: allowed vs. stranger preflight, headers on success and on a 401, and the address parser rejecting `*`, http, and paths. |
+
+**Not done, and why**
+- **Switching Pages on** is a repository setting (one click, or one `gh api` command in `GITHUB-SETTINGS.md`), and
+  the first deploy needs these changes merged into `master` through a pull request. Neither was done without asking.
+- The site at `cadence-test.netlify.app` (Christroi's deploy) is separate and unchanged.
+
+`npm test` (490 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
+## Part 12: GitHub Pages only, and a check of the live setup (2026-09-30)
+
+The team decided: **GitHub Pages is the only deployment, no Netlify for now.** The server code stays in the repo,
+tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMAP, DECISIONS, `.env.example`,
+`netlify.toml`, the deploy workflow's comments) now say so.
+
+| Check | Result |
+| --- | --- |
+| Checks workflow on GitHub (pull request #3) | **Passed twice** on GitHub's own computers (Node 22). |
+| Deploy workflow on GitHub | Not run yet: GitHub only registers it once it is on `master`. No YAML checker was available locally, so its first real test is the merge. |
+| Library security (`npm audit`) | 0 known vulnerabilities. |
+| The github.io build used as a visitor, no server | Built with `BASE_PATH=/cadence/`, served at `/cadence/`: sample students, "Fill schedule for me" (31 missing hours -> "every hour is covered"), semester dates saved, practice run reported "Nothing was sent... not synced", no sign-in box (correct: no server). After a reload: 6 students, 228 half-hour shifts and the semester dates were all still there. No console errors. |
+| **Finding: shared web address** | Every Pages site of one GitHub account is the same website to a browser (`p00rmans.github.io`). The account has another Pages site, `/netmon/`, which could read Cadence's saved student data. Today it loads no outside scripts, so there's no known exposure. Can't be fixed in code; options (a team GitHub organization or a custom domain) are in `docs/GITHUB-SETTINGS.md`, "Shared address", and on the ROADMAP. |
+
+`npm test` (490 passed), `npm run lint` and `npm run build` are clean after this round.
 
 ---
 

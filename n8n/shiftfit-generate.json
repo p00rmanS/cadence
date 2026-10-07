@@ -6,34 +6,65 @@
         "httpMethod": "POST",
         "path": "shiftfit/generate",
         "responseMode": "responseNode",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "webhook-generate",
       "name": "Webhook: /shiftfit/generate",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      },
+      "notes": "SECURITY: this webhook now asks callers for a password too (Header Auth), so n8n can't be used as an open door to the protected scheduler service. Use the same credential as the other ShiftFit webhooks. See docs/N8N_ARCHITECTURE.md, Authentication."
     },
     {
       "parameters": {
-        "url": "REPLACE_WITH_YOUR_SCHEDULER_SERVICE_URL/schedule",
+        "url": "REPLACE_WITH_YOUR_SITE/api/scheduler/generate",
         "method": "POST",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "students", "value": "={{$json.body.students}}" },
-            { "name": "assignments", "value": "={{$json.body.assignments}}" },
-            { "name": "settings", "value": "={{$json.body.settings}}" }
+            {
+              "name": "students",
+              "value": "={{$json.body.students}}"
+            },
+            {
+              "name": "assignments",
+              "value": "={{$json.body.assignments}}"
+            },
+            {
+              "name": "settings",
+              "value": "={{$json.body.settings}}"
+            }
           ]
         },
-        "options": {}
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
       },
       "id": "call-scheduler-service",
       "name": "Call deterministic scheduler service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [520, 300],
-      "notes": "Must run the SAME algorithm as src/features/scheduling/scheduler.ts. Do not re-implement scheduling rules in a Code node here — port the module instead."
+      "position": [
+        520,
+        300
+      ],
+      "notes": "Calls the scheduler service in src/server/handler.ts (POST /generate), which runs the SAME algorithm as src/features/scheduling/scheduler.ts. Do not re-implement scheduling rules in a Code node. Create an n8n Header Auth credential named Authorization with the value Bearer <your secret> (never paste the secret into this JSON). See docs/N8N_ARCHITECTURE.md, Workflow B, Switching it on. Never run against a live service: the service has not been deployed yet.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_CREDENTIAL_NAME"
+        }
+      }
     },
     {
       "parameters": {
@@ -43,14 +74,37 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [780, 300]
+      "position": [
+        780,
+        300
+      ]
     }
   ],
   "connections": {
-    "Webhook: /shiftfit/generate": { "main": [[{ "node": "Call deterministic scheduler service", "type": "main", "index": 0 }]] },
-    "Call deterministic scheduler service": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook: /shiftfit/generate": {
+      "main": [
+        [
+          {
+            "node": "Call deterministic scheduler service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call deterministic scheduler service": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "meta": {
-    "note": "Starting-point template only — not a tested workflow. Server-side re-validation for Workflow B; see docs/N8N_ARCHITECTURE.md."
+    "note": "Starting-point template only, not a tested workflow. Server-side scheduler for Workflow B; the service it calls exists in src/server/handler.ts but is not deployed yet. See docs/N8N_ARCHITECTURE.md."
   }
 }

@@ -1,5 +1,10 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * Settings for Tailwind, the styling tool behind class names like "rounded-xl" or "bg-panel".
+ * `content` lists the files it scans for class names; `colors` maps names like "accent" to the
+ * color variables in src/styles/app.css, which switch between the light and dark themes.
+ */
 export default {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],

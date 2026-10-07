@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 
+/**
+ * Lets a screen react to the window size (or other CSS "media queries"), e.g. switching to the
+ * one-day-at-a-time phone layout when the window is narrow. It re-renders whenever the answer changes.
+ */
+
 /** Live `window.matchMedia` result, safe when matchMedia isn't available (tests, old browsers). */
 export function useMediaQuery(query: string): boolean {
+  // Asks the browser right now whether the query matches (false where the browser can't answer).
   const get = () => (typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false);
   const [matches, setMatches] = useState(get);
 

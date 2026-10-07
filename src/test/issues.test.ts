@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { describeGap, explainSlot, findIssues, isBlockingIssue } from "../features/scheduling/issues";
 import { makeSettings, makeStudent, run, slot } from "./testkit";
 
+/**
+ * Tests for rule-problem finding (`features/scheduling/issues.ts`): a shift on top of a class, over
+ * the weekly hours, and so on, merged into readable messages, plus the per-box explanations.
+ */
+
 const settings = makeSettings();
 
 describe("findIssues", () => {

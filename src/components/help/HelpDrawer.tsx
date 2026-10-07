@@ -23,6 +23,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "keys", label: "Shortcuts" },
 ];
 
+/** True if every word typed in the help search appears somewhere in this question, answer or keywords. */
 function matches(item: FaqItem, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -30,10 +31,12 @@ function matches(item: FaqItem, query: string): boolean {
   return q.split(/\s+/).every((word) => haystack.includes(word));
 }
 
+/** The Help side panel with four tabs: quick start, questions, words explained, keyboard keys. */
 export function HelpDrawer({ onClose, initialTab = "start" }: { onClose: () => void; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ start: null, faq: null, words: null, keys: null });
 
+  // Left/right arrow keys move between the tabs (the standard keyboard pattern for tabs).
   function onTabKey(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     e.preventDefault();
@@ -96,6 +99,7 @@ export function HelpDrawer({ onClose, initialTab = "start" }: { onClose: () => v
   );
 }
 
+/** The four numbered first steps for a new manager. */
 function QuickStart({ onOpenFaq }: { onOpenFaq: () => void }) {
   const steps = [
     { n: 1, title: "Add your students", body: "Press Add student on the left. Type a name and paste when they have class. Cadence checks each line and tells you if it can't read one." },
@@ -129,6 +133,7 @@ function QuickStart({ onOpenFaq }: { onOpenFaq: () => void }) {
   );
 }
 
+/** The searchable list of common questions. */
 function Faq() {
   const [query, setQuery] = useState("");
   const results = useMemo(() => FAQ.filter((f) => matches(f, query)), [query]);

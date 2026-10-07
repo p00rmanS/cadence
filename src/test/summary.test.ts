@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { scheduleToText, shiftText, summarizeByDay, summarizeByStudent } from "../features/scheduling/summary";
 import { makeSettings, makeStudent, run, slot } from "./testkit";
 
+/**
+ * Tests for the text views of the schedule (`features/scheduling/summary.ts`): shifts grouped by
+ * student and by day, and the plain text that can be copied into a message.
+ */
+
 const settings = makeSettings();
 const noa = makeStudent({ id: "a", name: "Noa K.", color: "#1F6FB2" });
 const kai = makeStudent({ id: "b", name: "Kai P.", color: "#B3144F" });

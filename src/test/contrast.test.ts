@@ -6,6 +6,7 @@ type RGB = [number, number, number];
 
 const css = readFileSync("src/styles/app.css", "utf8");
 
+/** Reads the color variables (like --ink: 20 30 30) from one theme block of app.css. */
 function readTokens(blockStart: string): Record<string, RGB> {
   const open = css.indexOf("{", css.indexOf(blockStart));
   const close = css.indexOf("}", open);
@@ -17,7 +18,12 @@ function readTokens(blockStart: string): Record<string, RGB> {
   return out;
 }
 
+/**
+ * How bright a color looks to the eye, from 0 (black) to 1 (white), using the formula from the
+ * WCAG accessibility guidelines. Green counts most and blue least, because that is how eyes work.
+ */
 function luminance([r, g, b]: RGB): number {
+  // Converts one 0-255 color channel from screen values into real light intensity.
   const f = (c: number) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -25,6 +31,7 @@ function luminance([r, g, b]: RGB): number {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
+/** The WCAG contrast ratio between two colors: 1 (identical) up to 21 (black on white). Body text needs 4.5 or more. */
 function ratio(a: RGB, b: RGB): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);

@@ -13,6 +13,7 @@ import type { ScheduleSettings } from "../../features/scheduling/types";
  */
 const CLOSE_OPTIONS = Array.from({ length: 25 }, (_, i) => 12 * 60 + i * 30); // 12:00pm .. 12:00am (midnight)
 
+/** The "Rules" dialog where the manager changes office-wide settings (open hours, people per slot, weekly hours). */
 export function RulesDialog({
   settings,
   onSave,
