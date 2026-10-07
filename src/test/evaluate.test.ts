@@ -2,21 +2,24 @@ import { describe, expect, it } from "vitest";
 import { evaluateSchedule } from "../features/scheduling/evaluate";
 import { makeSettings, makeStudent, run } from "./testkit";
 
-const settings = makeSettings(); // open 7:00am-5:00pm, 30-minute boxes, 1 person needed, 19-hour weekly target
+// These tests were written for a 7:00am-5:00pm day, so they pin it (the default is now 7:00am-12:00am).
+// 30-minute boxes, 1 person needed, 19-hour weekly target, semester (Tuesday 11am-12pm devotional needs nobody).
+const settings = makeSettings({ closeTime: 17 * 60 });
 
 describe("evaluateSchedule: the one-call report", () => {
-  it("counts every missing staff-hour when nobody is scheduled (5 days x 10 hours = 50)", () => {
+  it("counts every missing staff-hour when nobody is scheduled (5 days x 10 hours = 50, minus the devotional hour = 49)", () => {
     const report = evaluateSchedule([makeStudent()], [], settings);
-    expect(report.uncoveredStaffHours).toBe(50);
+    expect(report.uncoveredStaffHours).toBe(49);
     expect(report.ok).toBe(true); // an empty schedule breaks no rule, it is just empty
     expect(report.gaps.length).toBeGreaterThan(0);
   });
 
   it("counts each missing PERSON, not just each empty box, when 2 people are needed", () => {
-    // 100 boxes x 2 people needed = 200 person-boxes. One student covers 2 boxes (1 hour), so 198 are missing = 99 hours.
-    const two = makeSettings({ minStaffPerSlot: 2 });
+    // 98 boxes (100 minus the 2 devotional boxes) x 2 people = 196 person-boxes.
+    // One student covers 2 boxes (1 hour), so 194 are missing = 97 hours.
+    const two = makeSettings({ closeTime: 17 * 60, minStaffPerSlot: 2 });
     const report = evaluateSchedule([makeStudent()], run("s1", "mon", 8 * 60, 9 * 60), two);
-    expect(report.uncoveredStaffHours).toBe(99);
+    expect(report.uncoveredStaffHours).toBe(97);
     expect(report.coverage.fullyStaffedSlots).toBe(0);
   });
 
@@ -34,8 +37,9 @@ describe("evaluateSchedule: the one-call report", () => {
   });
 
   it("treats a limit the manager knowingly passed as a warning, not a blocker", () => {
-    // 20 hours on Monday and Tuesday is over the 19-hour target; one shift is marked as an override.
-    const shifts = [...run("s1", "mon", 7 * 60, 17 * 60), ...run("s1", "tue", 7 * 60, 17 * 60)].map((s, i) => (i === 0 ? { ...s, override: true } : s));
+    // 20 hours on Monday and Wednesday is over the 19-hour target; one shift is marked as an override.
+    // (Wednesday, not Tuesday, so the shift doesn't cross Tuesday devotional, which is a real problem, not a limit.)
+    const shifts = [...run("s1", "mon", 7 * 60, 17 * 60), ...run("s1", "wed", 7 * 60, 17 * 60)].map((s, i) => (i === 0 ? { ...s, override: true } : s));
     const report = evaluateSchedule([makeStudent()], shifts, settings);
     expect(report.ok).toBe(true);
     expect(report.blockingIssues).toEqual([]);

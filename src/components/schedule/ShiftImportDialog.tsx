@@ -11,7 +11,7 @@ const EXAMPLE = "Noa K.: MWF 9:00am-1:00pm\nKai P.: Tuesday/Thursday 8:00am-12:0
 /**
  * Turns a schedule someone already wrote as text into real shifts. Paste one student per line
  * ("Name: MWF 9:00am-1:00pm"); every line is checked and previewed first, and nothing is placed
- * until the manager presses Add. Students must already be in ShiftFit. When the shifts are
+ * until the manager presses Add. Students must already be in Cadence. When the shifts are
  * placed, any half hour that breaks a rule is skipped and reported, and the whole paste is one
  * Undo step (see `IMPORT_SHIFTS` in `useShiftFitStore.ts`).
  */
@@ -33,7 +33,7 @@ export function ShiftImportDialog({
   return (
     <Modal
       title="Paste shifts you already have"
-      description="Paste a schedule written as text. ShiftFit checks every line before adding anything."
+      description="Paste a schedule written as text. Cadence checks every line before adding anything."
       size="lg"
       onClose={onClose}
       footer={
@@ -63,7 +63,7 @@ export function ShiftImportDialog({
             </label>
             <HelpTip label="How to write the list">
               Type the student&apos;s name, a colon, then their shift days and times. Separate several shifts with a semicolon. The student must already be
-              added to ShiftFit. Shifts that break a rule (like overlapping a class) are skipped, and you&apos;ll be told which.
+              added to Cadence. Shifts that break a rule (like overlapping a class) are skipped, and you&apos;ll be told which.
             </HelpTip>
           </div>
           <p className="text-xs text-muted">
@@ -89,7 +89,7 @@ export function ShiftImportDialog({
         {parsed.rows.length > 0 && (
           <div className="space-y-2 rounded-xl border border-line p-3" aria-live="polite">
             <h3 className="text-sm font-semibold">
-              Here is what ShiftFit understood{" "}
+              Here is what Cadence understood{" "}
               <span className="font-normal text-muted">
                 ({parsed.valid.length} of {parsed.rows.length} lines{bad ? `, ${bad} will be skipped` : ""})
               </span>
