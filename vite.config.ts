@@ -18,7 +18,7 @@ function contentSecurityPolicyTag(): Plugin {
   return {
     name: "shiftfit-content-security-policy",
     apply: "build",
-    transformIndexHtml: (html) => addCspToHtml(html),
+    transformIndexHtml: (html) => addCspToHtml(html, process.env.VITE_AUTOMATION_API_URL),
   };
 }
 

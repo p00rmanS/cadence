@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTENT_SECURITY_POLICY, addCspToHtml } from "../lib/contentSecurityPolicy";
+import { CONTENT_SECURITY_POLICY, addCspToHtml, contentSecurityPolicyFor } from "../lib/contentSecurityPolicy";
 
 /**
  * Privacy and security guards. These tests read the project's own files (not the running app) and
@@ -84,6 +84,14 @@ describe("security: the website's protective headers stay switched on", () => {
     const viteConfig = readFileSync("vite.config.ts", "utf8");
     expect(viteConfig).toMatch(/apply: "build"/);
     expect(viteConfig).toContain("addCspToHtml");
+  });
+
+  it("the built page may only talk to its own server, or to nobody when there is none", () => {
+    expect(contentSecurityPolicyFor(undefined)).toContain("connect-src 'self';");
+    expect(contentSecurityPolicyFor("/")).toContain("connect-src 'self';");
+    const withServer = contentSecurityPolicyFor("https://gateway.example.edu/some/path");
+    expect(withServer).toContain("connect-src 'self' https://gateway.example.edu;");
+    expect(withServer).not.toMatch(/connect-src[^;]*\shttps:(;|\s)/);
   });
 
   it("index.html has no inline script the policy would block (the app would show a blank page)", () => {
