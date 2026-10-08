@@ -399,3 +399,13 @@ describe("n8n photo-reading workflow, run for real", () => {
     expect(item.json.requestId).toBe("reqscript1");
   });
 });
+
+describe("publish request for a shift ending at midnight", () => {
+  it("sends 00:00 the next day, never a 24:00 time", () => {
+    const sem: SemesterConfig = { startDate: "2026-08-31", endDate: "2026-12-11", timeZone: "Pacific/Honolulu" };
+    const student = makeStudent({ id: "s1", name: "Noa K." });
+    const req = buildPublishRequest([student], run("s1", "mon", 22 * 60, 24 * 60), makeSettings(), sem);
+    expect(req.events[0].recurrence?.startIso).toBe("2026-08-31T22:00:00");
+    expect(req.events[0].recurrence?.endIso).toBe("2026-09-01T00:00:00");
+  });
+});
