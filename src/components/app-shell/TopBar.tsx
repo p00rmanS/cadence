@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizontal, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizontal, Undo2, Wand2 } from "lucide-react";
 import { clsx } from "../../lib/clsx";
 import { Segmented } from "../ui/Segmented";
 import { Button } from "../ui/Button";
+import { CadenceLogo } from "../ui/CadenceLogo";
 import { HelpTip } from "../help/HelpTip";
 import { ThemeControl } from "./ThemeControl";
 import type { ThemeChoice } from "../../hooks/useTheme";
 import type { ScheduleSettings } from "../../features/scheduling/types";
-import { MIN_STAFF_OPTIONS, OPEN_TIME_OPTIONS } from "../../features/scheduling/constants";
+import { BREAK_WEEKLY_HOURS, MIN_STAFF_OPTIONS, OPEN_TIME_OPTIONS } from "../../features/scheduling/constants";
 import { formatMinutes } from "../../features/scheduling/time";
 
 /**
@@ -75,11 +76,9 @@ export function TopBar({
     <header className="border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-accent-ink">
-            <Sparkles className="h-5 w-5" aria-hidden />
-          </div>
+          <CadenceLogo className="h-9 w-9 shrink-0" />
           <div>
-            <h1 className="font-display text-lg font-semibold leading-none">ShiftFit</h1>
+            <h1 className="font-display text-lg font-semibold leading-none">Cadence</h1>
             <p className="hidden text-xs text-muted sm:block">Work schedules that fit around classes</p>
           </div>
         </div>
@@ -88,6 +87,22 @@ export function TopBar({
         <Button variant="primary" onClick={onAutoFill} disabled={!hasStudents} title={hasStudents ? "Places shifts for everyone, following every rule" : "Add a student first"}>
           <Wand2 className="h-4 w-4" aria-hidden /> Fill schedule for me
         </Button>
+        <div className="flex items-center gap-1">
+          <Segmented
+            label="Semester or break"
+            value={settings.term ?? "semester"}
+            onChange={(v) => onSettingsChange({ term: v })}
+            options={[
+              { value: "semester", label: "Semester" },
+              { value: "break", label: "Break" },
+            ]}
+          />
+          <HelpTip label="Semester or break">
+            <b>Semester:</b> nobody works during Tuesday devotional (11am–12pm), and the weekly limit is {settings.weeklyTargetHours} hours.
+            <br />
+            <b>Break:</b> 11am–12pm on Tuesday is open, and students may work up to {BREAK_WEEKLY_HOURS} hours a week.
+          </HelpTip>
+        </div>
         <Button variant="ghost" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
           <SlidersHorizontal className="h-4 w-4" aria-hidden /> Settings
           <ChevronDown className={clsx("h-4 w-4 transition-transform", showOptions && "rotate-180")} aria-hidden />
@@ -154,7 +169,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onImportShifts} disabled={!hasStudents} title={hasStudents ? "Paste a schedule you already wrote as text" : "Add a student first"}>
             Paste existing shifts
           </Button>
-          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts ShiftFit added. Yours stay." : "There are no automatic shifts yet"}>
+          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts Cadence added. Yours stay." : "There are no automatic shifts yet"}>
             Rebuild automatic shifts
           </Button>
           <Button variant="secondary" onClick={onClearShifts} disabled={!hasShifts}>

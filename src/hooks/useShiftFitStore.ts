@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { canAssign, isAssigned, softViolations } from "../features/scheduling/availability";
+import { weeklyLimit } from "../features/scheduling/term";
 import { scheduleVersion } from "../features/scheduling/blocks";
-import { DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
+import { BREAK_WEEKLY_HOURS, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
@@ -23,7 +24,7 @@ import type {
  * ============================================================================
  *  THE APP'S "BRAIN": ALL STATE LIVES HERE
  * ============================================================================
- * This is the single most important file for understanding how ShiftFit
+ * This is the single most important file for understanding how Cadence
  * actually works. Every screen (`src/components/...`) is just a "view" —
  * it displays data and reports clicks, but it never changes anything by
  * itself. Instead, every user action (add a student, click a grid box, press
@@ -64,7 +65,10 @@ export type NewStudentInput = {
 type Doc = {
   settings: ScheduleSettings;
   students: Student[];
+  /** The schedule that is showing: semester or break, whichever `settings.term` says. */
   assignments: ShiftBlock[];
+  /** The other schedule, kept untouched until the Semester/Break switch brings it back. */
+  otherTermAssignments: ShiftBlock[];
   semester: SemesterConfig | null;
 };
 
@@ -159,14 +163,20 @@ export function initialState(): State {
   if (saved) {
     return {
       ...base,
-      doc: { settings: saved.settings, students: saved.students, assignments: saved.assignments, semester: saved.semester ?? null },
+      doc: {
+        settings: saved.settings,
+        students: saved.students,
+        assignments: saved.assignments,
+        otherTermAssignments: saved.otherTermAssignments ?? [],
+        semester: saved.semester ?? null,
+      },
       selectedStudentId: saved.selectedStudentId,
     };
   }
   const demo = buildDemoData();
   return {
     ...base,
-    doc: { settings: DEFAULT_SETTINGS, students: demo.students, assignments: demo.assignments, semester: null },
+    doc: { settings: DEFAULT_SETTINGS, students: demo.students, assignments: demo.assignments, otherTermAssignments: [], semester: null },
     selectedStudentId: demo.students[0]?.id ?? null,
   };
 }
@@ -254,7 +264,7 @@ export function reducer(state: State, action: Action): State {
     case "ADD_STUDENTS": {
       const room = Math.max(0, MAX_STUDENTS - doc.students.length);
       const entries = action.entries.slice(0, room);
-      if (!entries.length) return { ...state, toast: toast(`ShiftFit can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
+      if (!entries.length) return { ...state, toast: toast(`Cadence can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
       const students = [...doc.students];
       for (const e of entries) students.push(toStudent(e.id, e.input, nextColor(students)));
       const cut = action.entries.length - entries.length;
@@ -283,6 +293,7 @@ export function reducer(state: State, action: Action): State {
         ...doc,
         students: doc.students.filter((s) => s.id !== action.id),
         assignments: doc.assignments.filter((a) => a.studentId !== action.id),
+        otherTermAssignments: doc.otherTermAssignments.filter((a) => a.studentId !== action.id),
       };
       return commit(state, next, `Removed ${student.name}`, {
         selectedStudentId: fixSelection(next, state.selectedStudentId),
@@ -354,6 +365,21 @@ export function reducer(state: State, action: Action): State {
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
     }
+    case "SET_SETTINGS": {
+      const settings = { ...doc.settings, ...action.settings };
+      const termChanged = (settings.term ?? "semester") !== (doc.settings.term ?? "semester");
+      if (!termChanged) return commit(state, { ...doc, settings }, "Changed settings");
+      // The semester and break schedules are separate: put the showing one aside and bring the other back.
+      const swapped: Doc = { ...doc, settings, assignments: doc.otherTermAssignments, otherTermAssignments: doc.assignments };
+      const message =
+        settings.term === "break"
+          ? `Showing the break schedule. Tuesday 11am–12pm is open, and students can work up to ${BREAK_WEEKLY_HOURS} hours a week. Your semester schedule is kept as it was.`
+          : `Showing the semester schedule. Nobody works during Tuesday devotional (11am–12pm), and the limit is ${settings.weeklyTargetHours} hours a week. Your break schedule is kept as it was.`;
+      return commit(state, swapped, settings.term === "break" ? "Switched to semester break" : "Switched to semester", {
+        lastAutofill: null,
+        toast: toast(message),
+      });
+    }
     case "IMPORT_SHIFTS": {
       // Each pasted shift goes through the same rule checks as a click on the grid. A shift that
       // breaks a hard rule (class, lunch, cutoff) or a limit is skipped and counted, never forced.
@@ -381,8 +407,6 @@ export function reducer(state: State, action: Action): State {
         toast: toast(`Added ${plural((placed * doc.settings.slotMinutes) / 60, "hour")} of pasted shifts.${tail}`),
       });
     }
-    case "SET_SETTINGS":
-      return commit(state, { ...doc, settings: { ...doc.settings, ...action.settings } }, "Changed settings");
     case "SET_SEMESTER":
       return commit(state, { ...doc, semester: action.semester }, "Changed calendar dates");
     case "AUTOFILL": {
@@ -395,7 +419,7 @@ export function reducer(state: State, action: Action): State {
       const changed = scheduleVersion(result.assignments) !== scheduleVersion(doc.assignments);
       const notes: string[] = [];
       if (result.openingShiftUnmet.length) notes.push(`${plural(result.openingShiftUnmet.length, "student")} still need an opening shift`);
-      if (result.unmet.length) notes.push(`${plural(result.unmet.length, "student")} can't reach ${doc.settings.weeklyTargetHours} hours`);
+      if (result.unmet.length) notes.push(`${plural(result.unmet.length, "student")} can't reach ${weeklyLimit(doc.settings)} hours`);
       const tail = notes.length ? ` Heads up: ${notes.join("; ")}. See Insights for why.` : " Everyone is at their target.";
       const added = Math.max(0, result.assignments.length - doc.assignments.length);
       const message = !changed
@@ -409,14 +433,23 @@ export function reducer(state: State, action: Action): State {
         toast: toast(message),
       });
     }
-    case "CLEAR_SHIFTS":
-      return commit(state, { ...doc, assignments: [] }, "Cleared all shifts", {
+    case "CLEAR_SHIFTS": {
+      const which = doc.settings.term === "break" ? "break" : "semester";
+      return commit(state, { ...doc, assignments: [] }, `Cleared the ${which} shifts`, {
         lastAutofill: null,
-        toast: toast("Cleared all shifts. You can press Undo to get them back."),
+        toast: toast(`Cleared all shifts in the ${which} schedule. The other schedule is untouched. You can press Undo to get them back.`),
       });
+    }
     case "RESET_DEMO": {
       const demo = buildDemoData();
-      const next: Doc = { ...doc, students: demo.students, assignments: demo.assignments };
+      // The sample shifts are semester shifts; during a break the break schedule starts empty.
+      const onBreak = doc.settings.term === "break";
+      const next: Doc = {
+        ...doc,
+        students: demo.students,
+        assignments: onBreak ? [] : demo.assignments,
+        otherTermAssignments: onBreak ? demo.assignments : [],
+      };
       return commit(state, next, "Reset to sample data", {
         selectedStudentId: fixSelection(next, null),
         lastAutofill: null,
@@ -424,7 +457,7 @@ export function reducer(state: State, action: Action): State {
       });
     }
     case "CLEAR_ALL": {
-      const next: Doc = { ...doc, students: [], assignments: [] };
+      const next: Doc = { ...doc, students: [], assignments: [], otherTermAssignments: [] };
       return commit(state, next, "Cleared everything", {
         selectedStudentId: null,
         lastAutofill: null,
@@ -436,6 +469,7 @@ export function reducer(state: State, action: Action): State {
         settings: action.state.settings,
         students: action.state.students,
         assignments: normalizeAssignments(action.state.assignments),
+        otherTermAssignments: normalizeAssignments(action.state.otherTermAssignments ?? []),
         semester: action.state.semester ?? null,
       };
       return commit(state, next, "Imported a backup", {
@@ -502,6 +536,7 @@ export function useShiftFitStore() {
       settings: state.doc.settings,
       students: state.doc.students,
       assignments: state.doc.assignments,
+      otherTermAssignments: state.doc.otherTermAssignments,
       selectedStudentId: state.selectedStudentId,
       semester: state.doc.semester,
     };
@@ -575,6 +610,7 @@ export function useShiftFitStore() {
     settings: state.doc.settings,
     students: state.doc.students,
     assignments: state.doc.assignments,
+    otherTermAssignments: state.doc.otherTermAssignments,
     semester: state.doc.semester,
     selectedStudent,
     toast: state.toast,

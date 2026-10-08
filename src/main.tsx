@@ -4,7 +4,7 @@ import { App } from "./app/App";
 
 /**
  * The real entry point: the one line that tells the browser "render the
- * ShiftFit app (`App`, from `src/app/App.tsx`) into the `<div id="root">` in
+ * Cadence app (`App`, from `src/app/App.tsx`) into the `<div id="root">` in
  * `index.html`". Nothing else in the app is reachable except through `App`.
  */
 import "@fontsource/atkinson-hyperlegible/latin-400.css";

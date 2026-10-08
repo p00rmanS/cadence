@@ -29,7 +29,7 @@ export function BulkAddDialog({
   return (
     <Modal
       title="Add several students at once"
-      description="Paste your whole list. ShiftFit checks every line before adding anyone."
+      description="Paste your whole list. Cadence checks every line before adding anyone."
       size="lg"
       onClose={onClose}
       footer={
@@ -83,7 +83,7 @@ export function BulkAddDialog({
         {parsed.rows.length > 0 && (
           <div className="space-y-2 rounded-xl border border-line p-3" aria-live="polite">
             <h3 className="text-sm font-semibold">
-              Here is what ShiftFit understood{" "}
+              Here is what Cadence understood{" "}
               <span className="font-normal text-muted">
                 ({parsed.valid.length} of {parsed.rows.length} lines{bad ? `, ${bad} will be skipped` : ""})
               </span>

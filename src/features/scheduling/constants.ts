@@ -13,11 +13,18 @@ import type { ScheduleSettings, Minutes } from "./types";
 /** All scheduling rules live here instead of scattered magic numbers. */
 export const DEFAULT_SETTINGS: ScheduleSettings = {
   openTime: 7 * 60,
-  closeTime: 17 * 60,
+  closeTime: 24 * 60, // midnight — the day runs 7:00am to 12:00am
   minStaffPerSlot: 1,
   slotMinutes: 30,
   weeklyTargetHours: 19,
+  term: "semester",
 };
+
+/** During a semester break students may work up to this many hours a week (instead of `weeklyTargetHours`). */
+export const BREAK_WEEKLY_HOURS = 40;
+
+/** Tuesday devotional: during the semester nobody is scheduled in this hour, and it isn't counted as a gap. */
+export const DEVOTIONAL = { day: "tue", start: 11 * 60, end: 12 * 60 } as const;
 
 export const OPEN_TIME_OPTIONS: Minutes[] = [7 * 60, 8 * 60];
 
@@ -36,7 +43,7 @@ export const MIN_OPENING_SHIFT_MINUTES = 60;
 /** "No cutoff" for a student: they can work until the office closes, whenever that is. */
 export const NO_CUTOFF: Minutes = 24 * 60;
 
-/** Auto-fill prefers blocks at least this long; shorter blocks are allowed but penalized. */
+/** Shortest shift allowed. Auto-fill never makes a shorter one; a shorter hand-made shift is flagged as a problem. */
 export const MIN_SHIFT_MINUTES = 120;
 
 /** Auto-fill never creates a single contiguous block longer than this. */

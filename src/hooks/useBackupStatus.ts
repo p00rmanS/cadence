@@ -17,10 +17,10 @@ function readRecordText(): string {
 export function useBackupStatus(content: ScheduleContent): { lastBackup: BackupRecord | null; backupDue: boolean } {
   const recordText = useSyncExternalStore(subscribeToBackups, readRecordText, readRecordText);
   const lastBackup = useMemo(() => JSON.parse(recordText) as BackupRecord | null, [recordText]);
-  const { settings, students, assignments, semester } = content;
+  const { settings, students, assignments, otherTermAssignments, semester } = content;
   const backupDue = useMemo(
-    () => isBackupDue({ settings, students, assignments, semester }, lastBackup),
-    [settings, students, assignments, semester, lastBackup],
+    () => isBackupDue({ settings, students, assignments, otherTermAssignments, semester }, lastBackup),
+    [settings, students, assignments, otherTermAssignments, semester, lastBackup],
   );
   return { lastBackup, backupDue };
 }

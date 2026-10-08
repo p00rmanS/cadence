@@ -25,7 +25,7 @@ describe("findIssues", () => {
 
   it("catches a shift left behind after a student's class times change", () => {
     const before = makeStudent();
-    const shifts = run("s1", "tue", 8 * 60, 9 * 60);
+    const shifts = run("s1", "tue", 8 * 60, 10 * 60);
     expect(findIssues([before], shifts, settings)).toEqual([]);
     const after = makeStudent({ busy: [{ day: "tue", start: 8 * 60, end: 9 * 60, source: "class" }] });
     expect(findIssues([after], shifts, settings)).toHaveLength(1);
@@ -33,7 +33,7 @@ describe("findIssues", () => {
 
   it("flags cutoff and lunch problems separately", () => {
     const s = makeStudent({ latestEnd: 12 * 60, lunchStart: 10 * 60 });
-    const codes = findIssues([s], [slot("s1", "mon", 10 * 60), slot("s1", "mon", 12 * 60)], settings).map((i) => i.code);
+    const codes = findIssues([s], run("s1", "mon", 10 * 60, 12 * 60 + 30), settings).map((i) => i.code);
     expect(codes.sort()).toEqual(["after_cutoff", "lunch_conflict"]);
   });
 
@@ -53,14 +53,42 @@ describe("findIssues", () => {
 
   it("flags too many work days", () => {
     const s = makeStudent({ daysPerWeek: 1 });
-    const issues = findIssues([s], [slot("s1", "mon", 9 * 60), slot("s1", "tue", 9 * 60)], settings);
+    const issues = findIssues([s], [...run("s1", "mon", 9 * 60, 11 * 60), ...run("s1", "tue", 9 * 60, 11 * 60)], settings);
     expect(issues.map((i) => i.code)).toEqual(["over_max_days"]);
   });
 
   it("flags a missing opening shift, but not once it exists", () => {
     const s = makeStudent({ needsOpeningShift: true });
     expect(findIssues([s], [], settings).map((i) => i.code)).toEqual(["opening_shift_missing"]);
-    expect(findIssues([s], run("s1", "mon", 7 * 60, 8 * 60), settings)).toEqual([]);
+    expect(findIssues([s], run("s1", "mon", 7 * 60, 9 * 60), settings)).toEqual([]);
+  });
+
+  it("flags a shift shorter than 2 hours as a problem, judging the whole shift", () => {
+    const s = makeStudent({ name: "Ana" });
+    const issues = findIssues([s], run("s1", "mon", 9 * 60, 10 * 60 + 30), settings);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: "shift_too_short", day: "mon", start: 540, end: 630, overridden: false });
+    expect(issues[0].message).toBe("Ana's shift on Mon 9:00am–10:30am is too short. Shifts must be at least 2 hours.");
+    expect(isBlockingIssue(issues[0])).toBe(true);
+    // Two separate 2-hour shifts on one day are both fine.
+    expect(findIssues([s], [...run("s1", "mon", 8 * 60, 10 * 60), ...run("s1", "mon", 13 * 60, 15 * 60)], settings)).toEqual([]);
+  });
+
+  it("flags Tuesday devotional during the semester, but not during a break", () => {
+    const s = makeStudent({ name: "Ana" });
+    const shifts = run("s1", "tue", 10 * 60, 12 * 60);
+    const semester = findIssues([s], shifts, settings);
+    expect(semester.map((i) => i.code)).toEqual(["devotional"]);
+    expect(semester[0].message).toBe("Ana is scheduled during Tuesday devotional: Tue 11:00am–12:00pm.");
+    expect(findIssues([s], shifts, makeSettings({ term: "break" }))).toEqual([]);
+  });
+
+  it("allows up to 40 hours a week during a break", () => {
+    const s = makeStudent();
+    const days = ["mon", "tue", "wed", "thu", "fri"] as const;
+    const thirtyHours = days.flatMap((d) => run("s1", d, 8 * 60, 14 * 60));
+    expect(findIssues([s], thirtyHours, settings).map((i) => i.code)).toEqual(["devotional", "over_weekly_target"]);
+    expect(findIssues([s], thirtyHours, makeSettings({ term: "break" }))).toEqual([]);
   });
 
   it("ignores shifts that belong to students who no longer exist", () => {
@@ -82,6 +110,11 @@ describe("explaining empty times", () => {
   it("says why nobody can when everyone is blocked", () => {
     const text = describeGap([troy], [], settings, "mon", 9 * 60);
     expect(text).toBe("Nobody is free: Troy (in class).");
+  });
+
+  it("says devotional when Tuesday 11am is closed", () => {
+    expect(explainSlot([ana], [], settings, "tue", 11 * 60).map((r) => r.text)).toEqual(["devotional"]);
+    expect(explainSlot([ana], [], makeSettings({ term: "break" }), "tue", 11 * 60).map((r) => r.text)).toEqual(["free"]);
   });
 
   it("uses plain reasons for every kind of block", () => {

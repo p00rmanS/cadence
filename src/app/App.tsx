@@ -20,6 +20,7 @@ import { assignedHours } from "../features/scheduling/availability";
 import { nextStep } from "../features/scheduling/guidance";
 import type { GuidanceAction } from "../features/scheduling/guidance";
 import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
+import { weeklyLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
 import { useBackupStatus } from "../hooks/useBackupStatus";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -84,11 +85,11 @@ export function App() {
   const blockingIssues = useMemo(() => issues.filter(isBlockingIssue), [issues]);
   const gapSlots = useMemo(() => buildCoverageSlots(assignments, settings).filter((s) => !s.fullyStaffed).length, [assignments, settings]);
   const belowTarget = useMemo(
-    () => students.filter((s) => assignedHours(s.id, assignments, settings) < settings.weeklyTargetHours).length,
+    () => students.filter((s) => assignedHours(s.id, assignments, settings) < weeklyLimit(settings)).length,
     [students, assignments, settings],
   );
   // There's no database: remind the manager to save a backup file when the schedule changed since the last one.
-  const { backupDue } = useBackupStatus({ settings, students, assignments, semester: store.semester });
+  const { backupDue } = useBackupStatus({ settings, students, assignments, otherTermAssignments: store.otherTermAssignments, semester: store.semester });
   const guidance = useMemo(
     () => nextStep({ studentCount: students.length, shiftCount: assignments.length, blockingIssues: blockingIssues.length, gapSlots, studentsBelowTarget: belowTarget, backupDue }),
     [students.length, assignments.length, blockingIssues.length, gapSlots, belowTarget, backupDue],
@@ -191,7 +192,7 @@ export function App() {
         <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-bg px-4 py-2 text-sm sm:px-6">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warn" aria-hidden />
           <p className="min-w-0 flex-1">
-            Your browser won&apos;t let ShiftFit save automatically right now (private mode or full storage). Your work is safe on screen, but it would be lost if you close this tab. Save a
+            Your browser won&apos;t let Cadence save automatically right now (private mode or full storage). Your work is safe on screen, but it would be lost if you close this tab. Save a
             backup file now.
           </p>
           <Button variant="secondary" onClick={() => setDialog({ kind: "share" })}>
@@ -204,7 +205,7 @@ export function App() {
         <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-bg px-4 py-2 text-sm sm:px-6">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warn" aria-hidden />
           <p className="min-w-0 flex-1">
-            ShiftFit was changed in another tab or window. Reload to see the latest. If you keep working here, your next change will replace what the other tab saved.
+            Cadence was changed in another tab or window. Reload to see the latest. If you keep working here, your next change will replace what the other tab saved.
           </p>
           <Button variant="secondary" onClick={() => window.location.reload()}>
             Reload to get the latest
@@ -335,6 +336,7 @@ export function App() {
           settings={settings}
           students={students}
           assignments={assignments}
+          otherTermAssignments={store.otherTermAssignments}
           semester={store.semester}
           selectedStudentId={store.selectedStudent?.id ?? null}
           blockingIssues={blockingIssues.length}
@@ -381,7 +383,7 @@ export function App() {
         <ConfirmDialog title="Assign anyway?" confirmLabel="Yes, assign anyway" onCancel={store.cancelOverride} onConfirm={store.confirmOverride}>
           <p>{store.pendingOverride.message}</p>
           <p>
-            You can still do it. ShiftFit will keep a warning about {overrideStudent?.name ?? "this student"} visible in Schedule health so it isn&apos;t forgotten.
+            You can still do it. Cadence will keep a warning about {overrideStudent?.name ?? "this student"} visible in Schedule health so it isn&apos;t forgotten.
           </p>
         </ConfirmDialog>
       )}

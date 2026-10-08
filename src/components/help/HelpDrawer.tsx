@@ -102,8 +102,8 @@ export function HelpDrawer({ onClose, initialTab = "start" }: { onClose: () => v
 /** The four numbered first steps for a new manager. */
 function QuickStart({ onOpenFaq }: { onOpenFaq: () => void }) {
   const steps = [
-    { n: 1, title: "Add your students", body: "Press Add student on the left. Type a name and paste when they have class. ShiftFit checks each line and tells you if it can't read one." },
-    { n: 2, title: "Press “Fill schedule for me”", body: "ShiftFit places shifts around classes and lunch, and tries to keep each shift in one long block." },
+    { n: 1, title: "Add your students", body: "Press Add student on the left. Type a name and paste when they have class. Cadence checks each line and tells you if it can't read one." },
+    { n: 2, title: "Press “Fill schedule for me”", body: "Cadence places shifts around classes and lunch, and tries to keep each shift in one long block." },
     { n: 3, title: "Fix the pink boxes", body: "Pink means nobody is working then. Click a student, then click a pink box to add them. The panel on the right explains who is free." },
     { n: 4, title: "Save or share", body: "Press Save & share to keep a backup, download a spreadsheet, or make calendar files for your students." },
   ];

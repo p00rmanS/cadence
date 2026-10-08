@@ -34,6 +34,8 @@ export type ScheduleContent = {
   settings: ScheduleSettings;
   students: Student[];
   assignments: ShiftBlock[];
+  /** The Semester/Break schedule that is NOT showing. Changes to it count as changes too. */
+  otherTermAssignments?: ShiftBlock[];
   semester: SemesterConfig | null;
 };
 
@@ -43,7 +45,7 @@ export type ScheduleContent = {
  * Two different schedules could in theory get the same code, but that is about 1 in 4 billion.
  */
 export function fingerprint(content: ScheduleContent): string {
-  const text = JSON.stringify([content.settings, content.students, content.assignments, content.semester ?? null]);
+  const text = JSON.stringify([content.settings, content.students, content.assignments, content.otherTermAssignments ?? [], content.semester ?? null]);
   let hash = 0x811c9dc5; // FNV-1a's standard starting value
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);

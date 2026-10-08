@@ -109,3 +109,12 @@ describe("the next-step banner", () => {
     expect(nextStep({ ...done, gapSlots: 4, backupDue: true }).title).toMatch(/still need/);
   });
 });
+
+describe("backup fingerprint covers the other (Semester/Break) schedule", () => {
+  it("changes when only the schedule that is not showing changes", () => {
+    const base = { settings: DEFAULT_SETTINGS, students: [], assignments: [], semester: null };
+    const other = [{ id: "a", studentId: "s", day: "mon" as const, start: 540, source: "manual" as const }];
+    expect(fingerprint({ ...base, otherTermAssignments: other })).not.toBe(fingerprint(base));
+    expect(fingerprint({ ...base, otherTermAssignments: [] })).toBe(fingerprint(base));
+  });
+});
