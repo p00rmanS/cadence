@@ -34,9 +34,12 @@ describe("privacy: the app makes no third-party requests on its own", () => {
   });
 
   it("the only network calls go to the optional, configured automation URL", () => {
-    const calls = sourceFiles("src").flatMap((file) =>
-      [...readFileSync(file, "utf8").matchAll(/\bfetch\(([^)]*)/g)].map((m) => `${file}: ${m[1]}`),
-    );
+    // The offline helper's fetches only ever re-download this app's own files (pwa.test.ts proves it
+    // ignores every other address), so it is the one file allowed to call fetch with something else.
+    const OFFLINE_HELPER = join("src", "pwa", "serviceWorker.ts");
+    const calls = sourceFiles("src")
+      .filter((file) => file !== OFFLINE_HELPER)
+      .flatMap((file) => [...readFileSync(file, "utf8").matchAll(/\bfetch\(([^)]*)/g)].map((m) => `${file}: ${m[1]}`));
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) expect(call, call).toMatch(/endpoint|baseUrl/);
   });

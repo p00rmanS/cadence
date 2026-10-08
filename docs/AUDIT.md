@@ -394,6 +394,41 @@ tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMA
 
 ---
 
+## Part 13: protecting schedules without a database (2026-10-01)
+
+With GitHub Pages only and no database (both decided), each schedule exists in one browser. Two real ways to lose it:
+**Safari deletes a site's saved data after about 7 days without a visit**, and any browser may clear it when the disk
+is full or history is cleared. A downloaded backup file is the only other copy.
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| Backup tracking (`features/persistence/backupStatus.ts`, `hooks/useBackupStatus.ts`) | Remembers when the last backup was saved (or loaded) and a fingerprint of the schedule at that moment. A reminder is due when the schedule has real work in it (not empty, not the untouched sample), changed since the last backup, and that backup is missing or 7+ days old. | `backup-status.test.ts` (11 tests): fingerprints, every due/not-due case including the untouched sample and a broken stored record. |
+| Reminder in the "next step" banner (`guidance.ts`) | "Save a backup of this schedule", after rule problems and empty hours (finishing a schedule matters more mid-build), before "Looks great". | Banner tests; the whole-app test now walks: fill -> reminder -> Save & share shows "Last backup: never. The schedule has changed since then." -> save -> "Last backup: today." -> banner "Looks great". |
+| "Last backup" line in Save & share | Plain words ("never", "today", "5 days ago"), with a warning icon (not just color) when one is due. | Whole-app test above, and seen in a real browser on the `/cadence/` build. |
+| Asking the browser to keep the data | `navigator.storage.persist()` after the manager saves a backup (Firefox may show a question, so it is only asked right after they act); the line says so if the browser agreed. | Not testable in jsdom; the call is wrapped so a browser without it changes nothing. Not confirmed in Safari. |
+
+Five whole-app tests expected "Looks great" right after auto-filling the sample; they now expect the backup reminder,
+which is the intended behavior (the sample was changed and never backed up).
+
+`npm test` (500 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
+## Part 14: installable, offline app (2026-10-06)
+
+| Item | What was built | How it was checked |
+| --- | --- | --- |
+| App description and icons (`public/manifest.webmanifest`, 4 PNG icons, links in `index.html`) | Name, colors, standalone window, relative addresses (works in `/cadence/`). Icons drawn from `favicon.svg` by a script (no image library added), including a "maskable" one for Android and the iPhone home-screen icon. | `pwa.test.ts` checks every listed icon exists and addresses are relative; the icons were looked at. |
+| Offline helper (`src/pwa/serviceWorker.ts` -> `sw.js` written by `vite.config.ts` after each build) | Pages: internet first, saved copy only offline (updates always arrive). Build files: saved copy first (their names change every build). Only this app's own files: never other sites, `/api/`, or other github.io projects like `/netmon/`. One storage box per build; old ones deleted, other apps' never. | `pwa.test.ts` **runs the generated `sw.js`** in a pretend service-worker world (10 tests). In a real browser: installed at `/cadence/` with 17 files saved, then the web server was **switched off** and the page reloaded: the full app drew (110 buttons, fonts, banner), no failed files. |
+| **Bug found by the real-browser test** | The first offline reload showed the page but no app. Cause: servers can label files `Vary: Origin`; the page requests its script and stylesheet with an Origin note (`crossorigin`), the saved copies were made without one, so the browser treated them as different files and went online. Fixed with `ignoreVary` (safe: each saved file belongs to one exact build). | A test reproduces it (fails without the fix); the real-browser offline reload then worked. |
+| Switched on only in the published site (`registerServiceWorker.ts`) | Not in `npm run dev`, so old saved files never hide new changes while developing. | Test. |
+
+Not verified: installing on a real iPhone or Android phone; how GitHub Pages labels its files (the fix covers either way).
+
+`npm test` (510 passed), `npm run lint` and `npm run build` are clean after this round.
+
+---
+
 ## Readability pass (2026-09-22)
 
 Every file under `src/` now has a plain-language comment explaining what it's for and, in the

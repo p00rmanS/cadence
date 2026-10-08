@@ -34,6 +34,12 @@ async function openShare(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("dialog", { name: /save & share/i });
 }
 
+/**
+ * The banner after the sample schedule is fully filled: every hour is covered, so the next step is
+ * saving a backup (the schedule changed and was never backed up; there is no database).
+ */
+const FILLED = /Save a backup of this schedule/;
+
 /** Presses the main "Fill schedule for me" button. */
 async function fillSchedule(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /fill schedule for me/i }));
@@ -82,6 +88,13 @@ describe("guidance banner", () => {
     const { user } = boot();
     expect(banner().textContent).toMatch(/65 hours still need someone/);
     await fillSchedule(user);
+    // The schedule changed and was never backed up, and there is no database: protecting it is the next step.
+    expect(banner().textContent).toMatch(/Save a backup of this schedule/);
+    const dialog = await openShare(user);
+    expect(dialog.textContent).toMatch(/Last backup: never\. The schedule has changed since then\./);
+    await user.click(within(dialog).getByRole("button", { name: /save a backup file/i }));
+    expect(dialog.textContent).toMatch(/Last backup: today\./);
+    await user.click(within(dialog).getByRole("button", { name: /close/i }));
     expect(banner().textContent).toMatch(/Looks great: every hour is covered/);
     await user.click(screen.getByRole("button", { name: /clear all shifts/i }));
     await user.click(screen.getByRole("button", { name: /yes, clear them/i }));
@@ -111,7 +124,7 @@ describe("filling and undoing", () => {
     expect(toast().textContent).toMatch(/Undid: Auto-filled shifts/);
     expect(banner().textContent).toMatch(/65 hours still need someone/);
     await user.click(screen.getByRole("button", { name: /^redo/i }));
-    expect(banner().textContent).toMatch(/Looks great/);
+    expect(banner().textContent).toMatch(FILLED);
   });
 
   it("Ctrl+Z and Ctrl+Shift+Z work, but never while typing", async () => {
@@ -120,11 +133,11 @@ describe("filling and undoing", () => {
     await user.keyboard("{Control>}z{/Control}");
     expect(banner().textContent).toMatch(/still need someone/);
     await user.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
-    expect(banner().textContent).toMatch(/Looks great/);
+    expect(banner().textContent).toMatch(FILLED);
 
     await user.click(screen.getByRole("searchbox", { name: /search students/i }));
     await user.keyboard("{Control>}z{/Control}");
-    expect(banner().textContent).toMatch(/Looks great/); // typing field keeps its own undo
+    expect(banner().textContent).toMatch(FILLED); // typing field keeps its own undo
   });
 });
 
@@ -987,7 +1000,7 @@ describe("safety nets", () => {
     await fillSchedule(user);
     unmount();
     render(<App />);
-    expect(banner().textContent).toMatch(/Looks great/);
+    expect(banner().textContent).toMatch(FILLED);
   });
 });
 
