@@ -4,7 +4,7 @@
  * ============================================================================
  * Small building blocks used by both server files (`handler.ts`, the scheduler service, and
  * `gateway.ts`, the one the website talks to), so each safety rule is written once:
- *  - answers are JSON and marked "do not cache" (they may describe students),
+ *  - answers are JSON, marked "do not cache" (they may describe students) and locked down so a browser never runs them,
  *  - errors are short and never repeat what the caller sent,
  *  - passwords are compared in constant time,
  *  - request bodies over a size limit are refused before being read into memory,
@@ -15,7 +15,14 @@
 export function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      // An answer is data, never a page: if one is ever opened in a browser, it may not run or load anything.
+      "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+      "referrer-policy": "no-referrer",
+    },
   });
 }
 

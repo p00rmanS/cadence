@@ -26,6 +26,8 @@ import { FailedAttemptLimiter, clientAddress, fail, isAuthorized, json, readBody
  *  - `/api/publish`   send an approved schedule to Google Calendar
  *  - `/api/remove`    delete old events the manager confirmed (moved or removed shifts)
  *  - `/api/interpret` read a class-schedule screenshot
+ *  - `/api/health`    (GET, no passcode) "is the server up and fully set up?" for whoever hosts it. It
+ *                     answers only `{ ok: true, ready: true|false }`, never a setting or any student data.
  *
  * It is one plain function, `handleGateway(Request) -> Response`, so it runs on Netlify Functions
  * (see `netlify/functions/gateway.ts`) or any similar host. Until ALL THREE settings below are set it
@@ -63,7 +65,7 @@ const AUTOMATION_TIMEOUT_MS = 60_000;
 /** Longest shift id accepted in a removal request (real ones are about 30 characters). */
 const MAX_SHIFT_ID_LENGTH = 200;
 
-const ROUTES = ["/api/session", "/api/publish", "/api/remove", "/api/interpret"] as const;
+const ROUTES = ["/api/session", "/api/publish", "/api/remove", "/api/interpret", "/api/health"] as const;
 type Route = (typeof ROUTES)[number];
 
 /** True when all three settings are present, long enough, and the n8n address is a safe one. */
@@ -180,6 +182,8 @@ async function answer(request: Request, options: GatewayOptions, origin: string 
     const route = ROUTES.find((r) => path === r || path.endsWith(r));
     if (!route) return fail(404, "not_found", "There is nothing at that address.");
     if (request.method === "OPTIONS") return answerPreflight(origin);
+    // The only address that needs no passcode: it reveals nothing but "up" and "set up or not".
+    if (route === "/api/health" && request.method === "GET") return json(200, { ok: true, ready: isConfigured(options) });
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.");
     if (!isConfigured(options)) return fail(503, "not_configured", "The server hasn't been set up yet.");
 
@@ -203,6 +207,7 @@ async function answer(request: Request, options: GatewayOptions, origin: string 
 /** Sends a signed-in request to the job for its address. */
 function runRoute(route: Route, request: Request, options: GatewayOptions): Promise<Response> | Response {
   if (route === "/api/session") return json(200, { ok: true });
+  if (route === "/api/health") return fail(405, "method_not_allowed", "Use GET."); // POST to health is a mistake, not a sign-in
   if (route === "/api/publish") return publish(request, options);
   if (route === "/api/remove") return removeOldEvents(request, options);
   return interpret(request, options);

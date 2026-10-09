@@ -73,7 +73,7 @@ export function TopBar({
   const [showOptions, setShowOptions] = useState(false);
 
   return (
-    <header className="border-b border-line bg-panel">
+    <header className="soft-shadow relative z-10 border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex items-center gap-2">
           <CadenceLogo className="h-9 w-9 shrink-0" />

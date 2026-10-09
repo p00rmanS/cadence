@@ -295,7 +295,7 @@ export function ScheduleGrid({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-panel">
+      <div className="min-h-0 flex-1 overflow-auto soft-shadow rounded-xl border border-line bg-panel">
         <table role="grid" aria-label="Weekly schedule. Use the arrow keys to move between boxes." className="w-full min-w-[280px] select-none border-separate border-spacing-0">
           <thead>
             <tr>
