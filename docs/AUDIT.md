@@ -392,6 +392,29 @@ tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMA
 
 `npm test` (490 passed), `npm run lint` and `npm run build` are clean after this round.
 
+## Part 13: audit of master after Christroi's merge, and the fixes (2026-10-07 to 2026-10-09)
+
+Master after PR #5 (Semester/Break) and PR #8 (build fix) was checked by running it (type check, build, all
+tests, auto-fill in both terms, the app in a browser) and by reading the server and calendar code.
+
+| Finding | Fix |
+| --- | --- |
+| **Real bug:** the day now ends at midnight (1440 minutes), and a shift ending then was written as hour 24: `DTEND...T240000` in `.ics` files and `T24:00:00` in the Google Calendar request. Hour 24 is not a valid calendar time. No test covered it. | `rollOverMidnight` in `ics.ts`, used by both; 3 tests, plus whole-week Semester and Break checks (`term-calendar.test.ts`). |
+| `local-reader/` (screenshot reader) could not work with the app: no `/api/session`, blocked the `Authorization` header; its CORS setting only hid answers, so any localhost page could still spend API credit; upload size trusted a header; model id and beta flag were unverified. | Speaks the gateway protocol, needs `READER_PASSCODE`, refuses non-local origins with 403, counts bytes while streaming, valid model id, no beta flag. Auth/CORS smoke-tested with curl. |
+| Built site's security policy allowed connections to any `https:` address. | Now only the app's own server, or nobody when there is none (`contentSecurityPolicyFor`). |
+| PR #4 (backup reminders) conflicted with master, and once merged the "backup due" reminder would have ignored the schedule that isn't showing. | Merged; the other-term schedule is now part of the backup fingerprint. |
+| `npm audit`: 8 issues (6 high), all dev tooling. | `source-map-js` fixed. `braces` and `postcss-selector-parser` need Tailwind 4 (breaking), left alone. |
+| The "Protect master" rule requires a pull request but not a passing check, which is how merge markers reached master. | **Not fixed from here** (changing repo rules was blocked). Add the `checks` job as a required status check. |
+
+Added in the same round: a splash screen and animated logo loader, a warmer color palette, `GET /api/health`
+on the gateway, locked-down headers on every gateway answer, and `.github/dependabot.yml`.
+
+Christroi's other repositories were read too: `cadence-test-ui` is an empty README; his `cadence` fork has no
+secrets or key files in its history, but its default branch is a stale feature branch.
+
+**Not verified:** anything against a real Google Calendar, n8n or the Claude API (`local-reader` has never called
+Claude); real phones, slow networks or screen readers; the Pages deploy of these changes (it runs on merge).
+
 ---
 
 ## Readability pass (2026-09-22)

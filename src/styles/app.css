@@ -149,3 +149,38 @@ h3 {
     display: none !important;
   }
 }
+
+/* LogoLoader (src/components/ui/LogoLoader.tsx): the three bars brighten one after another,
+   and the dot beats. `currentColor` means it takes the color of the text next to it. */
+.logo-loader-bar {
+  animation: logo-loader-bar 1.2s ease-in-out infinite;
+}
+.logo-loader-bar-2 {
+  animation-delay: 0.2s;
+}
+.logo-loader-bar-3 {
+  animation-delay: 0.4s;
+}
+.logo-loader-beat {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-loader-beat 1.2s ease-in-out infinite;
+}
+@keyframes logo-loader-bar {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes logo-loader-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.5);
+  }
+}

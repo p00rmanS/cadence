@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Download, FileSpreadsheet, RotateCcw, Save, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "../ui/Button";
+import { LogoLoader } from "../ui/LogoLoader";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Modal } from "../ui/Modal";
 import { buildStudentIcs, icsFileName, isSemesterConfigured } from "../../features/calendar/ics";
@@ -405,7 +406,7 @@ export function SaveShareDialog(props: Props) {
                 disabled={busy || !hasShifts || needsSignIn}
                 onClick={() => (client.kind === "server" ? setConfirm("publish") : void runPublish())}
               >
-                <Send className="h-4 w-4" aria-hidden /> {busy ? "Working…" : client.kind === "server" ? "Approve and send" : "Do a practice run"}
+                {busy ? <LogoLoader className="h-4 w-4" /> : <Send className="h-4 w-4" aria-hidden />} {busy ? "Working…" : client.kind === "server" ? "Approve and send" : "Do a practice run"}
               </Button>
             )}
             {calendarReady && !hasShifts && <p className="mt-2 text-xs text-muted">Add some shifts first.</p>}
