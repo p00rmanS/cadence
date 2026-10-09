@@ -94,6 +94,35 @@ describe("switched off until it is fully set up", () => {
   });
 });
 
+describe("GET /api/health", () => {
+  it("answers without a passcode, says only whether it is set up, and never leaks a setting", async () => {
+    const ready = await call("/api/health", options(), { method: "GET", auth: null });
+    expect(ready.status).toBe(200);
+    expect(await ready.json()).toEqual({ ok: true, ready: true });
+    const notReady = await call("/api/health", options({ managerPasscode: undefined }), { method: "GET", auth: null });
+    expect(await notReady.json()).toEqual({ ok: true, ready: false });
+    const text = JSON.stringify(await (await call("/api/health", options(), { method: "GET", auth: null })).json());
+    for (const secret of [PASSCODE, SECRET, N8N]) expect(text).not.toContain(secret);
+  });
+
+  it("is read-only: a POST to it is refused (a wrong passcode still gets 401 like anywhere else)", async () => {
+    const opts = options();
+    expect((await call("/api/health", opts, { auth: "Bearer wrong" })).status).toBe(401);
+    expect((await call("/api/health", opts, { method: "POST" })).status).toBe(405);
+  });
+});
+
+describe("every answer is locked down", () => {
+  it("carries no-store, nosniff, a deny-everything content policy and no referrer, even on errors", async () => {
+    for (const res of [await call("/api/session", options()), await call("/api/session", options(), { auth: "Bearer no" }), await call("/api/nothing", options())]) {
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
+      expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    }
+  });
+});
+
 describe("manager passcode", () => {
   it("accepts the right passcode and refuses a wrong or missing one", async () => {
     expect((await call("/api/session", options())).status).toBe(200);
