@@ -8,7 +8,7 @@ import { isDevotional, isOnBreak, weeklyLimit } from "../../features/scheduling/
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
 import { DAYS, DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useLayoutQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
@@ -65,7 +65,7 @@ export function ScheduleGrid({
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
-  const wide = useMediaQuery("(min-width: 640px)");
+  const wide = useLayoutQuery(640);
   const [mobileDay, setMobileDay] = useState<Day>("mon");
   const visibleDays: Day[] = wide ? DAYS : [mobileDay];
 

@@ -110,6 +110,28 @@ h3 {
   outline-offset: 2px;
 }
 
+/* Text size (Settings -> Display). Everything is sized in rem, so changing the page's base size
+   scales the whole app together. "Medium" is the 17px set just above. */
+html[data-text-size="small"] {
+  font-size: 15px;
+}
+html[data-text-size="large"] {
+  font-size: 20px;
+}
+html[data-text-size="xlarge"] {
+  font-size: 24px;
+}
+
+/* "Reduce motion" chosen in Settings -> Display: the same switch-off as the device setting below. */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

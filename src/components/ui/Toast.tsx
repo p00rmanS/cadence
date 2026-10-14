@@ -13,7 +13,7 @@ export function Toast({ toast, onDismiss }: { toast: { id: number; message: stri
   }, [toast, onDismiss]);
 
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-3 lg:bottom-5">
+    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-3 wide:bottom-5">
       {toast && (
         <div key={toast.id} className="anim-rise pointer-events-auto flex max-w-lg items-start gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-bg shadow-lg">
           <p>{toast.message}</p>
