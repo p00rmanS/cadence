@@ -297,3 +297,90 @@ html[data-motion="reduced"] *::after {
     transform: translateY(-2px);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   EASIER TO SEE AND CLICK (Settings -> Display)
+   --------------------------------------------------------------------------- */
+
+/* "Bigger buttons and more space": every control gets a comfortable minimum height (2.75rem is
+   about 47px at Medium text, above the 44px touch-target guideline), and grid boxes get taller. */
+html[data-comfort="roomy"] :is(button, select, summary, input:not([type="checkbox"]):not([type="file"]):not([type="hidden"])) {
+  min-height: 2.75rem;
+}
+html[data-comfort="roomy"] td button {
+  min-height: 3rem;
+}
+html[data-comfort="roomy"] ul[aria-label="Student list"] > li {
+  margin-bottom: 0.75rem;
+}
+/* The small "?" help buttons sit inside sentences, so they grow their clickable area invisibly instead of getting taller. */
+html[data-comfort="roomy"] button[aria-expanded][aria-label]:has(> svg:only-child) {
+  min-height: 0;
+  position: relative;
+}
+html[data-comfort="roomy"] button[aria-expanded][aria-label]:has(> svg:only-child)::after {
+  content: "";
+  position: absolute;
+  inset: -0.75rem;
+}
+
+/* "High contrast": the same color names, with much stronger values (every text color is at least 7:1
+   against its background, the "AAA" level; indicators are at least 4.5:1). Three blocks, because dark
+   can come from the Dark button or from the computer's own setting (the second block repeats the first). */
+:root[data-contrast="high"] {
+  --bg: 255 255 255;
+  --panel: 255 255 255;
+  --ink: 0 0 0;
+  --muted: 60 60 60;
+  --line: 80 80 80;
+  --ok: 0 95 60;
+  --ok-bg: 214 242 226;
+  --gap: 150 0 55;
+  --gap-bg: 252 222 232;
+  --busy: 100 100 100;
+  --accent: 0 70 140;
+  --accent-ink: 255 255 255;
+  --warn: 120 60 0;
+  --warn-bg: 252 235 205;
+}
+
+:root[data-theme="dark"][data-contrast="high"] {
+  --bg: 0 0 0;
+  --panel: 12 12 14;
+  --ink: 255 255 255;
+  --muted: 215 215 215;
+  --line: 160 160 170;
+  --ok: 110 235 185;
+  --ok-bg: 10 60 40;
+  --gap: 255 150 185;
+  --gap-bg: 80 10 35;
+  --busy: 150 150 150;
+  --accent: 140 200 255;
+  --accent-ink: 0 0 0;
+  --warn: 255 200 100;
+  --warn-bg: 70 45 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-contrast="high"] {
+    --bg: 0 0 0;
+    --panel: 12 12 14;
+    --ink: 255 255 255;
+    --muted: 215 215 215;
+    --line: 160 160 170;
+    --ok: 110 235 185;
+    --ok-bg: 10 60 40;
+    --gap: 255 150 185;
+    --gap-bg: 80 10 35;
+    --busy: 150 150 150;
+    --accent: 140 200 255;
+    --accent-ink: 0 0 0;
+    --warn: 255 200 100;
+    --warn-bg: 70 45 0;
+  }
+}
+
+/* High contrast also draws the keyboard focus outline thicker, so it is easy to see where you are. */
+:root[data-contrast="high"] :focus-visible {
+  outline-width: 4px;
+}
