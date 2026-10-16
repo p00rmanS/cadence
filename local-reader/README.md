@@ -15,8 +15,10 @@ Your Claude API key stays in `local-reader/.env`, which Git ignores. Never put i
    ```
    VITE_AUTOMATION_API_URL=http://localhost:8787
    ```
-3. Start the reader and leave it running: `cd local-reader && npm start`
-4. In another terminal, (re)start the app: `npm run dev`
+3. In `local-reader/.env` also fill in `READER_PASSCODE=` with any passcode you invent (12+ characters).
+   In Cadence, sign in with that passcode before reading a screenshot.
+4. Start the reader and leave it running: `cd local-reader && npm start`
+5. In another terminal, (re)start the app: `npm run dev`
 
 The screenshot button only appears when steps 2–4 are done. Without them, typing or
 pasting class times works as always.

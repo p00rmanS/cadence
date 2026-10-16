@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStudentIcs, countWeeklyOccurrences, icsFileName, isSemesterConfigured } from "../features/calendar/ics";
+import { buildStudentIcs, countWeeklyOccurrences, icsFileName, isSemesterConfigured, rollOverMidnight } from "../features/calendar/ics";
 import { mergeContiguousBlocks, scheduleVersion, shiftsToCsv } from "../features/scheduling/blocks";
 import { makeStudent, run, slot } from "./testkit";
 import type { SemesterConfig } from "../features/scheduling/types";
@@ -174,5 +174,21 @@ describe("days off (holidays and breaks)", () => {
     const ics = buildStudentIcs(student, [slot("s1", "mon", 540)], { ...base, skipDates: [] }, 30, NOW);
     expect(events(ics)).toEqual([]);
     expect(ics).toContain("RRULE:FREQ=WEEKLY;COUNT=16");
+  });
+});
+
+describe("shifts that end at midnight", () => {
+  const student = makeStudent({ id: "s1", name: "Noa K." });
+
+  it("never writes hour 24 in the .ics file (it becomes 00:00 the next day)", () => {
+    const ics = buildStudentIcs(student, run("s1", "mon", 22 * 60, 24 * 60), semester, 30, NOW);
+    expect(ics).toContain("DTSTART;TZID=Pacific/Honolulu:20260824T220000");
+    expect(ics).toContain("DTEND;TZID=Pacific/Honolulu:20260825T000000");
+    expect(ics).not.toMatch(/T24\d{4}/);
+  });
+
+  it("rolls the date over, including across a month end", () => {
+    expect(rollOverMidnight(new Date("2026-08-31T00:00:00Z"), 24 * 60)).toEqual({ date: new Date("2026-09-01T00:00:00Z"), minutes: 0 });
+    expect(rollOverMidnight(new Date("2026-08-31T00:00:00Z"), 600).minutes).toBe(600);
   });
 });

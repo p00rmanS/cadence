@@ -17,7 +17,7 @@ import type { Day, SemesterConfig, ShiftBlock, Student } from "../scheduling/typ
 export type { SemesterConfig };
 
 /** JavaScript weekday numbers (Sunday = 0). */
-const JS_WEEKDAY: Record<Day, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5 };
+const JS_WEEKDAY: Record<Day, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const MS_PER_DAY = 86_400_000;
 
 /** A number as at least two digits, e.g. 7 -> "07" (calendar files need fixed-width dates and times). */
@@ -30,8 +30,18 @@ function utcDateStamp(date: Date): string {
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
 }
 
+/**
+ * A clock time of 24:00 does not exist in calendar files (hours run 00-23), but a shift that ends
+ * at midnight is stored as 1440 minutes. This turns "Monday + 1440 minutes" into "Tuesday + 0 minutes".
+ */
+export function rollOverMidnight(date: Date, minutes: number): { date: Date; minutes: number } {
+  if (minutes < 24 * 60) return { date, minutes };
+  return { date: new Date(date.getTime() + MS_PER_DAY), minutes: minutes - 24 * 60 };
+}
+
 /** Wall-clock time in the semester's timezone, written without a "Z" so it is NOT read as UTC. */
-function localDateTime(date: Date, minutes: number): string {
+function localDateTime(rawDate: Date, rawMinutes: number): string {
+  const { date, minutes } = rollOverMidnight(rawDate, rawMinutes);
   return `${utcDateStamp(date)}T${pad(Math.floor(minutes / 60))}${pad(minutes % 60)}00`;
 }
 

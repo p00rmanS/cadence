@@ -144,8 +144,8 @@ describe("screenshot reading is optional and safe", () => {
   it("checks image type and size before anything is sent", () => {
     expect(checkImageFile(new File(["x"], "a.png", { type: "image/png" }))).toBeNull();
     expect(checkImageFile(new File(["x"], "a.exe", { type: "application/x-msdownload" }))).toMatch(/PNG, JPG or WebP/);
-    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" });
-    expect(checkImageFile(big)).toMatch(/5 MB/);
+    const big = new File([new Uint8Array(4 * 1024 * 1024 + 1)], "big.png", { type: "image/png" });
+    expect(checkImageFile(big)).toMatch(/4 MB/);
   });
 
   it("still parses pasted text locally, and never fakes an AI read without a provider", async () => {
@@ -397,5 +397,15 @@ describe("n8n photo-reading workflow, run for real", () => {
   it("strips anything odd out of the request id", async () => {
     const [item] = await runImageCheck([{ json: { body: { requestId: "req<script>1" } } }], [0]);
     expect(item.json.requestId).toBe("reqscript1");
+  });
+});
+
+describe("publish request for a shift ending at midnight", () => {
+  it("sends 00:00 the next day, never a 24:00 time", () => {
+    const sem: SemesterConfig = { startDate: "2026-08-31", endDate: "2026-12-11", timeZone: "Pacific/Honolulu" };
+    const student = makeStudent({ id: "s1", name: "Noa K." });
+    const req = buildPublishRequest([student], run("s1", "mon", 22 * 60, 24 * 60), makeSettings(), sem);
+    expect(req.events[0].recurrence?.startIso).toBe("2026-08-31T22:00:00");
+    expect(req.events[0].recurrence?.endIso).toBe("2026-09-01T00:00:00");
   });
 });

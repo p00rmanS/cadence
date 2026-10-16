@@ -7,7 +7,8 @@ import { describeGap } from "../../features/scheduling/issues";
 import { isDevotional, isOnBreak, weeklyLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
-import { DAYS, DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
+import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
+import { openDays } from "../../features/scheduling/days";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
@@ -66,8 +67,12 @@ export function ScheduleGrid({
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
   const wide = useMediaQuery("(min-width: 640px)");
-  const [mobileDay, setMobileDay] = useState<Day>("mon");
-  const visibleDays: Day[] = wide ? DAYS : [mobileDay];
+  // Saturday shows only when the office is open on Saturdays (Settings → Days open).
+  const days = useMemo(() => openDays(settings), [settings]);
+  const [chosenMobileDay, setMobileDay] = useState<Day>("mon");
+  // If the office stops opening on the day picked on a phone (Saturday), fall back to Monday.
+  const mobileDay = days.includes(chosenMobileDay) ? chosenMobileDay : days[0];
+  const visibleDays: Day[] = wide ? days : [mobileDay];
 
   const [active, setActive] = useState({ row: 0, col: 0 });
   const [info, setInfo] = useState<{ day: Day; start: number } | null>(null);
@@ -97,7 +102,7 @@ export function ScheduleGrid({
   // Everything a cell needs, worked out once per data change (not on every hover).
   const model = useMemo(() => {
     const out = new Map<string, CellModel>();
-    for (const day of DAYS) {
+    for (const day of days) {
       for (const start of slots) {
         const staffIds = staffAt(day, start, assignments);
         const names = staffIds.map((id) => studentById.get(id)?.name ?? "Unknown");
@@ -109,7 +114,7 @@ export function ScheduleGrid({
           violation && (violation.code === "class_conflict" ||
             violation.code === "unavailable" ||
             violation.code === "after_cutoff" ||
-            violation.code === "lunch_conflict" ||
+            violation.code === "break_conflict" ||
           violation.code === "devotional"),
         );
 
@@ -278,7 +283,7 @@ export function ScheduleGrid({
 
       {!wide && (
         <div role="group" aria-label="Choose a day" className="flex gap-1">
-          {DAYS.map((d) => (
+          {days.map((d) => (
             <button
               key={d}
               type="button"
@@ -295,7 +300,7 @@ export function ScheduleGrid({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-panel">
+      <div className="min-h-0 flex-1 overflow-auto soft-shadow rounded-xl border border-line bg-panel">
         <table role="grid" aria-label="Weekly schedule. Use the arrow keys to move between boxes." className="w-full min-w-[280px] select-none border-separate border-spacing-0">
           <thead>
             <tr>
@@ -303,7 +308,7 @@ export function ScheduleGrid({
                 <span className="sr-only">Time</span>
               </th>
               {visibleDays.map((day) => (
-                <th key={day} scope="col" className="sticky top-0 z-10 bg-panel p-1.5 text-left text-xs font-semibold text-muted">
+                <th key={day} scope="col" className="sticky top-0 z-10 border-b border-line bg-panel px-1.5 py-2 text-left text-[11px] font-semibold uppercase tracking-widest text-muted">
                   <span aria-hidden>{DAY_LABEL[day]}</span>
                   <span className="sr-only">{DAY_LONG[day]}</span>
                 </th>
@@ -316,8 +321,8 @@ export function ScheduleGrid({
                 <th
                   scope="row"
                   className={clsx(
-                    "sticky left-0 z-10 whitespace-nowrap bg-panel p-1 pr-2 text-right text-xs",
-                    slot % 60 === 0 ? "font-semibold text-ink" : "font-normal text-muted",
+                    "sticky left-0 z-10 whitespace-nowrap bg-panel p-1 pr-2 text-right align-top text-xs",
+                    slot % 60 === 0 ? "border-t border-line/70 font-semibold text-ink" : "border-t border-dashed border-line/40 font-normal text-muted",
                   )}
                 >
                   {formatMinutes(slot)}
@@ -326,7 +331,11 @@ export function ScheduleGrid({
                   const cell = model.get(`${day}|${slot}`)!;
                   const isActive = r === row && c === col;
                   return (
-                    <td key={day} role="gridcell" className="p-[3px] align-middle">
+                    <td
+                      key={day}
+                      role="gridcell"
+                      className={clsx("border-l border-line/50 p-[3px] align-middle", slot % 60 === 0 ? "border-t border-line/70" : "border-t border-dashed border-line/40")}
+                    >
                       <button
                         type="button"
                         ref={(el) => {
@@ -350,8 +359,8 @@ export function ScheduleGrid({
                           activate(day, slot, e.shiftKey);
                         }}
                         className={clsx(
-                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-md px-1 text-left transition-colors",
-                          cell.closed ? "bg-line/40" : cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg",
+                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-lg px-1 text-left transition duration-100 ease-out",
+                          cell.closed ? "bg-line/40" : cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg/70",
                           cell.mine && "ring-2 ring-inset ring-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
