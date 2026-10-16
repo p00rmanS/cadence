@@ -137,3 +137,19 @@ describe("SettingsDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe("SettingsDialog: easier to see and click", () => {
+  it("has a box for bigger buttons and one for high contrast, and they change the page", async () => {
+    window.localStorage.clear();
+    function Harness() {
+      const display = useDisplayPrefs();
+      return <SettingsDialog settings={makeSettings()} onSaveRules={() => {}} theme="system" onThemeChange={() => {}} display={display} onClose={() => {}} />;
+    }
+    render(<Harness />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: /bigger buttons and more space/i }));
+    await user.click(screen.getByRole("checkbox", { name: /high contrast/i }));
+    expect(document.documentElement.getAttribute("data-comfort")).toBe("roomy");
+    expect(document.documentElement.getAttribute("data-contrast")).toBe("high");
+  });
+});

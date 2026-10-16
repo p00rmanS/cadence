@@ -5,10 +5,13 @@ import { useCallback, useEffect, useState } from "react";
  *  DISPLAY PREFERENCES: TEXT SIZE AND "REDUCE MOTION"
  * ============================================================================
  * Two comfort settings that belong to the person using the computer, not to the schedule:
- *  - how big the writing is (many managers are older, and bigger text is easier on the eyes), and
+ *  - how big the writing is (many managers are older, and bigger text is easier on the eyes),
+ *  - whether buttons are bigger with more room between them (easier to hit with a shaky hand or a trackpad),
+ *  - whether to use high-contrast colors (black and white with strong edges), and
  *  - whether to switch off the animations (calmer for some people).
  * Like the color theme (`useTheme.ts`), they are remembered in this browser's `localStorage` and
- * applied by putting a small marker on the page's <html> tag (`data-text-size`, `data-motion`).
+ * applied by putting a small marker on the page's <html> tag (`data-text-size`, `data-comfort`,
+ * `data-contrast`, `data-motion`).
  * `src/styles/app.css` reads those markers: everything in the app is sized in `rem` units, which
  * scale with the <html> text size, so one change makes the whole app bigger or smaller together.
  * They are NOT part of a schedule backup: a bigger font is a setting of this computer, not of the data.
@@ -32,6 +35,8 @@ export const TEXT_SCALE: Record<TextSize, number> = { small: 15 / 17, medium: 1,
 
 const TEXT_SIZE_KEY = "cadence:textSize";
 const REDUCE_MOTION_KEY = "cadence:reduceMotion";
+const ROOMY_KEY = "cadence:roomy";
+const HIGH_CONTRAST_KEY = "cadence:highContrast";
 
 /** True when `value` is one of the text sizes above (anything else saved in the browser is ignored). */
 function isTextSize(value: unknown): value is TextSize {
@@ -57,11 +62,18 @@ function save(key: string, value: string): void {
 }
 
 /** Puts the choices on the <html> tag, where the stylesheet picks them up. */
-function applyToPage(textSize: TextSize, reduceMotion: boolean): void {
+function applyToPage(choices: { textSize: TextSize; reduceMotion: boolean; roomy: boolean; highContrast: boolean }): void {
   const root = document.documentElement;
-  root.setAttribute("data-text-size", textSize);
-  if (reduceMotion) root.setAttribute("data-motion", "reduced");
-  else root.removeAttribute("data-motion");
+  root.setAttribute("data-text-size", choices.textSize);
+  setMarker(root, "data-motion", choices.reduceMotion ? "reduced" : null);
+  setMarker(root, "data-comfort", choices.roomy ? "roomy" : null);
+  setMarker(root, "data-contrast", choices.highContrast ? "high" : null);
+}
+
+/** Sets an attribute on the page, or removes it when the value is null (the "off" state has no marker at all). */
+function setMarker(root: HTMLElement, name: string, value: string | null): void {
+  if (value === null) root.removeAttribute(name);
+  else root.setAttribute(name, value);
 }
 
 /** The current display choices and ways to change them. Loads the saved choices and saves every change. */
@@ -71,10 +83,12 @@ export function useDisplayPrefs() {
     return isTextSize(saved) ? saved : "medium";
   });
   const [reduceMotion, setReduceMotionState] = useState<boolean>(() => readSaved(REDUCE_MOTION_KEY) === "1");
+  const [roomy, setRoomyState] = useState<boolean>(() => readSaved(ROOMY_KEY) === "1");
+  const [highContrast, setHighContrastState] = useState<boolean>(() => readSaved(HIGH_CONTRAST_KEY) === "1");
 
   useEffect(() => {
-    applyToPage(textSize, reduceMotion);
-  }, [textSize, reduceMotion]);
+    applyToPage({ textSize, reduceMotion, roomy, highContrast });
+  }, [textSize, reduceMotion, roomy, highContrast]);
 
   const setTextSize = useCallback((size: TextSize) => {
     setTextSizeState(size);
@@ -85,7 +99,16 @@ export function useDisplayPrefs() {
     save(REDUCE_MOTION_KEY, on ? "1" : "0");
   }, []);
 
-  return { textSize, setTextSize, reduceMotion, setReduceMotion };
+  const setRoomy = useCallback((on: boolean) => {
+    setRoomyState(on);
+    save(ROOMY_KEY, on ? "1" : "0");
+  }, []);
+  const setHighContrast = useCallback((on: boolean) => {
+    setHighContrastState(on);
+    save(HIGH_CONTRAST_KEY, on ? "1" : "0");
+  }, []);
+
+  return { textSize, setTextSize, reduceMotion, setReduceMotion, roomy, setRoomy, highContrast, setHighContrast };
 }
 
 /**

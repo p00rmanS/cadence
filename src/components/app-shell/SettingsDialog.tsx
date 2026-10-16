@@ -16,7 +16,7 @@ import { clsx } from "../../lib/clsx";
  * ============================================================================
  * One place for everything a manager can change, sorted into two tabs so each one stays short:
  *  - "Display": how Cadence looks on THIS computer: text size (Small to Extra large), light/dark
- *    colors, and switching animations off. These take effect the moment they are clicked and are
+ *    colors, bigger buttons, high-contrast colors, and switching animations off. These take effect the moment they are clicked and are
  *    remembered by the browser (see `hooks/useDisplayPrefs.ts` and `hooks/useTheme.ts`).
  *  - "Schedule rules": the office-wide rules (weekly hours, break hours, shortest shift, closing
  *    time). These belong to the schedule, so they have their own Save button (`RulesForm.tsx`).
@@ -130,6 +130,34 @@ export function SettingsDialog({ settings, onSaveRules, theme, onThemeChange, di
                 { value: "dark", label: "Dark" },
               ]}
             />
+          </section>
+
+          <section>
+            <h3 className="font-display text-base font-semibold">Easier to see and click</h3>
+            <label className="mt-2 flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={display.roomy}
+                onChange={(e) => display.setRoomy(e.target.checked)}
+                className="mt-1 h-5 w-5 shrink-0 accent-[rgb(var(--accent))]"
+              />
+              <span>
+                <span className="font-medium">Bigger buttons and more space</span>
+                <span className="block text-muted">Makes every button and list row taller, so they are easier to hit.</span>
+              </span>
+            </label>
+            <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={display.highContrast}
+                onChange={(e) => display.setHighContrast(e.target.checked)}
+                className="mt-1 h-5 w-5 shrink-0 accent-[rgb(var(--accent))]"
+              />
+              <span>
+                <span className="font-medium">High contrast</span>
+                <span className="block text-muted">Pure black and white with strong edges, for the clearest possible reading. Works with Light and Dark.</span>
+              </span>
+            </label>
           </section>
 
           <section>
