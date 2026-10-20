@@ -38,7 +38,9 @@ Superseded. Kept at `archive/shift-coverage-planner-v1.html`. See `docs/AUDIT.md
 - [ ] Try enhanced reading against the real OCR.space with a real key (only tested against a stand-in so far)
 - [ ] Try screenshot reading on real Workday screenshots (made-up samples only so far) and tune `ocr-text.ts`
 - [ ] Give Cadence its own web address (a GitHub organization for the team, or a custom domain), so other Pages sites on the same account can't read its saved data (`docs/GITHUB-SETTINGS.md`, "Shared address"). A Vercel deployment already has its own address (`<project>.vercel.app`).
-- [ ] Show `uncoveredStaffHours` and `openingShiftMissing` in Schedule health (front end; the numbers already exist)
+- [x] Show `uncoveredStaffHours` and `openingShiftMissing` in Schedule health ("More numbers"), sharing code with the server check
+- [x] Rules: weekly hour limit during a break and shortest shift allowed are now settings (were fixed constants)
+- [x] Settings window (gear) with a Display tab (text size Small to Extra large, colors, Reduce motion) and a Schedule rules tab; bigger text switches to the one-column layout sooner
 - [ ] Run the n8n templates against a live n8n (James is standing up hosting/credentials/AI provider)
 - [x] Declutter the header, banner and student cards: one visible primary action, icon-only secondary actions, settings collapsed by default, less always-on text (`docs/DECISIONS.md` 2026-09-23)
 - [x] "Paste existing shifts": import a schedule written as plain text (the engagement letter's supervisor-text case), previewed line by line, rule-checked, one Undo step (`shift-import.ts`)

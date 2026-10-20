@@ -9,7 +9,7 @@ import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import { openDays } from "../../features/scheduling/days";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useLayoutQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
@@ -66,7 +66,7 @@ export function ScheduleGrid({
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
-  const wide = useMediaQuery("(min-width: 640px)");
+  const wide = useLayoutQuery(640);
   // Saturday shows only when the office is open on Saturdays (Settings → Days open).
   const days = useMemo(() => openDays(settings), [settings]);
   const [chosenMobileDay, setMobileDay] = useState<Day>("mon");

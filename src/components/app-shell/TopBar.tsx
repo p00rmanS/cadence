@@ -11,7 +11,6 @@ import type { ScheduleSettings } from "../../features/scheduling/types";
 import { breakLimit } from "../../features/scheduling/term";
 import { MIN_STAFF_OPTIONS, OFFICE_HOURS_OPTIONS } from "../../features/scheduling/constants";
 import { formatRange } from "../../features/scheduling/time";
-import type { TextSize } from "../../hooks/useTextSize";
 
 /** One office-hours choice as a single value ("420-1440" = 7:00am to midnight), so a button row can hold it. */
 function hoursKey(openTime: number, closeTime: number): string {
@@ -48,12 +47,10 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   onOpenHelp: () => void;
-  onOpenRules: () => void;
+  onOpenSettings: () => void;
   onOpenShare: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
-  textSize: TextSize;
-  onTextSizeChange: (size: TextSize) => void;
 };
 
 /** The bar across the top: the main "Fill schedule for me" button, undo/redo, help, and the collapsible settings. */
@@ -74,12 +71,10 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenHelp,
-  onOpenRules,
+  onOpenSettings,
   onOpenShare,
   theme,
   onThemeChange,
-  textSize,
-  onTextSizeChange,
 }: Props) {
   const [showOptions, setShowOptions] = useState(false);
 
@@ -115,7 +110,7 @@ export function TopBar({
           </HelpTip>
         </div>
         <Button variant="ghost" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
-          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Settings
+          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Plan options
           <ChevronDown className={clsx("h-4 w-4 transition-transform", showOptions && "rotate-180")} aria-hidden />
         </Button>
 
@@ -130,7 +125,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onOpenShare}>
             <CalendarDays className="h-4 w-4" aria-hidden /> Save &amp; share
           </Button>
-          <Button variant="ghost" onClick={onOpenRules} aria-label="Rules" title="Rules">
+          <Button variant="ghost" onClick={onOpenSettings} aria-label="Settings" title="Settings (text size, colors, rules)">
             <Settings className="h-4 w-4" aria-hidden />
           </Button>
           <Button variant="ghost" onClick={onOpenHelp} aria-label="Help" title="Help">
@@ -195,23 +190,6 @@ export function TopBar({
             value={settings.minStaffPerSlot}
             onChange={(v) => onSettingsChange({ minStaffPerSlot: v })}
             options={MIN_STAFF_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
-          />
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium">
-            Text size
-            <HelpTip label="Text size">Makes all the words in Cadence smaller or bigger. Only this browser remembers it.</HelpTip>
-          </span>
-          <Segmented
-            label="Text size"
-            value={textSize}
-            onChange={onTextSizeChange}
-            options={[
-              { value: "small", label: "Small" },
-              { value: "normal", label: "Normal" },
-              { value: "large", label: "Large" },
-              { value: "xlarge", label: "Extra large" },
-            ]}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">

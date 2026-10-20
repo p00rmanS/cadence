@@ -63,7 +63,7 @@ describe("help content", () => {
 
   it("uses the exact button names people will see on screen", () => {
     const all = FAQ.flatMap((f) => f.answer).join(" ");
-    for (const label of ["Add student", "Fill schedule for me", "Rebuild automatic shifts", "Save & share", "Save a backup file", "Load a backup file", "Schedule health", "Rules", "Undo", "By student", "Copy as text", "Print", "Days off", "Add several at once", "Quick fix"]) {
+    for (const label of ["Add student", "Fill schedule for me", "Rebuild automatic shifts", "Save & share", "Save a backup file", "Load a backup file", "Schedule health", "Settings", "Undo", "By student", "Copy as text", "Print", "Days off", "Add several at once", "Quick fix"]) {
       expect(all, label).toContain(label);
     }
   });

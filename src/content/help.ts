@@ -165,6 +165,16 @@ export const FAQ: FaqItem[] = [
     keywords: ["fill", "gap", "suggest", "add", "pink", "empty", "who is free"],
   },
   {
+    id: "bigger-text",
+    topic: "Good to know",
+    question: "How do I make the writing bigger?",
+    answer: [
+      "Press the gear in the top bar (Settings), and on the Display tab pick Small, Medium, Large or Extra large. Everything gets bigger or smaller right away, and Cadence remembers your choice on this computer.",
+      "Bigger text needs more room, so on a smaller screen Cadence switches to one section at a time, with Students, Schedule and Health along the bottom. The same Display tab can also turn off the sliding and fading animations (Reduce motion) and switch between light and dark colors.",
+    ],
+    keywords: ["text", "font", "size", "bigger", "larger", "small", "read", "glasses", "zoom", "dark", "animation"],
+  },
+  {
     id: "why-cant-schedule",
     topic: "Rules",
     question: "Why won't it let me put someone in a box?",
@@ -180,7 +190,7 @@ export const FAQ: FaqItem[] = [
     question: "Can someone work more than their weekly hours?",
     answer: [
       "Class conflicts, late cutoffs and breaks can never be broken. But if a student is at their weekly hour limit or day limit, Cadence asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
-      "The default weekly limit is 19 hours. You can change it under Rules. Check your own employer's policy: Cadence doesn't know it.",
+      "The default weekly limit is 19 hours. You can change it in Settings, on the Schedule rules tab. Check your own employer's policy: Cadence doesn't know it.",
     ],
     keywords: ["override", "19", "limit", "hours", "overtime"],
   },
