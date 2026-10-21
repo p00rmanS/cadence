@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { KeyRound, LogOut } from "lucide-react";
 import { Button } from "../ui/Button";
+import { LogoLoader } from "../ui/LogoLoader";
 import { useManagerSession } from "../../hooks/useManagerSession";
 import { signInManager, signOutManager } from "../../services/automation/managerSession";
 
@@ -13,7 +14,7 @@ import { signInManager, signOutManager } from "../../services/automation/manager
  * into a short "Signed in as manager" line with a Sign out button. The passcode is kept only while
  * this tab is open (see `services/automation/managerSession.ts`).
  */
-export function ManagerSignIn({ purpose }: { purpose: string }) {
+export function ManagerSignIn({ purpose, serverUrl }: { purpose: string; serverUrl?: string }) {
   const signedIn = useManagerSession();
   const [passcode, setPasscode] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -24,7 +25,8 @@ export function ManagerSignIn({ purpose }: { purpose: string }) {
   async function handleSubmit() {
     if (!passcode || busy) return;
     setBusy(true);
-    const result = await signInManager(passcode);
+    // `serverUrl` is only given by "Try enhanced reading"; otherwise the usual server address is used.
+    const result = serverUrl === undefined ? await signInManager(passcode) : await signInManager(passcode, serverUrl);
     setBusy(false);
     setProblem(result);
     if (result === null) setPasscode("");
@@ -65,7 +67,7 @@ export function ManagerSignIn({ purpose }: { purpose: string }) {
           className="rounded-lg border border-line bg-bg p-2 text-sm"
         />
         <Button variant="secondary" disabled={busy || !passcode} onClick={() => void handleSubmit()}>
-          <KeyRound className="h-4 w-4" aria-hidden /> {busy ? "Checking…" : "Sign in"}
+          {busy ? <LogoLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" aria-hidden />} {busy ? "Checking…" : "Sign in"}
         </Button>
       </div>
       {problem && (

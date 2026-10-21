@@ -2,13 +2,13 @@ import { blockedBySlot, daySlots, hasOpeningShift, shiftRuns } from "./availabil
 import {
   MAX_SHIFT_MINUTES,
   MIN_OPENING_SHIFT_MINUTES,
-  MIN_SHIFT_MINUTES,
   OPENING_SHIFT_START,
   RELAXED_DAY_EXTRA_HOURS,
 } from "./constants";
-import { isDevotional, weeklyLimit } from "./term";
+import { isDevotional, minShiftMinutes, weeklyLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
+import { openDays } from "./days";
 import type {
   AutoFillExplanation,
   AutoFillResult,
@@ -150,7 +150,7 @@ function preferenceMismatches(student: Student, slotStarts: Minutes[]): number {
 
 /** Soft per-day hour cap so top-up doesn't pile every remaining hour onto one day. Never below one minimum-length shift. */
 function dayCapHours(student: Student, settings: ScheduleSettings): number {
-  return Math.max(MIN_SHIFT_MINUTES / 60, Math.ceil(weeklyLimit(settings) / student.daysPerWeek) + settings.slotMinutes / 60);
+  return Math.max(minShiftMinutes(settings) / 60, Math.ceil(weeklyLimit(settings) / student.daysPerWeek) + settings.slotMinutes / 60);
 }
 
 /** True when `a` should win over `b`: compares the first number, then the next only on a tie, and so on. */
@@ -185,7 +185,7 @@ function compareCandidates(a: Candidate, b: Candidate): number {
  * Phase 3 (top-up): bring everyone toward the weekly target, in the thinnest-covered
  *   time, preferring to extend an existing shift over starting a new one.
  *
- * Hard rules (class, cutoff, lunch, devotional, weekly limit, days per week, 2-hour
+ * Hard rules (class, cutoff, break, devotional, weekly limit, days per week, 2-hour
  * minimum shift) are never broken.
  *
  * During a break the weekly limit rises to 40 hours, and top-up aims for that full 40.
@@ -200,8 +200,10 @@ export function autoFill(
   // `let`, not `const`: phase 4 may rebuild the plan after moving part of a shift.
   let plan = new Plan(settings, base);
   const slots = daySlots(settings);
+  // Only the days the office is open get shifts (Saturday is a setting; see `days.ts`).
+  const days = openDays(settings);
   const slotHours = settings.slotMinutes / 60;
-  const minSlots = Math.ceil(MIN_SHIFT_MINUTES / settings.slotMinutes);
+  const minSlots = Math.ceil(minShiftMinutes(settings) / settings.slotMinutes);
   const maxSlots = Math.max(minSlots, Math.floor(MAX_SHIFT_MINUTES / settings.slotMinutes));
   const explanations: AutoFillExplanation[] = [];
   const limit = weeklyLimit(settings);
@@ -264,7 +266,7 @@ export function autoFill(
     const touches = before > 0 || after > 0;
     const splitShift = plan.hoursOn(student.id, day) > 0 && !touches;
     const mergedRun = len + before + after;
-    // Every shift must be at least MIN_SHIFT_MINUTES once joined to any shift it touches.
+    // Every shift must be at least the minimum shift length once joined to any shift it touches.
     if (mergedRun < minSlots) return null;
 
     let score = 0;
@@ -314,7 +316,7 @@ export function autoFill(
       });
       continue;
     }
-    const dayOrder = [...DAYS].sort(
+    const dayOrder = [...days].sort(
       (a, b) => plan.staff(a, OPENING_SHIFT_START) - plan.staff(b, OPENING_SHIFT_START) || DAYS.indexOf(a) - DAYS.indexOf(b),
     );
     let placed = false;
@@ -330,7 +332,7 @@ export function autoFill(
     if (!placed) {
       openingShiftUnmet.push({
         studentId: student.id,
-        reason: `No day has ${hoursLabel(Math.max(MIN_OPENING_SHIFT_MINUTES, MIN_SHIFT_MINUTES) / 60)} free in a row from ${formatMinutes(OPENING_SHIFT_START)} (classes, cutoff, lunch or hour limits are in the way).`,
+        reason: `No day has ${hoursLabel(Math.max(MIN_OPENING_SHIFT_MINUTES, minShiftMinutes(settings)) / 60)} free in a row from ${formatMinutes(OPENING_SHIFT_START)} (classes, cutoff, breaks or hour limits are in the way).`,
       });
     }
   }
@@ -343,7 +345,7 @@ export function autoFill(
   // staffed, then move to the next slot. This is why it's called "greedy": it
   // always takes the best option available right now, without looking ahead.
   // ---------------------------------------------------------------------------
-  for (const day of DAYS) {
+  for (const day of days) {
     for (let i = 0; i < slots.length; i++) {
       if (isDevotional(day, slots[i], settings)) continue;
       while (plan.staff(day, slots[i]) < settings.minStaffPerSlot) {
@@ -377,10 +379,10 @@ export function autoFill(
   // ---------------------------------------------------------------------------
   for (let studentIndex = 0; studentIndex < students.length; studentIndex++) {
     const student = students[studentIndex];
-    let guard = slots.length * DAYS.length;
+    let guard = slots.length * days.length;
     const findBest = (extraDayHours: number): Candidate | null => {
       let found: Candidate | null = null;
-      for (const day of DAYS) {
+      for (const day of days) {
         for (let len = 1; len <= maxSlots; len++) {
           for (let startIdx = 0; startIdx + len <= slots.length; startIdx++) {
             const c = evaluate(student, studentIndex, day, startIdx, len, "top-up", extraDayHours);
@@ -400,7 +402,7 @@ export function autoFill(
 
   // ---------------------------------------------------------------------------
   // PHASE 4 — close small shortfalls by moving part of a shift.
-  // Because no shift may be shorter than MIN_SHIFT_MINUTES, a student can end up
+  // Because no shift may be shorter than the minimum shift length, a student can end up
   // a little short (say 18.5 of 19): the last half hour can't be a shift of its
   // own. So we shorten one of their automatic shifts and give them a new, longer
   // shift elsewhere, so the total comes out exact. The part we shorten must be
@@ -439,7 +441,7 @@ export function autoFill(
       const keptSlots = slotSet(kept, student.id);
       const daysUsed = new Set(kept.filter((b) => b.studentId === student.id).map((b) => b.day));
       const len = missing + trim.boxes.length;
-      for (const day of DAYS) {
+      for (const day of days) {
         if (!daysUsed.has(day) && daysUsed.size >= student.daysPerWeek) continue;
         for (let startIdx = 0; startIdx + len <= slots.length; startIdx++) {
           const newBoxes = slots.slice(startIdx, startIdx + len);
@@ -460,7 +462,7 @@ export function autoFill(
   }
 
   for (const student of students) {
-    let guard = DAYS.length * 2;
+    let guard = days.length * 2;
     while (plan.hours(student.id) < aim && guard-- > 0) {
       const move = findMove(student);
       if (!move) break;
@@ -492,7 +494,7 @@ export function autoFill(
         start,
         end,
         phase: "top-up",
-        reason: `${moved}${DAY_LABEL[move.day]} ${formatRange(start, end)} so ${student.name} reaches ${aim} hours without a shift under ${hoursLabel(MIN_SHIFT_MINUTES / 60)}.`,
+        reason: `${moved}${DAY_LABEL[move.day]} ${formatRange(start, end)} so ${student.name} reaches ${aim} hours without a shift under ${hoursLabel(minShiftMinutes(settings) / 60)}.`,
       });
     }
   }
@@ -501,7 +503,7 @@ export function autoFill(
     .filter((student) => plan.hours(student.id) < aim)
     .map((student) => ({
       studentId: student.id,
-      reason: `${student.name}'s classes, cutoff, lunch, days-per-week and the ${MIN_SHIFT_MINUTES / 60}-hour minimum shift leave room for only ${plan.hours(student.id)} of ${aim} hours.`,
+      reason: `${student.name}'s classes, cutoff, breaks, days-per-week and the ${minShiftMinutes(settings) / 60}-hour minimum shift leave room for only ${plan.hours(student.id)} of ${aim} hours.`,
     }));
 
   return {

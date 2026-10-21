@@ -8,8 +8,8 @@ import {
   shiftRuns,
   workedDayCount,
 } from "./availability";
-import { MIN_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
-import { weeklyLimit } from "./term";
+import { OPENING_SHIFT_START } from "./constants";
+import { minShiftMinutes, weeklyLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
 import type { ConstraintViolationCode, Day, Minutes, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "./types";
@@ -26,17 +26,17 @@ import type { ConstraintViolationCode, Day, Minutes, ScheduleIssue, ScheduleSett
  * why not" text used throughout the app.
  */
 
-const SLOT_LEVEL_TEXT: Record<"class_conflict" | "unavailable" | "after_cutoff" | "lunch_conflict" | "devotional", string> = {
+const SLOT_LEVEL_TEXT: Record<"class_conflict" | "unavailable" | "after_cutoff" | "break_conflict" | "devotional", string> = {
   class_conflict: "has a class then",
   unavailable: "is marked unavailable then",
   after_cutoff: "is scheduled past their cutoff time",
-  lunch_conflict: "is scheduled during their lunch break",
+  break_conflict: "is scheduled during their break",
   devotional: "is scheduled during Tuesday devotional",
 };
 
 /**
  * Finds every rule the CURRENT schedule breaks. This matters because rules can be
- * broken after the fact: editing a student's class times, cutoff or lunch does not
+ * broken after the fact: editing a student's class times, cutoff or breaks does not
  * move shifts that were already placed. Consecutive slots with the same problem are
  * merged into one readable issue ("Mon 9:00am–10:30am").
  */
@@ -81,14 +81,14 @@ export function findIssues(students: Student[], assignments: ShiftBlock[], setti
     // A shift is judged as a whole: 9:00–10:00am is too short even though each box on its own is fine.
     for (const day of DAYS) {
       for (const run of shiftRuns(student.id, day, assignments, settings)) {
-        if (run.end - run.start >= MIN_SHIFT_MINUTES) continue;
+        if (run.end - run.start >= minShiftMinutes(settings)) continue;
         issues.push({
           code: "shift_too_short",
           studentId: student.id,
           day,
           start: run.start,
           end: run.end,
-          message: `${student.name}'s shift on ${DAY_LABEL[day]} ${formatRange(run.start, run.end)} is too short. Shifts must be at least ${hoursLabel(MIN_SHIFT_MINUTES / 60)}.`,
+          message: `${student.name}'s shift on ${DAY_LABEL[day]} ${formatRange(run.start, run.end)} is too short. Shifts must be at least ${hoursLabel(minShiftMinutes(settings) / 60)}.`,
           overridden: false,
         });
       }
@@ -165,7 +165,7 @@ export function explainSlot(
               ? "can't stay this late"
               : slot.code === "devotional"
                 ? "devotional"
-                : "on lunch";
+                : "on a break";
       return { student, reason: slot.code, text };
     }
     if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
@@ -188,9 +188,9 @@ export type GapSuggestion = {
 
 /**
  * Who could fill an empty stretch, best first. For each student it plays the stretch forward
- * one box at a time under every rule (class, lunch, cutoff, weekly hours, days per week), so
+ * one box at a time under every rule (class, break, cutoff, weekly hours, days per week), so
  * "Ana can take 3 of the 4 half-hours" is true, not a guess. Students who can't take any of it
- * are left out, and so is anyone who would end up with a shift shorter than MIN_SHIFT_MINUTES. Ties go to whoever has fewer hours so far, then roster order.
+ * are left out, and so is anyone who would end up with a shift shorter than the minimum shift length. Ties go to whoever has fewer hours so far, then roster order.
  */
 export function suggestFillers(
   students: Student[],
@@ -213,7 +213,7 @@ export function suggestFillers(
       slots++;
     }
     const leavesShortShift = shiftRuns(student.id, day, simulated, settings).some(
-      (run) => run.end > start && run.start < end && run.end - run.start < MIN_SHIFT_MINUTES,
+      (run) => run.end > start && run.start < end && run.end - run.start < minShiftMinutes(settings),
     );
     if (slots > 0 && !leavesShortShift) out.push({ student, slots, total, hours: assignedHours(student.id, assignments, settings), index });
   });

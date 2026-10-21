@@ -1,12 +1,12 @@
 import { mergeContiguousBlocks, scheduleVersion } from "../../features/scheduling/blocks";
-import { countWeeklyOccurrences, excludedOccurrences, isSemesterConfigured } from "../../features/calendar/ics";
+import { countWeeklyOccurrences, excludedOccurrences, isSemesterConfigured, rollOverMidnight } from "../../features/calendar/ics";
 import type { Day, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /**
  * ============================================================================
  *  THE "CONTRACT" WITH THE CALENDAR-PUBLISHING SERVER (n8n)
  * ============================================================================
- * Cadence itself never talks to Google Calendar. Instead, when the manager
+ * Syncro itself never talks to Google Calendar. Instead, when the manager
  * presses "Save & share" -> publish, this app sends a plain description of
  * the approved shifts to a separate server (an automation tool called n8n —
  * see `docs/N8N_ARCHITECTURE.md` and the `n8n/` folder) which is responsible
@@ -127,7 +127,7 @@ export function scheduleForServer(
       daysPerWeek: s.daysPerWeek,
       busy: s.busy,
       latestEnd: s.latestEnd,
-      lunchStart: s.lunchStart,
+      breaks: s.breaks,
       needsOpeningShift: s.needsOpeningShift,
     })),
     assignments,
@@ -137,7 +137,9 @@ export function scheduleForServer(
 }
 
 /** "2026-10-06" + 540 minutes -> "2026-10-06T09:00:00" (no timezone offset — paired with a separate `timeZone` field, same convention as the .ics export). */
-function isoLocal(date: Date, minutes: number): string {
+function isoLocal(rawDate: Date, rawMinutes: number): string {
+  // A shift ending at midnight is 1440 minutes; "24:00" is not a valid time, so it becomes 00:00 the next day.
+  const { date, minutes } = rollOverMidnight(rawDate, rawMinutes);
   const y = date.getUTCFullYear();
   const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
   const d = String(date.getUTCDate()).padStart(2, "0");

@@ -5,7 +5,7 @@ import { getAutomationClient } from "../services/automation/n8nClient";
 import { makeSettings, makeStudent, run } from "./testkit";
 
 /**
- * Tests for the browser side of signing in and talking to the ShiftFit server
+ * Tests for the browser side of signing in and talking to the Syncro server
  * (`services/automation/managerSession.ts` and `n8nClient.ts`). The server is replaced by a pretend
  * `fetch` that records each request, so the tests can check the passcode is sent correctly and that
  * a refused passcode is forgotten.

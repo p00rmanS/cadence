@@ -3,13 +3,19 @@ import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizont
 import { clsx } from "../../lib/clsx";
 import { Segmented } from "../ui/Segmented";
 import { Button } from "../ui/Button";
-import { CadenceLogo } from "../ui/CadenceLogo";
+import { SyncroLogo } from "../ui/SyncroLogo";
 import { HelpTip } from "../help/HelpTip";
 import { ThemeControl } from "./ThemeControl";
 import type { ThemeChoice } from "../../hooks/useTheme";
 import type { ScheduleSettings } from "../../features/scheduling/types";
-import { BREAK_WEEKLY_HOURS, MIN_STAFF_OPTIONS, OPEN_TIME_OPTIONS } from "../../features/scheduling/constants";
-import { formatMinutes } from "../../features/scheduling/time";
+import { breakLimit } from "../../features/scheduling/term";
+import { MIN_STAFF_OPTIONS, OFFICE_HOURS_OPTIONS } from "../../features/scheduling/constants";
+import { formatRange } from "../../features/scheduling/time";
+
+/** One office-hours choice as a single value ("420-1440" = 7:00am to midnight), so a button row can hold it. */
+function hoursKey(openTime: number, closeTime: number): string {
+  return `${openTime}-${closeTime}`;
+}
 
 /**
  * The header bar shown on every screen. Deliberately built around ONE clear
@@ -41,7 +47,7 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   onOpenHelp: () => void;
-  onOpenRules: () => void;
+  onOpenSettings: () => void;
   onOpenShare: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
@@ -65,7 +71,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenHelp,
-  onOpenRules,
+  onOpenSettings,
   onOpenShare,
   theme,
   onThemeChange,
@@ -73,13 +79,12 @@ export function TopBar({
   const [showOptions, setShowOptions] = useState(false);
 
   return (
-    <header className="border-b border-line bg-panel">
+    <header className="soft-shadow relative z-10 border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex items-center gap-2">
-          <CadenceLogo className="h-9 w-9 shrink-0" />
+          <SyncroLogo className="h-9 w-9 shrink-0" />
           <div>
-            <h1 className="font-display text-lg font-semibold leading-none">Cadence</h1>
-            <p className="hidden text-xs text-muted sm:block">Work schedules that fit around classes</p>
+            <h1 className="font-display text-lg font-semibold leading-none">Syncro</h1>
           </div>
         </div>
 
@@ -100,11 +105,11 @@ export function TopBar({
           <HelpTip label="Semester or break">
             <b>Semester:</b> nobody works during Tuesday devotional (11am–12pm), and the weekly limit is {settings.weeklyTargetHours} hours.
             <br />
-            <b>Break:</b> 11am–12pm on Tuesday is open, and students may work up to {BREAK_WEEKLY_HOURS} hours a week.
+            <b>Break:</b> 11am–12pm on Tuesday is open, and students may work up to {breakLimit(settings)} hours a week.
           </HelpTip>
         </div>
         <Button variant="ghost" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
-          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Settings
+          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Plan options
           <ChevronDown className={clsx("h-4 w-4 transition-transform", showOptions && "rotate-180")} aria-hidden />
         </Button>
 
@@ -119,7 +124,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onOpenShare}>
             <CalendarDays className="h-4 w-4" aria-hidden /> Save &amp; share
           </Button>
-          <Button variant="ghost" onClick={onOpenRules} aria-label="Rules" title="Rules">
+          <Button variant="ghost" onClick={onOpenSettings} aria-label="Settings" title="Settings (text size, colors, rules)">
             <Settings className="h-4 w-4" aria-hidden />
           </Button>
           <Button variant="ghost" onClick={onOpenHelp} aria-label="Help" title="Help">
@@ -140,15 +145,36 @@ export function TopBar({
           <span className="font-medium">
             Office hours
             <HelpTip label="Office hours">
-              The hours someone must be working. Pick when the office opens. If you pick 8:00am, the 7:00am row is hidden, but
-              any 7:00am shifts already placed still count toward that student&apos;s hours.
+              The hours someone must be working: opening at 7:00am or 8:00am, closing at 5:00pm or midnight (12:00am). Hours outside
+              the choice are hidden from the grid, but any shifts already placed there stay saved and still count toward hours.
             </HelpTip>
           </span>
           <Segmented
             label="Office hours"
-            value={settings.openTime}
-            onChange={(v) => onSettingsChange({ openTime: v })}
-            options={OPEN_TIME_OPTIONS.map((m) => ({ value: m, label: `${formatMinutes(m)}–${formatMinutes(settings.closeTime)}` }))}
+            value={hoursKey(settings.openTime, settings.closeTime)}
+            onChange={(key) => {
+              const [openTime, closeTime] = key.split("-").map(Number);
+              onSettingsChange({ openTime, closeTime });
+            }}
+            options={OFFICE_HOURS_OPTIONS.map((h) => ({ value: hoursKey(h.openTime, h.closeTime), label: formatRange(h.openTime, h.closeTime) }))}
+          />
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium">
+            Days open
+            <HelpTip label="Days open">
+              Whether the office is open on Saturday. Saturday shows on the grid, counts toward coverage and gets shifts from
+              &ldquo;Fill schedule for me&rdquo; only when it is open.
+            </HelpTip>
+          </span>
+          <Segmented
+            label="Days open"
+            value={settings.openDays ?? "mon-fri"}
+            onChange={(v) => onSettingsChange({ openDays: v })}
+            options={[
+              { value: "mon-fri", label: "Mon–Fri" },
+              { value: "mon-sat", label: "Mon–Sat" },
+            ]}
           />
         </div>
         <div className="flex items-center gap-2 text-sm">
@@ -169,7 +195,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onImportShifts} disabled={!hasStudents} title={hasStudents ? "Paste a schedule you already wrote as text" : "Add a student first"}>
             Paste existing shifts
           </Button>
-          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts Cadence added. Yours stay." : "There are no automatic shifts yet"}>
+          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts Syncro added. Yours stay." : "There are no automatic shifts yet"}>
             Rebuild automatic shifts
           </Button>
           <Button variant="secondary" onClick={onClearShifts} disabled={!hasShifts}>
