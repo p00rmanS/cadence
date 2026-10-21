@@ -7,7 +7,7 @@ import type { Day, Minutes, Student } from "./types";
  * ============================================================================
  * Supervisors often already have a schedule written as plain text ("Noa K.: MWF 9:00am-1:00pm")
  * in an email, message or spreadsheet. This turns that text into a preview list of shifts,
- * matched to students already in ShiftFit by name. It only READS text — it never changes the
+ * matched to students already in Syncro by name. It only READS text — it never changes the
  * schedule. Placing the shifts (and refusing any that break a rule) is done later by the store,
  * so the same rules apply as when a manager clicks the grid.
  *
@@ -23,7 +23,7 @@ export type ShiftImportRow = {
   /** 1-based line number in what was pasted, so a problem can be pointed at. */
   line: number;
   name: string;
-  /** Set when the name matched exactly one student already in ShiftFit. */
+  /** Set when the name matched exactly one student already in Syncro. */
   studentId: string | null;
   shifts: ImportedShift[];
   errors: string[];
@@ -85,8 +85,8 @@ export function parseShiftText(text: string, students: Student[], slotMinutes: n
     const wanted = split.name.toLowerCase();
     const matches = students.filter((s) => s.name.trim().toLowerCase() === wanted);
     if (!split.name) errors.push("There is no name at the start of this line.");
-    else if (matches.length === 0) errors.push(`No student named "${split.name}" is in ShiftFit yet. Add them first.`);
-    else if (matches.length > 1) errors.push(`More than one student is named "${split.name}", so ShiftFit can't tell which one you mean.`);
+    else if (matches.length === 0) errors.push(`No student named "${split.name}" is in Syncro yet. Add them first.`);
+    else if (matches.length > 1) errors.push(`More than one student is named "${split.name}", so Syncro can't tell which one you mean.`);
 
     const pieces = split.times.split(/;/).map((p) => p.trim()).filter(Boolean);
     if (!pieces.length) errors.push("No shift times were found on this line.");

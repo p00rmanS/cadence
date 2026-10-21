@@ -336,7 +336,7 @@ describe("n8n: finding and removing old events, run for real", () => {
     expect(records.shiftfitSyncMap).toEqual({ c: "g-c" });
   });
 
-  it("requires a password on every webhook, so only the ShiftFit gateway can call them", () => {
+  it("requires a password on every webhook, so only the Syncro gateway can call them", () => {
     for (const file of ["shiftfit-publish.json", "shiftfit-interpret.json", "shiftfit-generate.json"]) {
       const workflow = JSON.parse(readFileSync(`n8n/${file}`, "utf8")) as { nodes: N8nNode[] };
       const webhooks = workflow.nodes.filter((n) => n.type === "n8n-nodes-base.webhook");

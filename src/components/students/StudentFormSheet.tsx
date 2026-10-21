@@ -132,7 +132,7 @@ export function StudentFormSheet({
   return (
     <Modal
       title={student ? `Edit ${student.name}` : "Add a student"}
-      description="Tell Cadence when they have class and any limits. You can change this later."
+      description="Tell Syncro when they have class and any limits. You can change this later."
       onClose={onClose}
       footer={
         <>
@@ -229,7 +229,7 @@ export function StudentFormSheet({
             </label>
             <HelpTip label="Other times they can't work">
               Use this for another job, appointments, practice or anything else that is not a class. Write it the same way as
-              class times, like <b>W 2:00pm-4:00pm</b>. Cadence keeps them out of these times too.
+              class times, like <b>W 2:00pm-4:00pm</b>. Syncro keeps them out of these times too.
             </HelpTip>
           </div>
           <textarea
@@ -280,7 +280,7 @@ export function StudentFormSheet({
                 They must leave by
               </label>
               <HelpTip label="Must leave by">
-                The latest time they can work. Cadence won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
+                The latest time they can work. Syncro won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
               </HelpTip>
             </div>
             <select id="latest" value={latestEnd} onChange={(e) => setLatestEnd(Number(e.target.value))} className={inputCls}>

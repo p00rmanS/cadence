@@ -9,7 +9,7 @@ import type { ExtractedSchedule } from "./schemas";
  * ============================================================================
  *  TURNING PASTED TEXT OR A SCREENSHOT INTO CLASS TIMES
  * ============================================================================
- * Text is always read right here in the browser (`parser.ts`). A screenshot is sent to the ShiftFit
+ * Text is always read right here in the browser (`parser.ts`). A screenshot is sent to the Syncro
  * server only when one is configured AND a manager has signed in; the server passes it to the
  * reading service (n8n + an AI provider). Whatever comes back is checked by `schemas.ts` and shown
  * for review before anything is saved.
@@ -76,7 +76,7 @@ export async function extractSchedule(input: { text: string; image?: File | null
     form.append("requestId", createId("req"));
     form.append("image", input.image);
     form.append("text", input.text.slice(0, 4000));
-    // Goes to the ShiftFit server (src/server/gateway.ts), which checks the passcode and passes it on to n8n.
+    // Goes to the Syncro server (src/server/gateway.ts), which checks the passcode and passes it on to n8n.
     const res = await fetch(`${endpoint}/api/interpret`, {
       method: "POST",
       headers: { authorization: `Bearer ${passcode}` },

@@ -15,7 +15,7 @@ import { clsx } from "../../lib/clsx";
  *  THE SETTINGS WINDOW (opened by the gear in the header)
  * ============================================================================
  * One place for everything a manager can change, sorted into two tabs so each one stays short:
- *  - "Display": how Cadence looks on THIS computer: text size (Small to Extra large), light/dark
+ *  - "Display": how Syncro looks on THIS computer: text size (Small to Extra large), light/dark
  *    colors, bigger buttons, high-contrast colors, and switching animations off. These take effect the moment they are clicked and are
  *    remembered by the browser (see `hooks/useDisplayPrefs.ts` and `hooks/useTheme.ts`).
  *  - "Schedule rules": the office-wide rules (weekly hours, break hours, shortest shift, closing
@@ -83,7 +83,7 @@ export function SettingsDialog({ settings, onSaveRules, theme, onThemeChange, di
   }
 
   return (
-    <Modal title="Settings" description="Make Cadence comfortable to read, and change the office rules." onClose={onClose} size="lg">
+    <Modal title="Settings" description="Make Syncro comfortable to read, and change the office rules." onClose={onClose} size="lg">
       <div role="tablist" aria-label="Settings sections" className="mb-4 flex gap-1 border-b border-line">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
@@ -110,7 +110,7 @@ export function SettingsDialog({ settings, onSaveRules, theme, onThemeChange, di
         <div id="settings-panel-display" role="tabpanel" aria-labelledby="settings-tab-display" className="anim-fade-quick space-y-6">
           <section>
             <h3 className="font-display text-base font-semibold">Text size</h3>
-            <p className="mb-2 text-sm text-muted">Makes everything in Cadence bigger or smaller. It changes right away and is remembered on this computer.</p>
+            <p className="mb-2 text-sm text-muted">Makes everything in Syncro bigger or smaller. It changes right away and is remembered on this computer.</p>
             <TextSizePicker value={display.textSize} onChange={display.setTextSize} />
             <p className="mt-3 rounded-lg bg-bg p-3 text-sm">
               <span className="font-semibold">Mon 9:00am–11:00am</span> · Noa K. works the front desk. This line is how normal writing will look.

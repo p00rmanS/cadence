@@ -197,7 +197,7 @@ export function App() {
         <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-bg px-4 py-2 text-sm sm:px-6">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warn" aria-hidden />
           <p className="min-w-0 flex-1">
-            Your browser won&apos;t let Cadence save automatically right now (private mode or full storage). Your work is safe on screen, but it would be lost if you close this tab. Save a
+            Your browser won&apos;t let Syncro save automatically right now (private mode or full storage). Your work is safe on screen, but it would be lost if you close this tab. Save a
             backup file now.
           </p>
           <Button variant="secondary" onClick={() => setDialog({ kind: "share" })}>
@@ -210,7 +210,7 @@ export function App() {
         <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-bg px-4 py-2 text-sm sm:px-6">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warn" aria-hidden />
           <p className="min-w-0 flex-1">
-            Cadence was changed in another tab or window. Reload to see the latest. If you keep working here, your next change will replace what the other tab saved.
+            Syncro was changed in another tab or window. Reload to see the latest. If you keep working here, your next change will replace what the other tab saved.
           </p>
           <Button variant="secondary" onClick={() => window.location.reload()}>
             Reload to get the latest
@@ -397,7 +397,7 @@ export function App() {
         <ConfirmDialog title="Assign anyway?" confirmLabel="Yes, assign anyway" onCancel={store.cancelOverride} onConfirm={store.confirmOverride}>
           <p>{store.pendingOverride.message}</p>
           <p>
-            You can still do it. Cadence will keep a warning about {overrideStudent?.name ?? "this student"} visible in Schedule health so it isn&apos;t forgotten.
+            You can still do it. Syncro will keep a warning about {overrideStudent?.name ?? "this student"} visible in Schedule health so it isn&apos;t forgotten.
           </p>
         </ConfirmDialog>
       )}

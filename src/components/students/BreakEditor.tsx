@@ -48,7 +48,7 @@ export function BreakEditor({ breaks, onChange }: { breaks: WorkBreak[]; onChang
       <legend className="flex items-center gap-1 text-sm font-medium">
         Breaks
         <HelpTip label="Breaks">
-          Lunch or rest breaks, the same time every day. Cadence never schedules the student during a break, and breaks don&apos;t count
+          Lunch or rest breaks, the same time every day. Syncro never schedules the student during a break, and breaks don&apos;t count
           toward their weekly hours. The schedule works in half hours, so a 15-minute break at 12:00pm keeps 12:00–12:30pm free.
         </HelpTip>
       </legend>

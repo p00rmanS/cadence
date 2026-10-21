@@ -3,10 +3,10 @@ import { ENHANCED_TIMEOUT_MS } from "./constants";
 
 /**
  * ============================================================================
- *  "TRY ENHANCED READING": ASKING THE CADENCE SERVER TO USE OCR.SPACE
+ *  "TRY ENHANCED READING": ASKING THE SYNCRO SERVER TO USE OCR.SPACE
  * ============================================================================
  * When the reader in the browser (Tesseract) struggles, the manager can choose to send the screenshot
- * to the Cadence server's `/api/ocr` address (`src/server/ocr.ts`), which asks OCR.space, a free
+ * to the Syncro server's `/api/ocr` address (`src/server/ocr.ts`), which asks OCR.space, a free
  * online reader. The OCR.space key lives only on the server; this file never sees it.
  *
  * Because the picture leaves this computer, this only ever happens when the manager clicks the button,
@@ -15,7 +15,7 @@ import { ENHANCED_TIMEOUT_MS } from "./constants";
  */
 
 /**
- * The address of the Cadence server for enhanced reading. Normally the same website the app is on
+ * The address of the Syncro server for enhanced reading. Normally the same website the app is on
  * (Vercel serves both); VITE_AUTOMATION_API_URL is used instead when it points somewhere else.
  */
 export function enhancedReaderBaseUrl(): string {

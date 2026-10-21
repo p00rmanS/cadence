@@ -48,7 +48,7 @@ export function RulesForm({
           Most hours a student can work in a week
         </label>
         <p id="rule-hours-help" className="text-xs text-muted">
-          Cadence warns you before a student goes over this. Check your own employer&apos;s policy for the right number.
+          Syncro warns you before a student goes over this. Check your own employer&apos;s policy for the right number.
         </p>
         <input
           id="rule-hours"

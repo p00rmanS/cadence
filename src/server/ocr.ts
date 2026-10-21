@@ -4,7 +4,7 @@ import { fail, json } from "./http";
  * ============================================================================
  *  "ENHANCED READING": SENDING A SCREENSHOT TO OCR.SPACE
  * ============================================================================
- * Cadence first reads a class-schedule screenshot inside the browser (Tesseract, see
+ * Syncro first reads a class-schedule screenshot inside the browser (Tesseract, see
  * `src/features/import/ocr/`). When that reading is poor, the manager can click "Try enhanced
  * reading", and the gateway (`gateway.ts`, address `/api/ocr`) calls this file. It passes the picture
  * to OCR.space, a free online text-reading service, and hands back only the text it found.
@@ -50,7 +50,7 @@ export function isOcrConfigured(apiKey: string | undefined): boolean {
  * The gateway has already checked the manager passcode before calling this.
  */
 export async function readWithOcrSpace(request: Request, options: OcrSpaceOptions): Promise<Response> {
-  if (!isOcrConfigured(options.apiKey)) return fail(503, "not_configured", "Enhanced reading hasn't been set up on this copy of Cadence.");
+  if (!isOcrConfigured(options.apiKey)) return fail(503, "not_configured", "Enhanced reading hasn't been set up on this copy of Syncro.");
 
   const picture = await readPicture(request);
   if (!picture.ok) return picture.response;

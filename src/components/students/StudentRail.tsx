@@ -87,7 +87,7 @@ export function StudentRail({
           <li className="rounded-xl border border-dashed border-line p-5 text-center">
             <EmptyMark className="mx-auto h-16 w-16" />
             <p className="mt-2 font-semibold">No students yet</p>
-            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. Cadence keeps them out of those times.</p>
+            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. Syncro keeps them out of those times.</p>
             <Button variant="primary" className="mt-3" onClick={onAddNew}>
               <Plus className="h-4 w-4" aria-hidden /> Add your first student
             </Button>

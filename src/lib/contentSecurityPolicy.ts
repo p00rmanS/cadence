@@ -10,7 +10,7 @@
  * `<meta http-equiv="Content-Security-Policy">` tag, added by `vite.config.ts` when building.
  *
  * Two rules from the Netlify version can't work inside a <meta> tag (browsers ignore them there), so
- * they are left out here: `frame-ancestors` (stop other sites showing ShiftFit in a frame) and the
+ * they are left out here: `frame-ancestors` (stop other sites showing Syncro in a frame) and the
  * separate `X-Frame-Options` header. That protection exists only on hosts that send headers.
  *
  * The tag is added to the BUILT site only. The dev server (`npm run dev`) runs small inline scripts
@@ -19,7 +19,7 @@
 
 /**
  * The policy, one rule per entry (see `netlify.toml` for what each rule means). `connect-src` allows
- * any https address because the ShiftFit server (the gateway) lives on a different site than github.io.
+ * any https address because the Syncro server (the gateway) lives on a different site than github.io.
  *
  * `'wasm-unsafe-eval'` lets the browser start WebAssembly, the fast machine code the screenshot reader
  * (Tesseract) is written in. Despite its name it does NOT allow `eval()` or injected scripts: it only

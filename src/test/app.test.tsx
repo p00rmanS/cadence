@@ -46,7 +46,7 @@ beforeEach(() => {
 describe("first visit", () => {
   it("welcomes a new person once, in plain words, and remembers", async () => {
     const { user, unmount } = boot({ welcomed: false });
-    const dialog = screen.getByRole("dialog", { name: /welcome to cadence/i });
+    const dialog = screen.getByRole("dialog", { name: /welcome to syncro/i });
     expect(within(dialog).getByText(/Add your students/)).toBeTruthy();
     expect(within(dialog).getByText(/Fix the pink spots/)).toBeTruthy();
     await user.click(within(dialog).getByRole("button", { name: /try it with sample students/i }));
@@ -85,7 +85,7 @@ describe("guidance banner", () => {
     expect(banner().textContent).toMatch(/Looks great: every hour is covered/);
     await user.click(screen.getByRole("button", { name: /clear all shifts/i }));
     await user.click(screen.getByRole("button", { name: /yes, clear them/i }));
-    expect(banner().textContent).toMatch(/let Cadence fill the week/i);
+    expect(banner().textContent).toMatch(/let Syncro fill the week/i);
   });
 
   it("asks a brand-new user to add their first student", async () => {
@@ -515,7 +515,7 @@ describe("Save & share", () => {
   it("with a real server: asks for the manager passcode, sends, then offers to remove old events", async () => {
     vi.stubEnv("VITE_AUTOMATION_API_URL", "/");
     const requests: string[] = [];
-    // A pretend ShiftFit server: accepts one passcode, "creates" every event, and reports one old event.
+    // A pretend Syncro server: accepts one passcode, "creates" every event, and reports one old event.
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       requests.push(url);
       if ((init.headers as Record<string, string>).authorization !== "Bearer manager-pass-123") return new Response(null, { status: 401 });
@@ -1012,7 +1012,7 @@ describe("safety nets", () => {
     });
     boot({ welcomed: false });
     spy.mockRestore();
-    expect(screen.getByRole("alert").textContent).toMatch(/won't let Cadence save automatically/);
+    expect(screen.getByRole("alert").textContent).toMatch(/won't let Syncro save automatically/);
   });
 
   it("warns when another tab saved, instead of silently overwriting it later", async () => {
@@ -1086,7 +1086,7 @@ describe("audit round 3 fixes", () => {
     const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "huge.json", { type: "application/json" });
     const read = vi.spyOn(huge, "text");
     await user.upload(input, huge);
-    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/too big to be a Cadence backup/));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/too big to be a Syncro backup/));
     expect(read).not.toHaveBeenCalled();
   });
 

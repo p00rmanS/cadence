@@ -8,7 +8,7 @@ import type { Day, ShiftBlock, Student } from "./types";
  *  SAMPLE DATA FOR THE WELCOME/DEMO STATE
  * ============================================================================
  * Six made-up students with made-up class schedules, used to show a new
- * manager what a filled-in Cadence looks like before they've added anyone
+ * manager what a filled-in Syncro looks like before they've added anyone
  * real. This is the ONLY file with fake names in it — nothing here is a real
  * BYU–Hawaii student (see the README's Privacy section).
  */

@@ -1,7 +1,7 @@
 import type { AutomationClient, PublishRequest, PublishResponse, RemoveResponse } from "./contracts";
 
 /**
- * Local stand-in for the ShiftFit server so the app stays demoable without one.
+ * Local stand-in for the Syncro server so the app stays demoable without one.
  * It never claims a real Google Calendar sync happened: every result is "dry_run",
  * which `summarizePublish` maps to "not synced" so the UI cannot show a fake success.
  */

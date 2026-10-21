@@ -99,8 +99,8 @@ describe("calendar file (.ics)", () => {
     expect(isSemesterConfigured(semester)).toBe(true);
     expect(isSemesterConfigured({ ...semester, timeZone: "" })).toBe(false);
     expect(isSemesterConfigured(null)).toBe(false);
-    expect(icsFileName(makeStudent({ name: "Noa K. / ../../etc" }))).toBe("cadence-noa-k-etc.ics");
-    expect(icsFileName(makeStudent({ name: "!!!" }))).toBe("cadence-student.ics");
+    expect(icsFileName(makeStudent({ name: "Noa K. / ../../etc" }))).toBe("syncro-noa-k-etc.ics");
+    expect(icsFileName(makeStudent({ name: "!!!" }))).toBe("syncro-student.ics");
   });
 });
 

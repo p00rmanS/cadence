@@ -1,10 +1,10 @@
-# ShiftFit
+# Syncro
 
 Work schedules that fit around classes. Made for student-worker managers at BYU–Hawaii (CRDEV 301),
 and designed so a first-year student can use it without instructions.
 
 Add a student, paste when they have class, press **Fill schedule for me**, then click the pink
-boxes that still need someone. ShiftFit never puts anyone in a spot where they have class, and it
+boxes that still need someone. Syncro never puts anyone in a spot where they have class, and it
 tells you in plain words why something can't be done.
 
 ## The problem
@@ -131,13 +131,13 @@ original build brief; AUDIT Part 7 checks the finished app against its acceptanc
 n8n can orchestrate screenshot reading and Google Calendar publishing. It never replaces the
 frontend or the scheduler. See [`docs/N8N_ARCHITECTURE.md`](docs/N8N_ARCHITECTURE.md) and the
 templates in [`n8n/`](n8n/). The templates are starting points, have never been run against a live
-n8n, and contain no credentials. The browser never calls n8n directly: it goes through the ShiftFit
+n8n, and contain no credentials. The browser never calls n8n directly: it goes through the Syncro
 gateway (`src/server/gateway.ts`), which checks a manager passcode. Set `VITE_AUTOMATION_API_URL` to the
 gateway's address to enable it.
 
 ## Deploy
 
-There are two ways to put Cadence online. Both build with `npm run build` (Node 20.19 or newer).
+There are two ways to put Syncro online. Both build with `npm run build` (Node 20.19 or newer).
 
 ### Vercel (website + server, free Hobby plan)
 
@@ -150,7 +150,7 @@ Google Calendar sending can work. The Hobby plan is free for non-commercial proj
    Every push then gets its own preview address, and pushes to `master` update the main one.
 2. **Get a free OCR.space key** (only needed for *Try enhanced reading*): go to
    [ocr.space/ocrapi](https://ocr.space/ocrapi), choose the **Free** plan, and register with an email address.
-   The key arrives by email. The free plan allows 500 reads a day and pictures up to 1 MB (Cadence shrinks
+   The key arrives by email. The free plan allows 500 reads a day and pictures up to 1 MB (Syncro shrinks
    screenshots to fit).
 3. **Add the environment variables** in Vercel: **Project → Settings → Environment Variables**, for
    Production and Preview, then **redeploy** (Deployments → ⋯ → Redeploy) so they take effect:
@@ -206,7 +206,7 @@ For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when
   saved with the student; the original is never stored or uploaded. A photo of a student is personal
   data, so treat backup files as private and check with your instructor before using real photos.
 - Screenshots are read in the browser and never stored. One is only sent anywhere when a signed-in
-  manager clicks *Try enhanced reading*: it then goes through the Cadence server to OCR.space (an outside
+  manager clicks *Try enhanced reading*: it then goes through the Syncro server to OCR.space (an outside
   service, which says it deletes images after reading), and is shown as such on screen. The server keeps
   nothing. Only use enhanced reading with real students' schedules once your instructor agrees (FERPA).
 - Class schedules are education records under FERPA. Talk to your instructor before a real pilot,
@@ -214,7 +214,7 @@ For a host that serves the site from a sub-folder, set `BASE_PATH=/folder/` when
 
 ## Team
 
-Cadence, BYU–Hawaii CRDEV 301R (Track C, Fall 2026). Roles are from the team's project document.
+Syncro, BYU–Hawaii CRDEV 301R (Track C, Fall 2026). Roles are from the team's project document.
 
 | Role | Owner |
 | --- | --- |

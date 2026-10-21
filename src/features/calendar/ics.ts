@@ -108,12 +108,12 @@ export function excludedOccurrences(semester: SemesterConfig, first: Date, count
 }
 
 /**
- * A safe download name for a student's calendar file, e.g. "shiftfit-noa-k.ics". Anything other
+ * A safe download name for a student's calendar file, e.g. "syncro-noa-k.ics". Anything other
  * than letters and digits becomes a dash, so a name can't create folders or odd file names.
  */
 export function icsFileName(student: Student): string {
   const slug = student.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "student";
-  return `cadence-${slug}.ics`;
+  return `syncro-${slug}.ics`;
 }
 
 /**
@@ -147,7 +147,7 @@ export function buildStudentIcs(
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Cadence//Shift Coverage Planner//EN",
+    "PRODID:-//Syncro//Shift Coverage Planner//EN",
     "CALSCALE:GREGORIAN",
     `X-WR-CALNAME:${escapeText(`${student.name} — work shifts`)}`,
     `X-WR-TIMEZONE:${semester.timeZone}`,
@@ -166,7 +166,7 @@ export function buildStudentIcs(
       `RRULE:FREQ=WEEKLY;COUNT=${occurrences.count}`,
       ...exdate(semester, occurrences.first, occurrences.count, block.start),
       `SUMMARY:${escapeText(`Work shift — ${student.name}`)}`,
-      `DESCRIPTION:${escapeText("Created by Cadence. Ask your manager before changing this shift.")}`,
+      `DESCRIPTION:${escapeText("Created by Syncro. Ask your manager before changing this shift.")}`,
       "END:VEVENT",
     );
   }

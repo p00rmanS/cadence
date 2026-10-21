@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Tests for the splash screen (the animated logo shown while Cadence loads). It is plain HTML and
+ * Tests for the splash screen (the animated logo shown while Syncro loads). It is plain HTML and
  * CSS inside `index.html` so it appears before any code downloads, and `src/main.tsx` removes it.
  * These checks keep it from quietly breaking the app: it must not need a script (the security policy
  * blocks inline scripts), must respect "reduce motion", and must actually get removed.
@@ -13,9 +13,9 @@ const main = readFileSync("src/main.tsx", "utf8");
 
 describe("splash screen", () => {
   it("is in the page, announced to screen readers, and uses no script of its own", () => {
-    const splash = /<div id="splash"[\s\S]*?<\/div>\s*<div class="sub">[\s\S]*?<\/div>\s*<\/div>/.exec(html)?.[0] ?? "";
+    const splash = /<div id="splash"[\s\S]*?<div class="word">[\s\S]*?<\/div>\s*<\/div>/.exec(html)?.[0] ?? "";
     expect(splash).toContain('role="status"');
-    expect(splash).toContain("Loading Cadence");
+    expect(splash).toContain("Loading Syncro");
     expect(splash).not.toMatch(/<script|onload=|onclick=/i);
   });
 

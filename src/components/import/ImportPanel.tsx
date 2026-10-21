@@ -15,7 +15,7 @@ import { enhancedReaderBaseUrl, isEnhancedReadingAvailable } from "../../feature
 const EXAMPLE = "MWF 9:00-9:50\nTTh 1:00pm-2:15pm";
 
 /**
- * Which server reader "Try enhanced reading" uses: OCR.space through the Cadence server when that is
+ * Which server reader "Try enhanced reading" uses: OCR.space through the Syncro server when that is
  * switched on, otherwise the n8n AI reader when one is configured, otherwise none (button hidden).
  */
 type EnhancedMode = "ocr" | "ai" | null;
@@ -24,7 +24,7 @@ type EnhancedMode = "ocr" | "ai" | null;
  * Where class times go. Typing or pasting is checked instantly by the parent (no button needed).
  *
  * A screenshot (chosen, or pasted with Ctrl+V into the box) is read right here in the browser, and the
- * class times found are added to the box, where the parent's "Here is what Cadence understood" list
+ * class times found are added to the box, where the parent's "Here is what Syncro understood" list
  * checks every line. The person fixes anything wrong before saving, so reading mistakes never slip in.
  * If the reading was poor, "Try enhanced reading" sends the picture to a server reader instead, but
  * only when one is set up, only for a signed-in manager, and only when they click it.
@@ -211,8 +211,8 @@ export function ImportPanel({
         <p className="text-xs text-muted">
           {lastReading?.lowConfidence ? "Not right? " : ""}
           {enhancedMode === "ocr"
-            ? "Enhanced reading sends this screenshot to OCR.space, an outside reading service, which deletes it after reading. Cadence doesn't keep it."
-            : "Enhanced reading sends this screenshot to the Cadence server's reader. Cadence doesn't keep it."}
+            ? "Enhanced reading sends this screenshot to OCR.space, an outside reading service, which deletes it after reading. Syncro doesn't keep it."
+            : "Enhanced reading sends this screenshot to the Syncro server's reader. Syncro doesn't keep it."}
         </p>
       )}
       {showEnhanced && !signedIn && (

@@ -1,7 +1,7 @@
 import { clsx } from "../../lib/clsx";
 
 /**
- * A small, calm picture for "nothing here yet" spaces: the Cadence logo's three shift bars drawn as
+ * A small, calm picture for "nothing here yet" spaces: the Syncro logo's three shift bars drawn as
  * dashed outlines (empty slots waiting to be filled), gently floating one after another. Decoration
  * only (hidden from screen readers); the words beside it carry the meaning. The floating stops
  * for people who asked their device for less motion (see `app.css`).

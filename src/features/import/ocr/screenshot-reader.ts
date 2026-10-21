@@ -16,7 +16,7 @@ import type { ReadingProgress } from "./tesseract-reader";
  *     Tesseract right here in the browser (`tesseract-reader.ts`). Free, no key, and the picture never
  *     leaves this computer.
  *  2. `readScreenshotEnhanced`: only when the manager clicks "Try enhanced reading". Shrinks the
- *     cleaned-up picture under 1 MB and sends it to the Cadence server, which asks OCR.space
+ *     cleaned-up picture under 1 MB and sends it to the Syncro server, which asks OCR.space
  *     (`enhanced-reader.ts`). Suggested when Tesseract wasn't sure of its reading.
  *
  * Either way the text found goes through `ocr-text.ts`, which picks out the "days + times" of each
@@ -71,7 +71,7 @@ export async function readScreenshot(file: File, onProgress: (progress: ReadingP
   }
 }
 
-/** Reads a screenshot with OCR.space through the Cadence server (way 2 in the file comment). Never throws. */
+/** Reads a screenshot with OCR.space through the Syncro server (way 2 in the file comment). Never throws. */
 export async function readScreenshotEnhanced(file: File): Promise<ReadOutcome> {
   const problem = checkScreenshotFile(file);
   if (problem) return { ok: false, error: problem };

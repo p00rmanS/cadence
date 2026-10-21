@@ -146,7 +146,7 @@ describe("choosing a screenshot", () => {
   });
 });
 
-describe("enhanced reading: talking to the Cadence server", () => {
+describe("enhanced reading: talking to the Syncro server", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     forgetEnhancedReadingAvailability();

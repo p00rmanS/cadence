@@ -1,9 +1,10 @@
 import { clsx } from "../../lib/clsx";
 
 /**
- * A small animated Cadence logo for "please wait" moments (reading a screenshot, sending to the
- * calendar, checking a passcode). It is the same drawing as the splash screen and `CadenceLogo`:
- * the three white bars take turns brightening, and the light dot beats steadily. It is purely
+ * A small animated Syncro logo for "please wait" moments (reading a screenshot, sending to the
+ * calendar, checking a passcode). It is a generic loading mark (three bars taking turns brightening,
+ * and a dot that beats steadily), drawn in the current text color. It is NOT the Syncro logo
+ * (`SyncroLogo`); it only signals "working". It is purely
  * decoration (hidden from screen readers), so always put the words ("Reading…") next to it; the
  * button or message around it is what tells a screen reader what is happening. The animation
  * stops by itself for people who asked their device for less motion (see `app.css`).

@@ -25,7 +25,7 @@ import type {
  * ============================================================================
  *  THE APP'S "BRAIN": ALL STATE LIVES HERE
  * ============================================================================
- * This is the single most important file for understanding how Cadence
+ * This is the single most important file for understanding how Syncro
  * actually works. Every screen (`src/components/...`) is just a "view" —
  * it displays data and reports clicks, but it never changes anything by
  * itself. Instead, every user action (add a student, click a grid box, press
@@ -265,7 +265,7 @@ export function reducer(state: State, action: Action): State {
     case "ADD_STUDENTS": {
       const room = Math.max(0, MAX_STUDENTS - doc.students.length);
       const entries = action.entries.slice(0, room);
-      if (!entries.length) return { ...state, toast: toast(`Cadence can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
+      if (!entries.length) return { ...state, toast: toast(`Syncro can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
       const students = [...doc.students];
       for (const e of entries) students.push(toStudent(e.id, e.input, nextColor(students)));
       const cut = action.entries.length - entries.length;

@@ -3,7 +3,7 @@ import { CalendarDays, ChevronDown, HelpCircle, Redo2, Settings, SlidersHorizont
 import { clsx } from "../../lib/clsx";
 import { Segmented } from "../ui/Segmented";
 import { Button } from "../ui/Button";
-import { CadenceLogo } from "../ui/CadenceLogo";
+import { SyncroLogo } from "../ui/SyncroLogo";
 import { HelpTip } from "../help/HelpTip";
 import { ThemeControl } from "./ThemeControl";
 import type { ThemeChoice } from "../../hooks/useTheme";
@@ -82,10 +82,9 @@ export function TopBar({
     <header className="soft-shadow relative z-10 border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex items-center gap-2">
-          <CadenceLogo className="h-9 w-9 shrink-0" />
+          <SyncroLogo className="h-9 w-9 shrink-0" />
           <div>
-            <h1 className="font-display text-lg font-semibold leading-none">Cadence</h1>
-            <p className="hidden text-xs text-muted sm:block">Work schedules that fit around classes</p>
+            <h1 className="font-display text-lg font-semibold leading-none">Syncro</h1>
           </div>
         </div>
 
@@ -196,7 +195,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onImportShifts} disabled={!hasStudents} title={hasStudents ? "Paste a schedule you already wrote as text" : "Add a student first"}>
             Paste existing shifts
           </Button>
-          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts Cadence added. Yours stay." : "There are no automatic shifts yet"}>
+          <Button variant="secondary" onClick={onRebuild} disabled={!hasAutoShifts} title={hasAutoShifts ? "Remakes only the shifts Syncro added. Yours stay." : "There are no automatic shifts yet"}>
             Rebuild automatic shifts
           </Button>
           <Button variant="secondary" onClick={onClearShifts} disabled={!hasShifts}>

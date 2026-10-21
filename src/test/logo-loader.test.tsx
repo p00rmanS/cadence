@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { LogoLoader } from "../components/ui/LogoLoader";
 
 /**
- * Tests for the small animated logo shown while Cadence waits (`components/ui/LogoLoader.tsx`).
+ * Tests for the small animated logo shown while Syncro waits (`components/ui/LogoLoader.tsx`).
  * It is decoration only, so it must be hidden from screen readers (the words next to it say what is
  * happening), and its animation must be switched off for people who asked for less motion.
  */

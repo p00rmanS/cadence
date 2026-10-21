@@ -38,7 +38,7 @@ export const CONTRAST_CLIP_PERCENT = 1;
 
 /**
  * Tesseract rates its own reading from 0 to 100. Clear screenshots score above 80; below 70 the text
- * usually has mistakes, so Cadence suggests "Try enhanced reading".
+ * usually has mistakes, so Syncro suggests "Try enhanced reading".
  */
 export const LOW_CONFIDENCE = 70;
 

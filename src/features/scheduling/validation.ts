@@ -315,7 +315,7 @@ function readShifts(list: unknown, students: Student[] | null, prefix: string, e
 export function validatePersistedState(input: unknown): ValidationResult<PersistedStateV1> {
   const errors: string[] = [];
   const notes: string[] = [];
-  if (!isRecord(input)) return { ok: false, errors: ["That file is not a Cadence backup."] };
+  if (!isRecord(input)) return { ok: false, errors: ["That file is not a Syncro backup."] };
   if (input.version !== 1) errors.push(`Unsupported backup version: ${String(input.version)}.`);
 
   const settings = readSettings(input.settings, errors);
@@ -328,7 +328,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
     input.otherTermAssignments === undefined ? [] : (readShifts(input.otherTermAssignments, students, "In the other schedule: ", errors, notes) ?? []);
 
   if (errors.length || !settings || !students) {
-    return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a Cadence backup."] };
+    return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a Syncro backup."] };
   }
 
   const selected = typeof input.selectedStudentId === "string" && students.some((s) => s.id === input.selectedStudentId);
