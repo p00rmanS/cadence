@@ -201,8 +201,52 @@ const LINE_RE = new RegExp(String.raw`^([^\d]+?)\s*(${TIME_TOKEN})\s*(?:-|to|unt
 const NO_MEETING = /\b(online|on-line|asynchronous|async|tba|tbd|arranged|by arrangement|no meeting|does not meet|no set time|independent study)\b/i;
 const CLOCK_TIME = /\d{1,2}\s*(?::\d{2}|[ap]\.?\s*m\b)/i;
 
-/** Parses one line of pasted class-time text into a structured result (never throws). */
+/**
+ * A comma that ENDS one meeting and STARTS another, such as "M 9:00AM-9:50AM, W 1:00PM-2:15PM". It is only a
+ * split point when the text before it already ends in a time and the text after it looks like a new day + time
+ * range, so the commas inside "Mon, Wed, Fri 9:00-9:50" and in "MWF 9:00-9:50, Room 214" never split a line.
+ * (Without this, only the first meeting on such a line was read and the rest vanished without a warning.)
+ */
+const BETWEEN_MEETINGS = new RegExp(
+  String.raw`(?<=\d|[ap]\.?\s*m\.?),\s*(?=[A-Za-z][A-Za-z/&.\s]{0,40}?\d{1,2}(?::\d{2})?\s*(?:[ap]\.?\s*m\.?)?\s*(?:-|[–—−]|to\b|until\b)\s*\d)`,
+  "i",
+);
+
+/** Splits one pasted line into the separate meetings it contains (usually just one: itself). */
+function splitSeveralMeetings(line: string): string[] {
+  return line.split(BETWEEN_MEETINGS);
+}
+
+/**
+ * Parses one line of pasted class-time text into a structured result (never throws). If the line as written
+ * can't be read, two more ways are tried before giving up, both common in registration exports: the cells of
+ * a "course | days | times | room" row, and a course code such as "BIOL 101" in front of the meeting.
+ */
 export function parseMeetingLine(rawLine: string): ParsedMeetingLine {
+  const first = parseOneWay(rawLine);
+  if (first.ok) return first;
+  for (const attempt of otherReadings(rawLine)) {
+    const result = parseOneWay(attempt);
+    if (result.ok && !result.noMeeting) return { ...result, raw: rawLine.trim() };
+  }
+  return first;
+}
+
+/** Other ways to read a line that did not parse as written (see `parseMeetingLine`). Each is a different text to try. */
+function otherReadings(rawLine: string): string[] {
+  const readings: string[] = [];
+  // "BIOL 101 - Intro | MWF | 9:00 AM - 9:50 AM | Room 214": try every pair of neighbouring cells as "days times".
+  const cells = rawLine.split("|").map((c) => c.trim()).filter(Boolean);
+  if (cells.length >= 2) for (let i = 0; i < cells.length - 1; i++) readings.push(`${cells[i]} ${cells[i + 1]}`);
+  // "BIOL 101 MWF 9:00 AM - 9:50 AM": a course code is 2-6 letters then a 3-digit number (so a day group like "MWF"
+  // followed by a time such as "10:00" is never mistaken for one), optionally followed by a dash and a title.
+  const withoutCode = rawLine.trim().replace(/^[A-Za-z]{2,6}\s*\d{3}[A-Za-z]?(?![\d:])\s*(?:-\s*[^|]*?(?=\s+[A-Za-z/,&]*\s*\d))?\s+/, "");
+  if (withoutCode !== rawLine.trim()) readings.push(withoutCode);
+  return readings;
+}
+
+/** Reads one line exactly as written (the original logic of `parseMeetingLine`). */
+function parseOneWay(rawLine: string): ParsedMeetingLine {
   const raw = rawLine.trim();
   if (raw.length > MAX_LINE_LENGTH) {
     return { raw: raw.slice(0, 60) + "…", ok: false, warning: "This line is too long to be a class time." };
@@ -259,6 +303,7 @@ export function buildBusy(classText: string, blockedText: string): { busy: BusyB
 export function parseClassText(text: string): ParseResult {
   const rawLines = text
     .split(/[\n;]+/)
+    .flatMap(splitSeveralMeetings)
     .map((l) => l.trim())
     .filter(Boolean);
   const lines = rawLines.slice(0, MAX_LINES).map(parseMeetingLine);
