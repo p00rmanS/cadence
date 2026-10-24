@@ -1,9 +1,11 @@
 import { parseClassText } from "../../scheduling/parser";
 import { CALENDAR_THRESHOLD, LOW_CONFIDENCE, MAX_SCREENSHOT_BYTES, SCREENSHOT_TYPES } from "./constants";
 import { readWithEnhancedReader } from "./enhanced-reader";
-import { calendarWordsToClassText } from "./calendar-layout";
+import { readBoxGeometry } from "./calendar-geometry";
+import { calendarColumns, calendarWordsToClassText, dayName } from "./calendar-layout";
 import { ocrTextToClassText } from "./ocr-text";
 import { binarizedCopy, prepareScreenshot, shrinkForUpload } from "./preprocess";
+import type { OcrWord } from "./calendar-layout";
 import { readWithTesseract } from "./tesseract-reader";
 import type { ReadingProgress } from "./tesseract-reader";
 
@@ -34,6 +36,8 @@ export type ScreenshotReading = {
   lowConfidence: boolean;
   /** A plain-language explanation to show instead of the usual "no class times found" (see `NO_TIMES_NOTE`). */
   note?: string;
+  /** True when the times were MEASURED from the size of each class box (nothing was written), so they can be a few minutes off. */
+  measured?: boolean;
 };
 
 /**
@@ -41,7 +45,10 @@ export type ScreenshotReading = {
  * only show the course name and room and let the box's height show the time, which can't be read reliably).
  */
 export const NO_TIMES_NOTE =
-  "This looks like a weekly calendar picture, but the class boxes don't have their times written in them, so the times can't be read. In Workday, switch to the List view (the Meeting Patterns column) and screenshot that instead, or type the times.";
+  "This looks like a weekly calendar picture, but the class boxes don't have their times written in them, and the time labels down the side couldn't be read well enough to measure them. In Workday, switch to the List view (the Meeting Patterns column) and screenshot that instead, or type the times.";
+
+/** Shown with times that were measured from box sizes instead of read from text (see `ScreenshotReading.measured`). */
+export const MEASURED_NOTE = "These times were measured from the size of each class box in the picture, so they can be a few minutes off. Check every one against the real schedule.";
 
 export type ReadOutcome = { ok: true; reading: ScreenshotReading } | { ok: false; error: string };
 
@@ -67,6 +74,21 @@ function messageFrom(err: unknown): string {
 }
 
 /** Reads a screenshot in this browser with Tesseract (way 1 in the file comment). Never throws. */
+/**
+ * Reads a calendar whose boxes have no times written in them by measuring the boxes (see `calendar-geometry.ts`).
+ * Null when the day columns or the time labels can't be found.
+ */
+function measureBoxes(picture: HTMLCanvasElement, words: OcrWord[]): { classText: string; linesFound: number } | null {
+  const found = calendarColumns(words);
+  const context = picture.getContext("2d", { willReadFrequently: true });
+  if (!found || !context) return null;
+  const pixels = context.getImageData(0, 0, picture.width, picture.height).data;
+  // The picture is already grayscale, so any one colour channel is the brightness.
+  const brightness = (x: number, y: number): number => (x < 0 || y < 0 || x >= picture.width || y >= picture.height ? 255 : pixels[(y * picture.width + x) * 4]);
+  const reading = readBoxGeometry(found.columns, words, brightness, picture.width, dayName);
+  return reading && reading.linesFound > 0 ? reading : null;
+}
+
 export async function readScreenshot(file: File, onProgress: (progress: ReadingProgress) => void): Promise<ReadOutcome> {
   const problem = checkScreenshotFile(file);
   if (problem) return { ok: false, error: problem };
@@ -89,6 +111,9 @@ export async function readScreenshot(file: File, onProgress: (progress: ReadingP
     }
     const found = ocrTextToClassText(text);
     if (calendar && found.linesFound === 0) {
+      // No times are written in the boxes: measure the boxes against the time labels down the side instead.
+      const measured = measureBoxes(picture, words);
+      if (measured) return { ok: true, reading: { ...measured, lowConfidence: true, measured: true } };
       return { ok: true, reading: { ...found, lowConfidence: true, note: NO_TIMES_NOTE } };
     }
     return { ok: true, reading: { ...found, lowConfidence: confidence < LOW_CONFIDENCE || needsFixing(found.classText) } };

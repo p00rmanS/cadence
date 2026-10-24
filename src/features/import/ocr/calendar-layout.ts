@@ -27,7 +27,10 @@ export type CalendarReading = {
   noTimesWritten: boolean;
 };
 
-type CalendarDay = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export type CalendarDay = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/** One day's column of the calendar: its day and the left and right edges (x) of the strip below its name. */
+export type CalendarColumn = { day: CalendarDay; left: number; right: number };
 
 /** The spellings of day names that count as a column header, lowercase, no punctuation. */
 const DAY_NAMES: Record<string, CalendarDay> = {
@@ -90,31 +93,46 @@ function findHeaderRow(words: OcrWord[]): { header: { day: CalendarDay; word: Oc
   return null;
 }
 
+/** The full name of a day ("Monday"), as written in the class-time lines. */
+export function dayName(day: CalendarDay): string {
+  return FULL_NAME[day];
+}
+
 /**
- * Reads a weekly calendar picture from its words, or returns null when the picture has no row of day names
- * (so the caller reads it as ordinary text instead).
+ * The day columns of a weekly calendar picture, and the height of the day-name row (everything below it is the
+ * calendar body). Each column runs halfway to its neighbours; the outer columns extend half a column past the
+ * first and last day name. Returns null when the picture has no row of day names.
  */
-export function calendarWordsToClassText(words: OcrWord[]): CalendarReading | null {
+export function calendarColumns(words: OcrWord[]): { columns: CalendarColumn[]; headerBottom: number } | null {
   const found = findHeaderRow(words);
   if (!found) return null;
   const { header, bottom } = found;
   const centers = header.map((h) => centerX(h.word));
   const spacing = (centers[centers.length - 1] - centers[0]) / (centers.length - 1);
-
-  // Each column runs halfway to its neighbours; the outer columns extend half a column past the first/last day name.
   const edges = centers.map((c, i) => (i === 0 ? c - spacing / 2 : (centers[i - 1] + c) / 2));
   edges.push(centers[centers.length - 1] + spacing / 2);
+  return { columns: header.map(({ day }, i) => ({ day, left: edges[i], right: edges[i + 1] })), headerBottom: bottom };
+}
+
+/**
+ * Reads a weekly calendar picture from its words, or returns null when the picture has no row of day names
+ * (so the caller reads it as ordinary text instead).
+ */
+export function calendarWordsToClassText(words: OcrWord[]): CalendarReading | null {
+  const found = calendarColumns(words);
+  if (!found) return null;
+  const { columns, headerBottom } = found;
 
   const lines: string[] = [];
-  header.forEach(({ day }, i) => {
+  for (const { day, left, right } of columns) {
     const column = words
-      .filter((w) => w.y0 >= bottom - 2 && centerX(w) >= edges[i] && centerX(w) < edges[i + 1])
+      .filter((w) => w.y0 >= headerBottom - 2 && centerX(w) >= left && centerX(w) < right)
       .sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
     // The column read top to bottom as one running text, so a time range wrapped over two lines inside a box
     // ("9:30AM -" then "10:50AM") is still seen as one range.
     const text = fixReadingMistakes(column.map((w) => w.text).join(" "));
     for (const { start, end } of timeRangesIn(text)) lines.push(`${FULL_NAME[day]} ${start}-${end}`);
-  });
+  }
 
   const unique = Array.from(new Set(lines));
   return { classText: unique.join("\n"), linesFound: unique.length, noTimesWritten: unique.length === 0 };

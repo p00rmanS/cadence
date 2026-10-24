@@ -7,7 +7,7 @@ import { ManagerSignIn } from "../app-shell/ManagerSignIn";
 import { useManagerSession } from "../../hooks/useManagerSession";
 import { extractSchedule, isRemoteExtractionAvailable } from "../../features/import/schedule-extractor";
 import type { ExtractionOutcome } from "../../features/import/schedule-extractor";
-import { readScreenshot, readScreenshotEnhanced } from "../../features/import/ocr/screenshot-reader";
+import { MEASURED_NOTE, readScreenshot, readScreenshotEnhanced } from "../../features/import/ocr/screenshot-reader";
 import type { ScreenshotReading } from "../../features/import/ocr/screenshot-reader";
 import type { ReadingProgress } from "../../features/import/ocr/tesseract-reader";
 import { enhancedReaderBaseUrl, isEnhancedReadingAvailable } from "../../features/import/ocr/enhanced-reader";
@@ -88,7 +88,11 @@ export function ImportPanel({
       return "No class times were found in that screenshot. Try a clearer screenshot of just the class list, or type the times.";
     }
     const count = reading.linesFound === 1 ? "1 class time" : `${reading.linesFound} class times`;
-    const unsure = reading.lowConfidence ? " The picture was hard to read, so check them carefully." : "";
+    const unsure = reading.measured
+      ? ` ${MEASURED_NOTE}`
+      : reading.lowConfidence
+        ? " The picture was hard to read, so check them carefully."
+        : "";
     return `Found ${count} and added them to the box above. Check each one in the list below and fix anything that's wrong before saving.${unsure}`;
   }
 
