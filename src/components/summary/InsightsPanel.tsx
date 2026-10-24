@@ -4,7 +4,7 @@ import { HelpTip } from "../help/HelpTip";
 import { assignedHours, studentsMissingOpeningShift } from "../../features/scheduling/availability";
 import { buildCoverageSlots, buildGapRanges, summarizeCoverage, uncoveredStaffHours } from "../../features/scheduling/coverage";
 import { describeGap, suggestFillers } from "../../features/scheduling/issues";
-import { weeklyLimit } from "../../features/scheduling/term";
+import { studentLimit } from "../../features/scheduling/term";
 import { formatRange, hoursLabel } from "../../features/scheduling/time";
 import { DAY_LABEL } from "../../features/scheduling/types";
 import type { Day } from "../../features/scheduling/types";
@@ -69,7 +69,7 @@ export function InsightsPanel({
   const summary = summarizeCoverage(coverage, settings);
   // A student's name from their id ("Someone" if they were removed).
   const nameOf = (id: string) => students.find((s) => s.id === id)?.name ?? "Someone";
-  const atTarget = students.filter((s) => assignedHours(s.id, assignments, settings) >= weeklyLimit(settings)).length;
+  const atTarget = students.filter((s) => assignedHours(s.id, assignments, settings) >= studentLimit(s, settings)).length;
   const emptyHalfHours = summary.totalSlots - summary.fullyStaffedSlots;
   // The two headline numbers also used by the server check (same functions, so they can never disagree).
   const missingStaffHours = uncoveredStaffHours(coverage, settings);

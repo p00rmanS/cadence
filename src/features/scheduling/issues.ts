@@ -9,7 +9,7 @@ import {
   workedDayCount,
 } from "./availability";
 import { OPENING_SHIFT_START } from "./constants";
-import { minShiftMinutes, weeklyLimit } from "./term";
+import { minShiftMinutes, studentLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
 import type { ConstraintViolationCode, Day, Minutes, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "./types";
@@ -96,11 +96,11 @@ export function findIssues(students: Student[], assignments: ShiftBlock[], setti
 
     const overridden = mine.some((a) => a.override);
     const hours = assignedHours(student.id, assignments, settings);
-    if (hours > weeklyLimit(settings)) {
+    if (hours > studentLimit(student, settings)) {
       issues.push({
         code: "over_weekly_target",
         studentId: student.id,
-        message: `${student.name} is scheduled ${hoursLabel(hours)}, over the weekly limit of ${hoursLabel(weeklyLimit(settings))}.`,
+        message: `${student.name} is scheduled ${hoursLabel(hours)}, over the weekly limit of ${hoursLabel(studentLimit(student, settings))}.`,
         overridden,
       });
     }
@@ -168,8 +168,8 @@ export function explainSlot(
                 : "on a break";
       return { student, reason: slot.code, text };
     }
-    if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
-      return { student, reason: "over_weekly_target", text: `already at ${hoursLabel(weeklyLimit(settings))}` };
+    if (assignedHours(student.id, assignments, settings) >= studentLimit(student, settings)) {
+      return { student, reason: "over_weekly_target", text: `already at ${hoursLabel(studentLimit(student, settings))}` };
     }
     if (!canUseDay(student, day, assignments, settings)) {
       return { student, reason: "over_max_days", text: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"}` };
