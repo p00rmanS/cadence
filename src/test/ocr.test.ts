@@ -149,6 +149,7 @@ describe("choosing a screenshot", () => {
 describe("enhanced reading: talking to the Syncro server", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     forgetEnhancedReadingAvailability();
     signOutManager();
   });
@@ -167,6 +168,24 @@ describe("enhanced reading: talking to the Syncro server", () => {
     forgetEnhancedReadingAvailability();
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
     expect(await isEnhancedReadingAvailable()).toBe(false);
+  });
+
+  it("does not even ask on GitHub Pages (a site in a sub-folder with no server address): nothing there can answer", async () => {
+    vi.stubEnv("BASE_URL", "/cadence/");
+    vi.stubEnv("VITE_AUTOMATION_API_URL", "");
+    const fetchMock = vi.fn(async () => Response.json({ enabled: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await isEnhancedReadingAvailable()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still asks on a sub-folder site when a server address has been set", async () => {
+    vi.stubEnv("BASE_URL", "/cadence/");
+    vi.stubEnv("VITE_AUTOMATION_API_URL", "https://server.example.edu");
+    const fetchMock = vi.fn(async () => Response.json({ enabled: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await isEnhancedReadingAvailable()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith("https://server.example.edu/api/ocr", expect.anything());
   });
 
   it("never sends a picture before a manager has signed in", async () => {

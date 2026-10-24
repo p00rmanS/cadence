@@ -20,7 +20,7 @@ import { assignedHours } from "../features/scheduling/availability";
 import { nextStep } from "../features/scheduling/guidance";
 import type { GuidanceAction } from "../features/scheduling/guidance";
 import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
-import { weeklyLimit } from "../features/scheduling/term";
+import { studentLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
 import { useLayoutQuery } from "../hooks/useMediaQuery";
 import { useShiftFitStore } from "../hooks/useShiftFitStore";
@@ -92,7 +92,7 @@ export function App() {
   const blockingIssues = useMemo(() => issues.filter(isBlockingIssue), [issues]);
   const gapSlots = useMemo(() => buildCoverageSlots(assignments, settings).filter((s) => !s.fullyStaffed).length, [assignments, settings]);
   const belowTarget = useMemo(
-    () => students.filter((s) => assignedHours(s.id, assignments, settings) < weeklyLimit(settings)).length,
+    () => students.filter((s) => assignedHours(s.id, assignments, settings) < studentLimit(s, settings)).length,
     [students, assignments, settings],
   );
   const guidance = useMemo(
@@ -304,6 +304,7 @@ export function App() {
         <StudentFormSheet
           key={dialog.id}
           student={editing}
+          settings={settings}
           existingNames={students.map((s) => s.name)}
           onClose={() => setDialog(null)}
           onSave={(input) => {

@@ -175,6 +175,18 @@ export const FAQ: FaqItem[] = [
     keywords: ["text", "font", "size", "bigger", "larger", "small", "read", "glasses", "zoom", "dark", "animation"],
   },
   {
+    id: "student-days-and-hours",
+    topic: "The schedule",
+    question: "Can a student pick the days and hours they want to work?",
+    answer: [
+      "Yes. Open the Add student (or Edit) form and look under Work preferences. Pick “Days they want to work”, or leave every day unpicked if any day is fine.",
+      "Type “Hours they want each week”. Choose “They can’t start before” if they can only begin later in the day.",
+      "A day that isn’t picked counts like any other time the student can’t work. “Fill schedule for me” and the quick fixes never use it.",
+      "A student’s hours can be lower than the office limit, but never higher. If you type more, the office limit applies.",
+    ],
+    keywords: ["day", "days", "hours", "week", "prefer", "only", "specific", "start", "early", "limit", "student"],
+  },
+  {
     id: "why-cant-schedule",
     topic: "Rules",
     question: "Why won't it let me put someone in a box?",

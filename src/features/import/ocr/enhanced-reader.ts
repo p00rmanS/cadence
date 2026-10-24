@@ -23,6 +23,15 @@ export function enhancedReaderBaseUrl(): string {
 }
 
 /** Remembers the server's answer, so the app only asks once per page load. */
+/**
+ * True when this copy of the site could have the enhanced reader behind it: either a server address was set
+ * (`VITE_AUTOMATION_API_URL`), or the site is served from the root of its own address, where a host such as Vercel
+ * puts its server functions next to the page. A site in a sub-folder (GitHub Pages: /cadence/) has neither.
+ */
+function canHaveOwnServer(): boolean {
+  return serverBaseUrl() !== null || import.meta.env.BASE_URL === "/";
+}
+
 let availability: Promise<boolean> | null = null;
 
 /**
@@ -30,6 +39,11 @@ let availability: Promise<boolean> | null = null;
  * Answers false on any problem, e.g. on GitHub Pages, which has no server, so the button stays hidden.
  */
 export function isEnhancedReadingAvailable(): Promise<boolean> {
+  if (!availability && !canHaveOwnServer()) {
+    // GitHub Pages (a site in a sub-folder, with no server address set) cannot run server code, so asking would only
+    // produce a "not found" error in the console on every visit, aimed at the shared root of github.io.
+    availability = Promise.resolve(false);
+  }
   if (!availability) {
     const endpoint = `${enhancedReaderBaseUrl()}/api/ocr`;
     availability = fetch(endpoint, { method: "GET", credentials: "omit" })

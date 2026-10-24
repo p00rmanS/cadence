@@ -119,6 +119,49 @@ function isOnlyDays(line: string): boolean {
   return words.length > 0 && words.every(isDayWord);
 }
 
+/** One time of day, as a standalone piece (anchored), used to see how a line starts or ends. */
+const LONE_TIME_AT_END = new RegExp(String.raw`(?<![\d:])${TIME}\s*(?:-|to|until)?\s*$`, "i");
+const STARTS_WITH_TIME = new RegExp(String.raw`^\s*(?:(?:-|to|until)\s*)?${TIME}(?![\d:])`, "i");
+const LEADING_DASH = /^\s*(?:-|to|until)\s*/i;
+const TRAILING_DASH = /(?:-|to|until)\s*$/i;
+
+/** True when the line already holds a complete "start - end" time range. */
+function hasCompleteRange(line: string): boolean {
+  return new RegExp(TIME_RANGE.source, "i").test(line);
+}
+
+/**
+ * Narrow screens (a phone screenshot of a list) wrap one meeting over two lines, like
+ * "Tuesday/Thursday | 8:00 AM -" then "9:15 AM SCB 211", or even drop the dash:
+ * "Monday/Wednesday | 1:00 PM" then "1:50 PM | STC 184". Read line by line, each half fails. So a line that
+ * has day words and ends on an unfinished start time (or on a dash) is joined to the next line when that
+ * line starts with a time. A line with NO day word and no dash is never joined (a calendar's left-hand
+ * "8:00 AM", "9:00 AM" labels are not the start and end of one class).
+ */
+export function joinWrappedLines(lines: string[]): string[] {
+  const joined: string[] = [];
+  for (const line of lines) {
+    const previous = joined[joined.length - 1];
+    const unfinished =
+      previous !== undefined &&
+      !hasCompleteRange(previous) &&
+      LONE_TIME_AT_END.test(previous) &&
+      (TRAILING_DASH.test(previous) || previous.split(WORD_SEPARATORS).some(isDayWord));
+    if (unfinished && STARTS_WITH_TIME.test(line)) {
+      const glue = TRAILING_DASH.test(previous) ? " " : " - ";
+      joined[joined.length - 1] = `${previous}${glue}${line.replace(LEADING_DASH, "")}`;
+    } else {
+      joined.push(line);
+    }
+  }
+  return joined;
+}
+
+/** Every complete time range written in some text, in order, as the start and end exactly as read ("9:30 AM", "10:50 AM"). */
+export function timeRangesIn(text: string): { start: string; end: string }[] {
+  return [...text.matchAll(TIME_RANGE)].map((m) => ({ start: m[1].trim(), end: m[2].trim() }));
+}
+
 /**
  * Picks the class times out of text read from a screenshot (see the file comment). Lines with nothing
  * like a time (titles, teachers, column headings) are left out. A class is never silently dropped:
@@ -126,14 +169,18 @@ function isOnlyDays(line: string): boolean {
  * is kept as it was read, so the class-times box marks it with a red ✕ and the person fixes it.
  */
 export function ocrTextToClassText(rawText: string): ClassTextFromOcr {
-  const lines = rawText.split(/\r?\n/).map(fixReadingMistakes).filter(Boolean);
+  const lines = joinWrappedLines(rawText.split(/\r?\n/).map(fixReadingMistakes).filter(Boolean));
   const found: string[] = [];
   let daysOnPreviousLine = "";
 
   for (const line of lines) {
     const matches = [...line.matchAll(TIME_RANGE)];
     if (!matches.length) {
-      if (LOOKS_LIKE_A_TIME.test(line)) found.push(fromFirstDay(line));
+      // A lone time with no day and no dash ("8:00 AM", "Start Time | 8:00 AM") is a calendar's axis label or a
+      // form field, not a class that failed to read, so it is dropped instead of being reported as a problem line.
+      const hasDay = line.split(WORD_SEPARATORS).some(isDayWord);
+      const hasDash = /-|\bto\b|\buntil\b/i.test(line);
+      if (LOOKS_LIKE_A_TIME.test(line) && (hasDay || hasDash)) found.push(fromFirstDay(line));
       daysOnPreviousLine = isOnlyDays(line) ? line : "";
       continue;
     }
