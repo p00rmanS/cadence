@@ -5,7 +5,7 @@ import {
   OPENING_SHIFT_START,
   RELAXED_DAY_EXTRA_HOURS,
 } from "./constants";
-import { isDevotional, minShiftMinutes, weeklyLimit } from "./term";
+import { isDevotional, minShiftMinutes, studentLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
 import { openDays } from "./days";
@@ -150,7 +150,7 @@ function preferenceMismatches(student: Student, slotStarts: Minutes[]): number {
 
 /** Soft per-day hour cap so top-up doesn't pile every remaining hour onto one day. Never below one minimum-length shift. */
 function dayCapHours(student: Student, settings: ScheduleSettings): number {
-  return Math.max(minShiftMinutes(settings) / 60, Math.ceil(weeklyLimit(settings) / student.daysPerWeek) + settings.slotMinutes / 60);
+  return Math.max(minShiftMinutes(settings) / 60, Math.ceil(studentLimit(student, settings) / student.daysPerWeek) + settings.slotMinutes / 60);
 }
 
 /** True when `a` should win over `b`: compares the first number, then the next only on a tie, and so on. */
@@ -206,9 +206,10 @@ export function autoFill(
   const minSlots = Math.ceil(minShiftMinutes(settings) / settings.slotMinutes);
   const maxSlots = Math.max(minSlots, Math.floor(MAX_SHIFT_MINUTES / settings.slotMinutes));
   const explanations: AutoFillExplanation[] = [];
-  const limit = weeklyLimit(settings);
-  // Auto-fill aims for the full limit: 19 hours in the semester, 40 during a break.
-  const aim = limit;
+  // Each student's own weekly limit (the office limit unless their form says fewer hours).
+  const limitOf = (student: Student): number => studentLimit(student, settings);
+  // Auto-fill aims for the full limit: 19 hours in the semester, 40 during a break, or the student's own number.
+  const aimOf = limitOf;
 
   // How many back-to-back slots the student already works right BEFORE `startSlot` (used to extend a shift).
   const runBefore = (student: Student, day: Day, startSlot: Minutes): number => {
@@ -247,7 +248,7 @@ export function autoFill(
       if (blockedBySlot(student, day, s, settings) || plan.has(student.id, day, s)) return null;
     }
     const addedHours = len * slotHours;
-    if (plan.hours(student.id) + addedHours > limit) return null;
+    if (plan.hours(student.id) + addedHours > limitOf(student)) return null;
     if (plan.hoursOn(student.id, day) === 0 && plan.daysUsed(student.id) >= student.daysPerWeek) return null;
     if (plan.hoursOn(student.id, day) + addedHours > dayCapHours(student, settings) + extraDayHours) return null;
 
@@ -392,11 +393,11 @@ export function autoFill(
       }
       return found;
     };
-    while (plan.hours(student.id) < aim && guard-- > 0) {
+    while (plan.hours(student.id) < aimOf(student) && guard-- > 0) {
       // Prefer an even spread across days; only stretch a day if that is the only way to reach the target.
       const best = findBest(0) ?? findBest(RELAXED_DAY_EXTRA_HOURS);
       if (best === null) break;
-      place(best, "top-up", `Adds hours for ${student.name} toward ${aim} hrs, in the least-covered time.`);
+      place(best, "top-up", `Adds hours for ${student.name} toward ${aimOf(student)} hrs, in the least-covered time.`);
     }
   }
 
@@ -414,7 +415,7 @@ export function autoFill(
 
   /** The best "shorten this, add that" change that brings the student exactly to `aim`, or null. */
   function findMove(student: Student) {
-    const missing = Math.round((aim - plan.hours(student.id)) / slotHours);
+    const missing = Math.round((aimOf(student) - plan.hours(student.id)) / slotHours);
     if (missing <= 0) return null;
     const mine = plan.blocks.filter((b) => b.studentId === student.id);
 
@@ -463,7 +464,7 @@ export function autoFill(
 
   for (const student of students) {
     let guard = days.length * 2;
-    while (plan.hours(student.id) < aim && guard-- > 0) {
+    while (plan.hours(student.id) < aimOf(student) && guard-- > 0) {
       const move = findMove(student);
       if (!move) break;
       const cut = new Set(move.trim.boxes.map((m) => `${move.trim.day}|${m}`));
@@ -494,16 +495,16 @@ export function autoFill(
         start,
         end,
         phase: "top-up",
-        reason: `${moved}${DAY_LABEL[move.day]} ${formatRange(start, end)} so ${student.name} reaches ${aim} hours without a shift under ${hoursLabel(minShiftMinutes(settings) / 60)}.`,
+        reason: `${moved}${DAY_LABEL[move.day]} ${formatRange(start, end)} so ${student.name} reaches ${aimOf(student)} hours without a shift under ${hoursLabel(minShiftMinutes(settings) / 60)}.`,
       });
     }
   }
 
   const unmet: AutoFillResult["unmet"] = students
-    .filter((student) => plan.hours(student.id) < aim)
+    .filter((student) => plan.hours(student.id) < aimOf(student))
     .map((student) => ({
       studentId: student.id,
-      reason: `${student.name}'s classes, cutoff, breaks, days-per-week and the ${minShiftMinutes(settings) / 60}-hour minimum shift leave room for only ${plan.hours(student.id)} of ${aim} hours.`,
+      reason: `${student.name}'s classes, cutoff, breaks, days-per-week and the ${minShiftMinutes(settings) / 60}-hour minimum shift leave room for only ${plan.hours(student.id)} of ${aimOf(student)} hours.`,
     }));
 
   return {
