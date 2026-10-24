@@ -57,3 +57,12 @@ export const MIN_UPLOAD_WIDTH = 800;
 
 /** How long to wait for the enhanced reader before giving up (the server itself gives up after 45 s). */
 export const ENHANCED_TIMEOUT_MS = 50_000;
+
+/**
+ * Brightness (0-255) below which a pixel becomes pure black in the second, "calendar" reading. A weekly
+ * calendar shows each class as a coloured or grey box with dark text on it; on such pictures Tesseract's own
+ * black-and-white conversion sometimes treats whole boxes as pictures and skips their text (one real
+ * calendar lost every Wednesday class). Making the text pure black and everything lighter pure white avoids
+ * that. Tried on a real picture: 100 and 130 both read every class, 70 read none, so 115 sits in the middle.
+ */
+export const CALENDAR_THRESHOLD = 115;
