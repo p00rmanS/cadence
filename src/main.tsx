@@ -12,12 +12,16 @@ import "@fontsource/atkinson-hyperlegible/latin-700.css";
 import "@fontsource/bricolage-grotesque/latin-500.css";
 import "@fontsource/bricolage-grotesque/latin-700.css";
 import "./styles/app.css";
+import { registerServiceWorker } from "./pwa/registerServiceWorker";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,
 );
+
+// In the published site only: keep a copy of the app on the device so it opens offline and can be installed.
+registerServiceWorker();
 
 /**
  * Hides the splash screen (the animated logo in `index.html`). It stays up for at least
