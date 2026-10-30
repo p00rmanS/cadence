@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTENT_SECURITY_POLICY, addCspToHtml } from "../lib/contentSecurityPolicy";
+import { CONTENT_SECURITY_POLICY, addCspToHtml, contentSecurityPolicyFor } from "../lib/contentSecurityPolicy";
 
 /**
  * Privacy and security guards. These tests read the project's own files (not the running app) and
@@ -64,7 +64,9 @@ describe("security: the website's protective headers stay switched on", () => {
   it("sends a Content Security Policy that only runs our own scripts and forbids framing", () => {
     const policy = /Content-Security-Policy\s*=\s*"([^"]+)"/.exec(toml)?.[1] ?? "";
     expect(policy).toContain("script-src 'self'");
-    expect(policy).not.toMatch(/script-src[^;]*unsafe/); // no 'unsafe-inline' / 'unsafe-eval' for scripts
+    // No 'unsafe-inline' / 'unsafe-eval' for scripts. ('wasm-unsafe-eval' is allowed: it only lets the
+    // screenshot reader start WebAssembly, and never allows eval() or injected scripts.)
+    expect(policy).not.toMatch(/script-src[^;]*'unsafe-/);
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("object-src 'none'");
   });
@@ -79,7 +81,7 @@ describe("security: the website's protective headers stay switched on", () => {
     const built = addCspToHtml("<html><head><title>x</title></head></html>");
     expect(built.indexOf("Content-Security-Policy")).toBeLessThan(built.indexOf("<title>"));
     expect(CONTENT_SECURITY_POLICY).toContain("script-src 'self'");
-    expect(CONTENT_SECURITY_POLICY).not.toMatch(/script-src[^;]*unsafe/);
+    expect(CONTENT_SECURITY_POLICY).not.toMatch(/script-src[^;]*'unsafe-/);
     expect(CONTENT_SECURITY_POLICY).toContain("object-src 'none'");
     // Every rule in the meta version also appears, word for word, in the Netlify header version.
     const header = /Content-Security-Policy\s*=\s*"([^"]+)"/.exec(toml)?.[1] ?? "";
@@ -87,6 +89,14 @@ describe("security: the website's protective headers stay switched on", () => {
     const viteConfig = readFileSync("vite.config.ts", "utf8");
     expect(viteConfig).toMatch(/apply: "build"/);
     expect(viteConfig).toContain("addCspToHtml");
+  });
+
+  it("the built page may only talk to its own server, or to nobody when there is none", () => {
+    expect(contentSecurityPolicyFor(undefined)).toContain("connect-src 'self';");
+    expect(contentSecurityPolicyFor("/")).toContain("connect-src 'self';");
+    const withServer = contentSecurityPolicyFor("https://gateway.example.edu/some/path");
+    expect(withServer).toContain("connect-src 'self' https://gateway.example.edu;");
+    expect(withServer).not.toMatch(/connect-src[^;]*\shttps:(;|\s)/);
   });
 
   it("index.html has no inline script the policy would block (the app would show a blank page)", () => {

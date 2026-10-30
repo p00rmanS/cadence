@@ -1,8 +1,8 @@
-import type { BusyBlock, ConstraintViolation, Day, Minutes, ScheduleSettings, ShiftBlock, Student } from "./types";
+import type { BusyBlock, ConstraintViolation, Day, Minutes, ScheduleSettings, ShiftBlock, Student, WorkBreak } from "./types";
 import { DAY_LABEL } from "./types";
-import { DAYS } from "./types";
+import { openDays } from "./days";
 import { DEVOTIONAL, MIN_OPENING_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
-import { isDevotional, weeklyLimit } from "./term";
+import { isDevotional, studentLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 
 /**
@@ -96,7 +96,7 @@ export function staffAt(day: Day, slotStart: Minutes, assignments: ShiftBlock[])
  */
 export function hasOpeningShift(studentId: string, assignments: ShiftBlock[], settings: ScheduleSettings): boolean {
   const requiredSlots = Math.ceil(MIN_OPENING_SHIFT_MINUTES / settings.slotMinutes);
-  for (const day of DAYS) {
+  for (const day of openDays(settings)) {
     let run = 0;
     let cursor = OPENING_SHIFT_START;
     while (isAssigned(studentId, day, cursor, assignments)) {
@@ -128,18 +128,34 @@ export function blockedBySlot(
       ? { code: "class_conflict", message: `has class on ${DAY_LABEL[day]} at this time` }
       : { code: "unavailable", message: `is unavailable on ${DAY_LABEL[day]} at this time` };
   }
+  // Days the student does not want to work, and times before they can start, are "unavailable" like any other blocked time.
+  if (student.workDays && student.workDays.length > 0 && !student.workDays.includes(day)) {
+    return { code: "unavailable", message: `only wants to work ${student.workDays.map((d) => DAY_LABEL[d]).join(", ")}` };
+  }
+  if (student.earliestStart !== undefined && slotStart < student.earliestStart) {
+    return { code: "unavailable", message: `can't start before ${formatMinutes(student.earliestStart)}` };
+  }
   if (slotStart + settings.slotMinutes > student.latestEnd) {
     return { code: "after_cutoff", message: `can't work past ${formatMinutes(student.latestEnd)}` };
   }
-  if (student.lunchStart != null && slotStart === student.lunchStart) {
-    return { code: "lunch_conflict", message: `is on lunch at ${formatMinutes(student.lunchStart)}` };
+  const onBreak = breakAt(student, slotStart, settings.slotMinutes);
+  if (onBreak) {
+    return { code: "break_conflict", message: `is on a break at ${formatRange(onBreak.start, onBreak.start + onBreak.minutes)}` };
   }
   return null;
 }
 
 /**
+ * The student's break that overlaps this box, if any. A break blocks every box it touches: with
+ * 30-minute boxes, a 15-minute break at 12:00 keeps the whole 12:00–12:30 box free.
+ */
+export function breakAt(student: Student, slotStart: Minutes, slotMinutes: number): WorkBreak | undefined {
+  return student.breaks.find((b) => b.start < slotStart + slotMinutes && b.start + b.minutes > slotStart);
+}
+
+/**
  * Every soft limit this assignment would break (weekly hours, days per week). Unlike a class
- * or lunch conflict, a manager may knowingly allow these, so an override dialog must list
+ * or break conflict, a manager may knowingly allow these, so an override dialog must list
  * ALL of them, not just the first one `canAssign` happens to report.
  */
 export function softViolations(
@@ -151,8 +167,8 @@ export function softViolations(
 ): ConstraintViolation[] {
   if (blockedBySlot(student, day, slotStart, settings) || isAssigned(student.id, day, slotStart, assignments)) return [];
   const out: ConstraintViolation[] = [];
-  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
-    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` });
+  if (assignedHours(student.id, assignments, settings) >= studentLimit(student, settings)) {
+    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(studentLimit(student, settings))}` });
   }
   if (!canUseDay(student, day, assignments, settings)) {
     out.push({ code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` });
@@ -162,7 +178,7 @@ export function softViolations(
 
 /**
  * The main "can this student take this slot?" check used by clicks and auto-fill. Returns the
- * FIRST rule it breaks (hard rules first: class, blocked time, cutoff, lunch, already there; then
+ * FIRST rule it breaks (hard rules first: class, blocked time, cutoff, break, already there; then
  * the soft limits: weekly hours, days per week), or null if the slot is fine.
  */
 export function canAssign(
@@ -177,8 +193,8 @@ export function canAssign(
   if (isAssigned(student.id, day, slotStart, assignments)) {
     return { code: "already_assigned", message: "is already working this slot" };
   }
-  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
-    return { code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` };
+  if (assignedHours(student.id, assignments, settings) >= studentLimit(student, settings)) {
+    return { code: "over_weekly_target", message: `is already at ${hoursLabel(studentLimit(student, settings))}` };
   }
   if (!canUseDay(student, day, assignments, settings)) {
     return { code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` };
@@ -207,4 +223,15 @@ export function shiftRuns(
     else if (!last || last.end < start) runs.push({ start, end: start + settings.slotMinutes });
   }
   return runs;
+}
+
+/** Students who need an opening shift and don't have a real one yet. Shared by the server check and the Schedule health panel. */
+export function studentsMissingOpeningShift(
+  students: Student[],
+  assignments: ShiftBlock[],
+  settings: ScheduleSettings,
+): { studentId: string; name: string }[] {
+  return students
+    .filter((s) => s.needsOpeningShift && !hasOpeningShift(s.id, assignments, settings))
+    .map((s) => ({ studentId: s.id, name: s.name }));
 }

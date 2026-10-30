@@ -6,13 +6,17 @@ import { Avatar } from "../ui/Avatar";
 import { makeAvatar } from "../../lib/image";
 import { ImportPanel } from "../import/ImportPanel";
 import { MeetingReview } from "../import/MeetingReview";
-import { NO_CUTOFF } from "../../features/scheduling/constants";
+import { BreakEditor } from "./BreakEditor";
+import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, MAX_DAYS_PER_WEEK, NO_CUTOFF } from "../../features/scheduling/constants";
+import { clsx } from "../../lib/clsx";
 import { buildBusy } from "../../features/scheduling/parser";
 import { formatMinutes } from "../../features/scheduling/time";
+import { openDays } from "../../features/scheduling/days";
+import { studentLimit } from "../../features/scheduling/term";
 import { DAY_LONG } from "../../features/scheduling/types";
 import type { ExtractionOutcome } from "../../features/import/schedule-extractor";
 import type { NewStudentInput } from "../../hooks/useShiftFitStore";
-import type { Student } from "../../features/scheduling/types";
+import type { Day, ScheduleSettings, Student, WorkBreak } from "../../features/scheduling/types";
 
 /**
  * The "Add a student" / "Edit student" popup form. Holds its own draft state
@@ -40,14 +44,21 @@ const LATEST_OPTIONS: Opt[] = [
   { value: 23 * 60, label: "11:00pm" },
 ];
 
-const LUNCH_OPTIONS: Opt[] = [
-  { value: null, label: "No lunch break" },
-  { value: 11 * 60, label: "11:00am – 11:30am" },
-  { value: 11 * 60 + 30, label: "11:30am – 12:00pm" },
-  { value: 12 * 60, label: "12:00pm – 12:30pm" },
-  { value: 12 * 60 + 30, label: "12:30pm – 1:00pm" },
-  { value: 13 * 60, label: "1:00pm – 1:30pm" },
+/** The "can't start before" choices (0 means no limit, which is stored as "missing"). */
+const EARLIEST_OPTIONS: Opt[] = [
+  { value: 0, label: "No limit — from when the office opens" },
+  ...[8, 9, 10, 11, 12, 13, 14].map((hour) => ({ value: hour * 60, label: formatMinutes(hour * 60) })),
 ];
+
+/** A plain-language problem with a typed weekly-hours number (blank is fine: it means the office limit), or null. */
+function weeklyHoursProblem(text: string): string | null {
+  if (text.trim() === "") return null;
+  const value = Number(text);
+  if (Number.isNaN(value)) return "Type a number of hours, like 12, or leave it empty.";
+  if (value < 1 || value > 40) return "Choose between 1 and 40 hours.";
+  if (Math.round(value * 2) / 2 !== value) return "Use whole or half hours, like 12 or 12.5.";
+  return null;
+}
 
 const inputCls = "mt-1 w-full rounded-lg border border-line bg-bg p-2 text-sm";
 
@@ -60,11 +71,14 @@ function withCurrent(options: Opt[], current: number | null, label: (v: number) 
 /** The add/edit student form: name, photo, class times, blocked times and work preferences. */
 export function StudentFormSheet({
   student,
+  settings,
   existingNames,
   onSave,
   onClose,
 }: {
   student: Student | null;
+  /** The office rules, for the days the office is open and the office weekly limit shown next to the hours box. */
+  settings: ScheduleSettings;
   existingNames: string[];
   onSave: (input: NewStudentInput) => void;
   onClose: () => void;
@@ -73,8 +87,12 @@ export function StudentFormSheet({
   const [preference, setPreference] = useState<NewStudentInput["preference"]>(student?.preference ?? "any");
   const [daysPerWeek, setDaysPerWeek] = useState(student?.daysPerWeek ?? 5);
   const [latestEnd, setLatestEnd] = useState(student?.latestEnd ?? NO_CUTOFF);
-  const [lunchStart, setLunchStart] = useState<number | null>(student ? student.lunchStart : 12 * 60);
+  // A new student starts with the usual 30-minute lunch at noon; the manager can change or remove it.
+  const [breaks, setBreaks] = useState<WorkBreak[]>(student ? student.breaks : [{ start: DEFAULT_BREAK_START, minutes: DEFAULT_BREAK_MINUTES }]);
   const [needsOpeningShift, setNeedsOpeningShift] = useState(student?.needsOpeningShift ?? false);
+  const [workDays, setWorkDays] = useState<Day[]>(student?.workDays ?? []);
+  const [weeklyHoursText, setWeeklyHoursText] = useState(student?.weeklyHours === undefined ? "" : String(student.weeklyHours));
+  const [earliestStart, setEarliestStart] = useState(student?.earliestStart ?? 0);
   const [classText, setClassText] = useState(student?.classText ?? "");
   const [blockedText, setBlockedText] = useState(student?.blockedText ?? "");
   const [avatar, setAvatar] = useState<string | null>(student?.avatar ?? null);
@@ -99,7 +117,7 @@ export function StudentFormSheet({
     if (!ai) return;
     setClassText(ai.meetings.map((m) => `${DAY_LONG[m.day as keyof typeof DAY_LONG]} ${formatMinutes(m.start)}-${formatMinutes(m.end)}`).join("\n"));
     if (ai.constraints.latestEnd != null) setLatestEnd(ai.constraints.latestEnd);
-    if (ai.constraints.lunchStart != null) setLunchStart(ai.constraints.lunchStart);
+    if (ai.constraints.breaks.length) setBreaks(ai.constraints.breaks);
     setNeedsOpeningShift(ai.constraints.needsOpeningShift);
     setPreference(ai.constraints.preference);
     if (ai.constraints.daysPerWeek) setDaysPerWeek(ai.constraints.daysPerWeek);
@@ -131,16 +149,34 @@ export function StudentFormSheet({
   function handleSubmit() {
     setTriedSave(true);
     if (nameError || classError) return;
-    onSave({ name: trimmed, avatar, preference, daysPerWeek, classText, blockedText, latestEnd, lunchStart, needsOpeningShift });
+    if (weeklyHoursProblem(weeklyHoursText)) return;
+    onSave({
+      name: trimmed,
+      avatar,
+      preference,
+      daysPerWeek,
+      classText,
+      blockedText,
+      latestEnd,
+      breaks,
+      needsOpeningShift,
+      workDays,
+      weeklyHours: weeklyHoursText.trim() === "" ? undefined : Number(weeklyHoursText),
+      earliestStart,
+    });
   }
 
   const latestOptions = withCurrent(LATEST_OPTIONS, latestEnd, (v) => formatMinutes(v));
-  const lunchOptions = withCurrent(LUNCH_OPTIONS, lunchStart, (v) => `${formatMinutes(v)} – ${formatMinutes(v + 30)}`);
+  const earliestOptions = withCurrent(EARLIEST_OPTIONS, earliestStart, (v) => formatMinutes(v));
+  const officeDays = openDays(settings);
+  const officeLimit = studentLimit({}, settings);
+  const hoursError = weeklyHoursProblem(weeklyHoursText);
+  const toggleDay = (day: Day) => setWorkDays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day]));
 
   return (
     <Modal
       title={student ? `Edit ${student.name}` : "Add a student"}
-      description="Tell Cadence when they have class and any limits. You can change this later."
+      description="Tell Syncro when they have class and any limits. You can change this later."
       onClose={onClose}
       footer={
         <>
@@ -237,7 +273,7 @@ export function StudentFormSheet({
             </label>
             <HelpTip label="Other times they can't work">
               Use this for another job, appointments, practice or anything else that is not a class. Write it the same way as
-              class times, like <b>W 2:00pm-4:00pm</b>. Cadence keeps them out of these times too.
+              class times, like <b>W 2:00pm-4:00pm</b>. Syncro keeps them out of these times too.
             </HelpTip>
           </div>
           <textarea
@@ -275,7 +311,7 @@ export function StudentFormSheet({
               Days they can work each week
             </label>
             <select id="days" value={daysPerWeek} onChange={(e) => setDaysPerWeek(Number(e.target.value))} className={inputCls}>
-              {[1, 2, 3, 4, 5].map((d) => (
+              {Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1).map((d) => (
                 <option key={d} value={d}>
                   {d} {d === 1 ? "day" : "days"}
                 </option>
@@ -288,7 +324,7 @@ export function StudentFormSheet({
                 They must leave by
               </label>
               <HelpTip label="Must leave by">
-                The latest time they can work. Cadence won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
+                The latest time they can work. Syncro won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
               </HelpTip>
             </div>
             <select id="latest" value={latestEnd} onChange={(e) => setLatestEnd(Number(e.target.value))} className={inputCls}>
@@ -300,18 +336,79 @@ export function StudentFormSheet({
             </select>
           </div>
           <div>
-            <label htmlFor="lunch" className="block text-sm font-medium">
-              Lunch break (30 minutes)
-            </label>
-            <select id="lunch" value={lunchStart ?? ""} onChange={(e) => setLunchStart(e.target.value === "" ? null : Number(e.target.value))} className={inputCls}>
-              {lunchOptions.map((o) => (
-                <option key={String(o.value)} value={o.value ?? ""}>
+            <div className="flex items-center gap-1">
+              <label htmlFor="earliest" className="text-sm font-medium">
+                They can&apos;t start before
+              </label>
+              <HelpTip label="Can't start before">
+                The earliest time they can begin work (for example, they have an early class or a long commute). Syncro won&apos;t schedule them earlier.
+              </HelpTip>
+            </div>
+            <select id="earliest" value={earliestStart} onChange={(e) => setEarliestStart(Number(e.target.value))} className={inputCls}>
+              {earliestOptions.map((o) => (
+                <option key={o.value} value={o.value ?? ""}>
                   {o.label}
                 </option>
               ))}
             </select>
           </div>
+          <div>
+            <div className="flex items-center gap-1">
+              <label htmlFor="weekly-hours" className="text-sm font-medium">
+                Hours they want each week
+              </label>
+              <HelpTip label="Hours per week">
+                How many hours this student wants to work in a week. Leave it empty to use the office limit ({officeLimit} hours right now). A number
+                higher than the office limit is held to the office limit.
+              </HelpTip>
+            </div>
+            <input
+              id="weekly-hours"
+              inputMode="decimal"
+              value={weeklyHoursText}
+              onChange={(e) => setWeeklyHoursText(e.target.value)}
+              placeholder={`Office limit: ${officeLimit}`}
+              aria-describedby="weekly-hours-err"
+              aria-invalid={Boolean(hoursError)}
+              className={inputCls}
+            />
+            {hoursError && (
+              <p id="weekly-hours-err" role="alert" className="mt-1 text-xs text-gap">
+                {hoursError}
+              </p>
+            )}
+          </div>
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-1">
+              <span id="work-days-label" className="text-sm font-medium">
+                Days they want to work
+              </span>
+              <HelpTip label="Days they want to work">
+                Pick the days this student would like to work. Leave every day unpicked if any day is fine. Days that are not picked are treated like
+                days they can&apos;t work, so Syncro won&apos;t put them there.
+              </HelpTip>
+            </div>
+            <div role="group" aria-labelledby="work-days-label" className="mt-1 flex flex-wrap gap-2">
+              {officeDays.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={workDays.includes(day)}
+                  onClick={() => toggleDay(day)}
+                  className={clsx(
+                    "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                    workDays.includes(day) ? "border-accent bg-accent text-accent-ink" : "border-line bg-panel text-ink hover:bg-line/30",
+                  )}
+                >
+                  {DAY_LONG[day]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-muted">{workDays.length === 0 ? "Any day is fine." : "Only the picked days."}</p>
+          </div>
         </fieldset>
+
+        <BreakEditor breaks={breaks} onChange={setBreaks} />
 
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={needsOpeningShift} onChange={(e) => setNeedsOpeningShift(e.target.checked)} />

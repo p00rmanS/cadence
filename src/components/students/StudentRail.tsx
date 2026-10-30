@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Plus, Search, UserPlus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Button } from "../ui/Button";
+import { EmptyMark } from "../ui/EmptyMark";
 import { StudentCard } from "./StudentCard";
 import { summarizeStudent } from "../../features/scheduling/selectors";
-import { weeklyLimit } from "../../features/scheduling/term";
+import { studentLimit } from "../../features/scheduling/term";
 import type { ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /** The left-hand column: search box, "Add student"/"Add several at once" entry points, and the scrolling list of `StudentCard`s. Filtering by the search box happens entirely here (`filtered`) — it doesn't change what's actually stored. */
@@ -68,13 +69,13 @@ export function StudentRail({
         </label>
       )}
 
-      <ul className="min-h-0 flex-1 overflow-y-auto pr-0.5" aria-label="Student list">
+      <ul className="stagger min-h-0 flex-1 overflow-y-auto pr-0.5" aria-label="Student list">
         {filtered.map((student) => (
           <StudentCard
             key={student.id}
             summary={summarizeStudent(student, assignments, settings)}
-            targetHours={weeklyLimit(settings)}
-            limitHours={weeklyLimit(settings)}
+            targetHours={studentLimit(student, settings)}
+            limitHours={studentLimit(student, settings)}
             selected={student.id === selectedStudentId}
             issueCount={issues.filter((i) => i.studentId === student.id && !i.overridden).length}
             onSelect={() => onSelect(student.id)}
@@ -84,9 +85,9 @@ export function StudentRail({
         ))}
         {!students.length && (
           <li className="rounded-xl border border-dashed border-line p-5 text-center">
-            <UserPlus className="mx-auto h-8 w-8 text-muted" aria-hidden />
+            <EmptyMark className="mx-auto h-16 w-16" />
             <p className="mt-2 font-semibold">No students yet</p>
-            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. Cadence keeps them out of those times.</p>
+            <p className="mt-1 text-sm text-muted">Add a student and paste the times they have class. Syncro keeps them out of those times.</p>
             <Button variant="primary" className="mt-3" onClick={onAddNew}>
               <Plus className="h-4 w-4" aria-hidden /> Add your first student
             </Button>

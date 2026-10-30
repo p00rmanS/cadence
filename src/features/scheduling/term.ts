@@ -1,5 +1,5 @@
-import { BREAK_WEEKLY_HOURS, DEVOTIONAL } from "./constants";
-import type { Day, Minutes, ScheduleSettings } from "./types";
+import { BREAK_WEEKLY_HOURS, DEVOTIONAL, MIN_SHIFT_MINUTES } from "./constants";
+import type { Day, Minutes, ScheduleSettings, Student } from "./types";
 
 /**
  * ============================================================================
@@ -21,7 +21,27 @@ export function isOnBreak(settings: ScheduleSettings): boolean {
 
 /** Most hours a student may be scheduled this week. */
 export function weeklyLimit(settings: ScheduleSettings): number {
-  return isOnBreak(settings) ? BREAK_WEEKLY_HOURS : settings.weeklyTargetHours;
+  return isOnBreak(settings) ? breakLimit(settings) : settings.weeklyTargetHours;
+}
+
+/**
+ * Most hours THIS student may be scheduled in a week: their own number from the add/edit form when they have
+ * one, but never more than the office limit (`weeklyLimit`), which is the employer's rule. Every place that asks
+ * "is this student at their hours?" uses this, so the grid, auto-fill and the problem checks agree.
+ */
+export function studentLimit(student: Pick<Student, "weeklyHours">, settings: ScheduleSettings): number {
+  const office = weeklyLimit(settings);
+  return student.weeklyHours === undefined ? office : Math.min(student.weeklyHours, office);
+}
+
+/** Most hours a student may work in a week during a break: the manager's choice in Rules, or the standard 40. */
+export function breakLimit(settings: ScheduleSettings): number {
+  return settings.breakWeeklyHours ?? BREAK_WEEKLY_HOURS;
+}
+
+/** Shortest shift allowed, in minutes: the manager's choice in Rules, or the standard 2 hours. */
+export function minShiftMinutes(settings: ScheduleSettings): number {
+  return settings.minShiftHours === undefined ? MIN_SHIFT_MINUTES : Math.round(settings.minShiftHours * 60);
 }
 
 /** True for a half-hour box that falls inside Tuesday devotional while the semester is on. */

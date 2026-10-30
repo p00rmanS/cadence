@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { CACHE_PREFIX, buildServiceWorker } from "../pwa/serviceWorker";
+import { CACHE_PREFIX, READER_CACHE, buildServiceWorker } from "../pwa/serviceWorker";
 import { registerServiceWorker } from "../pwa/registerServiceWorker";
 
 /**
@@ -23,7 +23,11 @@ function fakeCaches(initial: Record<string, Record<string, string>> = {}) {
     open: async (name: string) => {
       if (!boxes.has(name)) boxes.set(name, new Map());
       const box = boxes.get(name)!;
-      return { addAll: async (urls: string[]) => urls.forEach((url) => box.set(url, `saved:${url}`)) };
+      return {
+        addAll: async (urls: string[]) => urls.forEach((url) => box.set(url, `saved:${url}`)),
+        match: async (request: { url: string }) => box.get(request.url),
+        put: async (request: { url: string }, response: unknown) => void box.set(request.url, response as string),
+      };
     },
     keys: async () => [...boxes.keys()],
     delete: async (name: string) => boxes.delete(name),
@@ -39,7 +43,7 @@ function fakeCaches(initial: Record<string, Record<string, string>> = {}) {
 }
 
 /** Runs the generated sw.js in a pretend world and returns its event handlers plus the fakes. */
-function runServiceWorker(options: { online: boolean; caches?: ReturnType<typeof fakeCaches> }) {
+function runServiceWorker(options: { online: boolean; caches?: ReturnType<typeof fakeCaches>; files?: string[]; readerStatus?: number }) {
   const handlers: Record<string, Handler> = {};
   const caches = options.caches ?? fakeCaches();
   const fetched: string[] = [];
@@ -53,9 +57,14 @@ function runServiceWorker(options: { online: boolean; caches?: ReturnType<typeof
   const fetch = async (request: { url: string }) => {
     fetched.push(request.url);
     if (!options.online) throw new TypeError("offline");
+    // The screenshot reader's files come back as real-looking answers (with a status and clone), like a browser's.
+    if (request.url.includes("/ocr/")) {
+      const answer = { status: options.readerStatus ?? 200, body: `network:${request.url}`, clone: () => answer };
+      return answer;
+    }
     return `network:${request.url}`;
   };
-  new Function("self", "caches", "fetch", buildServiceWorker(FILES, "v1"))(self, caches, fetch);
+  new Function("self", "caches", "fetch", buildServiceWorker(options.files ?? FILES, "v1"))(self, caches, fetch);
   return { handlers, caches, fetched, self };
 }
 
@@ -151,5 +160,44 @@ describe("installing as an app", () => {
     const html = readFileSync("index.html", "utf8");
     expect(html).toContain('rel="manifest"');
     expect(html).toContain('rel="apple-touch-icon"');
+  });
+});
+
+describe("the screenshot reader's big files (rule 5)", () => {
+  const WITH_READER = [...FILES, "ocr/worker.min.js", "ocr/lang/eng.traineddata.gz"];
+  const READER_FILE = `${SCOPE}ocr/lang/eng.traineddata.gz`;
+
+  it("are NOT downloaded when the app is installed (about 12 MB nobody asked for yet)", async () => {
+    const sw = runServiceWorker({ online: true, files: WITH_READER });
+    await lifecycle(sw, "install");
+    const saved = [...sw.caches.boxes.get(`${CACHE_PREFIX}v1`)!.keys()];
+    expect(saved.some((url) => url.includes("/ocr/"))).toBe(false);
+    expect(saved).toHaveLength(FILES.length);
+  });
+
+  it("are saved the first time they are used, and then come from the saved copy even offline", async () => {
+    const online = runServiceWorker({ online: true, files: WITH_READER });
+    await lifecycle(online, "install");
+    expect(await request(online, READER_FILE)).toMatchObject({ body: `network:${READER_FILE}` });
+    expect(online.caches.boxes.get(READER_CACHE)?.has(READER_FILE)).toBe(true);
+
+    // later, with no internet, the same box answers
+    const offline = runServiceWorker({ online: false, files: WITH_READER, caches: online.caches });
+    expect(await request(offline, READER_FILE)).toMatchObject({ body: `network:${READER_FILE}` });
+    expect(offline.fetched).toEqual([]); // the saved copy answered; the internet was never asked
+  });
+
+  it("survive an app update: old versions are deleted, the reader's box is kept", async () => {
+    const caches = fakeCaches({ [`${CACHE_PREFIX}old`]: {}, [READER_CACHE]: { [READER_FILE]: "x" } });
+    const sw = runServiceWorker({ online: true, caches });
+    await lifecycle(sw, "activate");
+    expect([...caches.boxes.keys()]).toEqual([READER_CACHE]);
+  });
+
+  it("are never saved from a failed or partial download", async () => {
+    const sw = runServiceWorker({ online: true, files: WITH_READER, readerStatus: 206 });
+    await lifecycle(sw, "install");
+    await request(sw, READER_FILE);
+    expect(sw.caches.boxes.get(READER_CACHE)?.has(READER_FILE) ?? false).toBe(false);
   });
 });

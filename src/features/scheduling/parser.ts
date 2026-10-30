@@ -17,7 +17,7 @@ import type { BusyBlock, Day, Minutes, ParseResult, ParsedMeetingLine } from "./
 const MAX_LINES = 200;
 const MAX_LINE_LENGTH = 300;
 
-const LETTER_DAY: Record<string, Day> = { M: "mon", T: "tue", W: "wed", R: "thu", F: "fri" };
+const LETTER_DAY: Record<string, Day> = { M: "mon", T: "tue", W: "wed", R: "thu", F: "fri", S: "sat" };
 
 const FULL_DAY_NAMES: [RegExp, Day][] = [
   [/^mon(day)?$/i, "mon"],
@@ -25,12 +25,14 @@ const FULL_DAY_NAMES: [RegExp, Day][] = [
   [/^wed(nesday)?$/i, "wed"],
   [/^thu(r(s(day)?)?)?$/i, "thu"],
   [/^fri(day)?$/i, "fri"],
+  [/^sat(urday)?$/i, "sat"],
 ];
-const WEEKEND_NAME = /^(sat(urday)?|sun(day)?)$/i;
+/** Sunday, written out or as "Su". The office is never open on Sunday, so it is reported instead of read. */
+const SUNDAY_NAME = /^(sun(day)?|su)$/i;
 
 /**
- * Compact day codes: "MWF", "TTh", "TR", "Th", "MW". "Th"/"Tu" are read before
- * single letters and a lone "T" is Tuesday (Thursday is "Th" or "R"). A code that
+ * Compact day codes: "MWF", "TTh", "TR", "Th", "MW", "MWFS". "Th"/"Tu"/"Sa" are read before
+ * single letters, a lone "T" is Tuesday (Thursday is "Th" or "R") and a lone "S" is Saturday. A code that
  * repeats a day ("TT") is ambiguous, so it is rejected rather than guessed.
  */
 function parseCompactDays(token: string): Day[] | null {
@@ -43,6 +45,9 @@ function parseCompactDays(token: string): Day[] | null {
       i += 2;
     } else if (s.startsWith("TU", i)) {
       out.push("tue");
+      i += 2;
+    } else if (s.startsWith("SA", i)) {
+      out.push("sat");
       i += 2;
     } else if (s[i] in LETTER_DAY) {
       out.push(LETTER_DAY[s[i]]);
@@ -76,9 +81,9 @@ export function parseDays(input: string): Day[] | null {
   return days;
 }
 
-/** True if the text names Saturday or Sunday, so the parser can explain why that part was skipped. */
-export function mentionsWeekend(input: string): boolean {
-  return input.split(DAY_SEPARATORS).some((t) => WEEKEND_NAME.test(t));
+/** True if the text names Sunday, so the parser can explain why that part was skipped. */
+export function mentionsSunday(input: string): boolean {
+  return input.split(DAY_SEPARATORS).some((t) => SUNDAY_NAME.test(t));
 }
 
 type Meridiem = "am" | "pm";
@@ -196,8 +201,52 @@ const LINE_RE = new RegExp(String.raw`^([^\d]+?)\s*(${TIME_TOKEN})\s*(?:-|to|unt
 const NO_MEETING = /\b(online|on-line|asynchronous|async|tba|tbd|arranged|by arrangement|no meeting|does not meet|no set time|independent study)\b/i;
 const CLOCK_TIME = /\d{1,2}\s*(?::\d{2}|[ap]\.?\s*m\b)/i;
 
-/** Parses one line of pasted class-time text into a structured result (never throws). */
+/**
+ * A comma that ENDS one meeting and STARTS another, such as "M 9:00AM-9:50AM, W 1:00PM-2:15PM". It is only a
+ * split point when the text before it already ends in a time and the text after it looks like a new day + time
+ * range, so the commas inside "Mon, Wed, Fri 9:00-9:50" and in "MWF 9:00-9:50, Room 214" never split a line.
+ * (Without this, only the first meeting on such a line was read and the rest vanished without a warning.)
+ */
+const BETWEEN_MEETINGS = new RegExp(
+  String.raw`(?<=\d|[ap]\.?\s*m\.?),\s*(?=[A-Za-z][A-Za-z/&.\s]{0,40}?\d{1,2}(?::\d{2})?\s*(?:[ap]\.?\s*m\.?)?\s*(?:-|[–—−]|to\b|until\b)\s*\d)`,
+  "i",
+);
+
+/** Splits one pasted line into the separate meetings it contains (usually just one: itself). */
+function splitSeveralMeetings(line: string): string[] {
+  return line.split(BETWEEN_MEETINGS);
+}
+
+/**
+ * Parses one line of pasted class-time text into a structured result (never throws). If the line as written
+ * can't be read, two more ways are tried before giving up, both common in registration exports: the cells of
+ * a "course | days | times | room" row, and a course code such as "BIOL 101" in front of the meeting.
+ */
 export function parseMeetingLine(rawLine: string): ParsedMeetingLine {
+  const first = parseOneWay(rawLine);
+  if (first.ok) return first;
+  for (const attempt of otherReadings(rawLine)) {
+    const result = parseOneWay(attempt);
+    if (result.ok && !result.noMeeting) return { ...result, raw: rawLine.trim() };
+  }
+  return first;
+}
+
+/** Other ways to read a line that did not parse as written (see `parseMeetingLine`). Each is a different text to try. */
+function otherReadings(rawLine: string): string[] {
+  const readings: string[] = [];
+  // "BIOL 101 - Intro | MWF | 9:00 AM - 9:50 AM | Room 214": try every pair of neighbouring cells as "days times".
+  const cells = rawLine.split("|").map((c) => c.trim()).filter(Boolean);
+  if (cells.length >= 2) for (let i = 0; i < cells.length - 1; i++) readings.push(`${cells[i]} ${cells[i + 1]}`);
+  // "BIOL 101 MWF 9:00 AM - 9:50 AM": a course code is 2-6 letters then a 3-digit number (so a day group like "MWF"
+  // followed by a time such as "10:00" is never mistaken for one), optionally followed by a dash and a title.
+  const withoutCode = rawLine.trim().replace(/^[A-Za-z]{2,6}\s*\d{3}[A-Za-z]?(?![\d:])\s*(?:-\s*[^|]*?(?=\s+[A-Za-z/,&]*\s*\d))?\s+/, "");
+  if (withoutCode !== rawLine.trim()) readings.push(withoutCode);
+  return readings;
+}
+
+/** Reads one line exactly as written (the original logic of `parseMeetingLine`). */
+function parseOneWay(rawLine: string): ParsedMeetingLine {
   const raw = rawLine.trim();
   if (raw.length > MAX_LINE_LENGTH) {
     return { raw: raw.slice(0, 60) + "…", ok: false, warning: "This line is too long to be a class time." };
@@ -214,8 +263,8 @@ export function parseMeetingLine(rawLine: string): ParsedMeetingLine {
     return { raw, ok: false, warning: "Could not find a day + time range on this line." };
   }
   const [, dayToken, startToken, endToken] = match;
-  if (mentionsWeekend(dayToken)) {
-    return { raw, ok: false, warning: "Weekend meetings aren't part of the Mon–Fri schedule — remove this line." };
+  if (mentionsSunday(dayToken)) {
+    return { raw, ok: false, warning: "Sunday isn't part of the Monday to Saturday schedule — remove this line." };
   }
   const days = parseDays(dayToken);
   if (!days) {
@@ -254,6 +303,7 @@ export function buildBusy(classText: string, blockedText: string): { busy: BusyB
 export function parseClassText(text: string): ParseResult {
   const rawLines = text
     .split(/[\n;]+/)
+    .flatMap(splitSeveralMeetings)
     .map((l) => l.trim())
     .filter(Boolean);
   const lines = rawLines.slice(0, MAX_LINES).map(parseMeetingLine);

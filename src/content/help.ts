@@ -24,9 +24,9 @@ export const FAQ: FaqItem[] = [
   {
     id: "what-is-shiftfit",
     topic: "Getting started",
-    question: "What is Cadence for?",
+    question: "What is Syncro for?",
     answer: [
-      "Cadence helps a manager decide who works when. You tell it when each student worker has class, and it shows you a week grid so you can make sure someone is working every hour.",
+      "Syncro helps a manager decide who works when. You tell it when each student worker has class, and it shows you a week grid so you can make sure someone is working every hour.",
       "It won't put anyone in a spot where they have class, and it warns you if someone would work too many hours.",
     ],
     keywords: ["purpose", "about", "overview"],
@@ -37,7 +37,7 @@ export const FAQ: FaqItem[] = [
     question: "What's the fastest way to make a schedule?",
     answer: [
       "1. Press Add student on the left and type a name. Paste or type the student's class times.",
-      "2. Press Fill schedule for me. Cadence places shifts for everyone.",
+      "2. Press Fill schedule for me. Syncro places shifts for everyone.",
       "3. Look for pink boxes in the grid. Those hours still need someone. Click a pink box to assign a student who is free.",
     ],
     keywords: ["start", "begin", "tutorial", "how to"],
@@ -47,8 +47,8 @@ export const FAQ: FaqItem[] = [
     topic: "Getting started",
     question: "How do I add a student?",
     answer: [
-      "Press Add student above the student list. Type their name, then paste their class times into the box. You will see each line checked right away: a green check means Cadence understood it.",
-      "Then choose their preferences (morning or afternoon, how many days a week, when they must leave, lunch) and press Add student.",
+      "Press Add student above the student list. Type their name, then paste their class times into the box. You will see each line checked right away: a green check means Syncro understood it.",
+      "Then choose their preferences (morning or afternoon, how many days a week, when they must leave, their breaks) and press Add student.",
     ],
     keywords: ["new", "create", "worker"],
   },
@@ -58,8 +58,8 @@ export const FAQ: FaqItem[] = [
     question: "How should I write class times?",
     answer: [
       "Any of these work, one class per line: MWF 9:00-9:50, TTh 1:00pm-2:15pm, or Tuesday/Thursday 8:00 AM - 9:15 AM. You can also paste the Meeting Patterns column straight from Workday.",
-      "M = Monday, T = Tuesday, W = Wednesday, Th or R = Thursday, F = Friday. Weekend classes aren't part of the Monday to Friday schedule.",
-      "An online course with no meeting time, like “Online - Asynchronous” or “TBA”, is fine to paste. It blocks nothing, and Cadence tells you it skipped it.",
+      "M = Monday, T = Tuesday, W = Wednesday, Th or R = Thursday, F = Friday, S or Sat = Saturday. Sunday classes aren't part of the Monday to Saturday schedule.",
+      "An online course with no meeting time, like “Online - Asynchronous” or “TBA”, is fine to paste. It blocks nothing, and Syncro tells you it skipped it.",
     ],
     keywords: ["workday", "paste", "MWF", "TTh", "format"],
   },
@@ -69,7 +69,7 @@ export const FAQ: FaqItem[] = [
     question: "Can I add lots of students at once?",
     answer: [
       "Yes. Press “Add several at once” under the student list. Type one student per line: the name, a colon, then their class times. Separate several classes with a semicolon.",
-      "You can also copy rows from a spreadsheet, with the name in the first column and the classes in the next ones. Cadence checks every line first and tells you which ones it can't read.",
+      "You can also copy rows from a spreadsheet, with the name in the first column and the classes in the next ones. Syncro checks every line first and tells you which ones it can't read.",
     ],
     keywords: ["bulk", "many", "roster", "import", "spreadsheet", "paste", "list", "csv", "everyone"],
   },
@@ -79,7 +79,7 @@ export const FAQ: FaqItem[] = [
     question: "I already have a schedule written down. Can I paste it in?",
     answer: [
       "Yes. Open Settings at the top, then press “Paste existing shifts”. Type one student per line: the name, a colon, then the days and times, like Noa K.: MWF 9:00am-1:00pm. Separate several shifts with a semicolon.",
-      "The students must already be added. Cadence shows what it understood before adding anything. A half hour that breaks a rule, like overlapping a class, is skipped and you are told why. Press Undo to take the whole paste back.",
+      "The students must already be added. Syncro shows what it understood before adding anything. A half hour that breaks a rule, like overlapping a class, is skipped and you are told why. Press Undo to take the whole paste back.",
     ],
     keywords: ["import", "existing", "text", "email", "supervisor", "already", "paste", "shifts"],
   },
@@ -88,7 +88,7 @@ export const FAQ: FaqItem[] = [
     topic: "Getting started",
     question: "Can I add a photo for a student?",
     answer: [
-      "Yes. Press the pencil next to a student, then Choose a photo. Pick a PNG, JPG or WebP file up to 5 MB. Cadence crops it to a small square and shows it on the student's card and in the By student and By day lists.",
+      "Yes. Press the pencil next to a student, then Choose a photo. Pick a PNG, JPG or WebP file up to 5 MB. Syncro crops it to a small square and shows it on the student's card and in the By student and By day lists.",
       "The photo is kept in this browser only, like the rest of your schedule. It is included in a backup file, so keep backups private.",
     ],
     keywords: ["picture", "profile", "image", "avatar", "upload", "face"],
@@ -99,17 +99,27 @@ export const FAQ: FaqItem[] = [
     question: "What if a student can't work at other times, like for a second job?",
     answer: [
       "In the student's form, use the box called “Any other times they can't work?”. Write those times the same way as classes, for example W 2:00pm-4:00pm.",
-      "Cadence treats these exactly like class time: it won't schedule them there, and the schedule says “is unavailable” instead of “has class”.",
+      "Syncro treats these exactly like class time: it won't schedule them there, and the schedule says “is unavailable” instead of “has class”.",
     ],
     keywords: ["job", "appointment", "practice", "busy", "unavailable", "blocked", "sports"],
+  },
+  {
+    id: "breaks",
+    topic: "Getting started",
+    question: "How do I give a student a lunch or rest break?",
+    answer: [
+      "In the student's form, under Breaks, pick when the break starts and how long it lasts (15 minutes to 1 hour). Press Add a break for another one, up to three a day.",
+      "Breaks repeat every day. Syncro never schedules the student during a break, and break time doesn't count toward their weekly hours. The schedule works in half hours, so a 15-minute break at 12:00pm keeps 12:00–12:30pm free.",
+    ],
+    keywords: ["lunch", "break", "rest", "meal", "pause"],
   },
   {
     id: "am-pm-warning",
     topic: "Getting started",
     question: "Why does it say “No am/pm given”?",
     answer: [
-      "If a time like 9:00 has no am or pm, Cadence makes a careful guess (for example, 9:00 is morning and 1:00 is afternoon) and tells you what it picked. Check the guess and add am or pm if it is wrong.",
-      "Cadence would rather ask than quietly put a class in the wrong place.",
+      "If a time like 9:00 has no am or pm, Syncro makes a careful guess (for example, 9:00 is morning and 1:00 is afternoon) and tells you what it picked. Check the guess and add am or pm if it is wrong.",
+      "Syncro would rather ask than quietly put a class in the wrong place.",
     ],
     keywords: ["warning", "ambiguous", "assumed"],
   },
@@ -118,7 +128,7 @@ export const FAQ: FaqItem[] = [
     topic: "The schedule",
     question: "What do the colors and patterns in the grid mean?",
     answer: [
-      "Green: enough people are working. Pink with the words “Need 1”: this half hour still needs someone. Diagonal stripes: the student you picked can't work then (class, lunch, or too late).",
+      "Green: enough people are working. Pink with the words “Need 1”: this half hour still needs someone. Diagonal stripes: the student you picked can't work then (class, break, or too late).",
       "A blue outline means the student you picked is working in that box. The colored badges with letters show who is working. We never use color alone, so you can tell states apart by the words and patterns too.",
     ],
     keywords: ["legend", "pink", "green", "stripes", "colors"],
@@ -139,7 +149,7 @@ export const FAQ: FaqItem[] = [
     question: "What does “Fill schedule for me” do?",
     answer: [
       "It adds shifts for you, following every rule. It keeps the shifts you placed yourself and only adds new ones. It prefers longer, unbroken shifts instead of lots of tiny ones.",
-      "“Rebuild automatic shifts” throws away only the shifts Cadence added before and makes them again. Shifts you placed by hand are never removed.",
+      "“Rebuild automatic shifts” throws away only the shifts Syncro added before and makes them again. Shifts you placed by hand are never removed.",
       "It is not AI. It follows fixed rules, so the same students and settings always give the same schedule.",
     ],
     keywords: ["autofill", "auto-fill", "automatic", "ai", "rebuild"],
@@ -155,11 +165,33 @@ export const FAQ: FaqItem[] = [
     keywords: ["fill", "gap", "suggest", "add", "pink", "empty", "who is free"],
   },
   {
+    id: "bigger-text",
+    topic: "Good to know",
+    question: "How do I make the writing bigger?",
+    answer: [
+      "Press the gear in the top bar (Settings), and on the Display tab pick Small, Medium, Large or Extra large. Everything gets bigger or smaller right away, and Syncro remembers your choice on this computer.",
+      "Bigger text needs more room, so on a smaller screen Syncro switches to one section at a time, with Students, Schedule and Health along the bottom. The same Display tab can also turn off the sliding and fading animations (Reduce motion) and switch between light and dark colors.",
+    ],
+    keywords: ["text", "font", "size", "bigger", "larger", "small", "read", "glasses", "zoom", "dark", "animation"],
+  },
+  {
+    id: "student-days-and-hours",
+    topic: "The schedule",
+    question: "Can a student pick the days and hours they want to work?",
+    answer: [
+      "Yes. Open the Add student (or Edit) form and look under Work preferences. Pick “Days they want to work”, or leave every day unpicked if any day is fine.",
+      "Type “Hours they want each week”. Choose “They can’t start before” if they can only begin later in the day.",
+      "A day that isn’t picked counts like any other time the student can’t work. “Fill schedule for me” and the quick fixes never use it.",
+      "A student’s hours can be lower than the office limit, but never higher. If you type more, the office limit applies.",
+    ],
+    keywords: ["day", "days", "hours", "week", "prefer", "only", "specific", "start", "early", "limit", "student"],
+  },
+  {
     id: "why-cant-schedule",
     topic: "Rules",
     question: "Why won't it let me put someone in a box?",
     answer: [
-      "Something is in the way. It tells you exactly what: the student has class, has to leave before then, is on lunch, is already at their weekly hours, or already works their maximum number of days.",
+      "Something is in the way. It tells you exactly what: the student has class, has to leave before then, is on a break, is already at their weekly hours, or already works their maximum number of days.",
       "Hover over a striped box (or use the keyboard to move onto it) to read the reason.",
     ],
     keywords: ["blocked", "disabled", "can't", "unavailable"],
@@ -169,10 +201,29 @@ export const FAQ: FaqItem[] = [
     topic: "Rules",
     question: "Can someone work more than their weekly hours?",
     answer: [
-      "Class conflicts, late cutoffs and lunch can never be broken. But if a student is at their weekly hour limit or day limit, Cadence asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
-      "The default weekly limit is 19 hours. You can change it under Rules. Check your own employer's policy: Cadence doesn't know it.",
+      "Class conflicts, late cutoffs and breaks can never be broken. But if a student is at their weekly hour limit or day limit, Syncro asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
+      "The default weekly limit is 19 hours. You can change it in Settings, on the Schedule rules tab. Check your own employer's policy: Syncro doesn't know it.",
     ],
     keywords: ["override", "19", "limit", "hours", "overtime"],
+  },
+  {
+    id: "office-hours",
+    topic: "Rules",
+    question: "How do I change the office hours or open on Saturday?",
+    answer: [
+      "Press Settings at the top. Under Office hours, pick 7:00am–12:00am, 7:00am–5:00pm, 8:00am–12:00am or 8:00am–5:00pm. Under Days open, pick Mon–Fri or Mon–Sat.",
+      "Changing them never deletes a shift. Shifts outside the hours you pick stay saved and still count toward hours; they are just hidden from the grid.",
+    ],
+    keywords: ["hours", "open", "close", "midnight", "saturday", "weekend", "days"],
+  },
+  {
+    id: "text-size",
+    topic: "Rules",
+    question: "Can I make the text bigger?",
+    answer: [
+      "Yes. Press Settings at the top and pick a Text size: Small, Normal, Large or Extra large. Everything grows or shrinks together. Only your browser remembers it, so each person can pick their own.",
+    ],
+    keywords: ["font", "size", "bigger", "smaller", "zoom", "read", "text"],
   },
   {
     id: "people-needed",
@@ -188,7 +239,7 @@ export const FAQ: FaqItem[] = [
     topic: "Rules",
     question: "What is an “opening shift”?",
     answer: [
-      "Some students need to start their week with a 7:00am shift. Cadence only counts it if they work at least one hour in a row starting at 7:00am, not a single lonely half hour.",
+      "Some students need to start their week with a 7:00am shift. Syncro only counts it if they work at least one hour in a row starting at 7:00am, not a single lonely half hour.",
       "If you switch to 8:00am office hours, a 7:00am shift is outside the schedule you can see. It still counts toward that student's hours.",
     ],
     keywords: ["7am", "early", "open"],
@@ -227,7 +278,7 @@ export const FAQ: FaqItem[] = [
     topic: "Saving & sharing",
     question: "I switched computers (or cleared my browser) and my schedule is gone. Help!",
     answer: [
-      "Cadence can only remember what is stored in the browser you are using. If you cleared browsing data or changed computers, that copy is gone.",
+      "Syncro can only remember what is stored in the browser you are using. If you cleared browsing data or changed computers, that copy is gone.",
       "To be safe, use Save & share → Save a backup file now and then. To restore, use Load a backup file. Backups contain student names and class times, so keep the file somewhere private.",
     ],
     keywords: ["backup", "restore", "lost", "missing", "import", "export"],
@@ -256,7 +307,7 @@ export const FAQ: FaqItem[] = [
     topic: "Saving & sharing",
     question: "Can students put their shifts on their phone calendar?",
     answer: [
-      "Yes. In Save & share, enter the first and last day of the semester and your timezone (Cadence never guesses these), then download a calendar file for each student. Opening it adds their weekly shifts to Google, Apple or Outlook calendar.",
+      "Yes. In Save & share, enter the first and last day of the semester and your timezone (Syncro never guesses these), then download a calendar file for each student. Opening it adds their weekly shifts to Google, Apple or Outlook calendar.",
       "Add holidays and breaks under “Days off” first. Shifts that fall on those days are left out. If you skip this step, shifts repeat on holidays too.",
     ],
     keywords: ["ics", "google calendar", "apple", "outlook", "phone"],
@@ -264,10 +315,10 @@ export const FAQ: FaqItem[] = [
   {
     id: "screenshots",
     topic: "Good to know",
-    question: "Can Cadence read a screenshot of a class schedule?",
+    question: "Can Syncro read a screenshot of a class schedule?",
     answer: [
       "Only if your organization has set up a reading service for it. If that button is greyed out, it isn't set up here. Typing or pasting the class times always works and is checked instantly.",
-      "Even when it is set up, Cadence shows you what it found and waits for you to approve before saving anything.",
+      "Even when it is set up, Syncro shows you what it found and waits for you to approve before saving anything.",
     ],
     keywords: ["image", "upload", "ocr", "photo", "picture"],
   },
@@ -291,7 +342,7 @@ export const GLOSSARY: GlossaryItem[] = [
   { term: "Covered", meaning: "Enough people are working during that half hour." },
   { term: "Gap", meaning: "A time when too few people are working. Shown in pink." },
   { term: "Class block", meaning: "A time when a student is in class and can't work." },
-  { term: "Must leave by", meaning: "The latest time a student can work. Cadence won't schedule them past it." },
+  { term: "Must leave by", meaning: "The latest time a student can work. Syncro won't schedule them past it." },
   { term: "Opening shift", meaning: "A required shift starting at 7:00am, lasting at least one hour." },
   { term: "Weekly limit", meaning: "The most hours a student may work in one week. The default is 19." },
   { term: "Assign anyway", meaning: "Going past a weekly hour or day limit on purpose. Allowed, but flagged with a warning." },

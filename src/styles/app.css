@@ -3,33 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --bg: 234 241 240;
+  --bg: 246 243 238;
   --panel: 255 255 255;
-  --ink: 18 48 47;
-  --muted: 79 104 102;
-  --line: 201 216 214;
+  --ink: 27 36 48;
+  --muted: 94 102 112;
+  --line: 221 215 205;
   --ok: 24 113 85;
-  --ok-bg: 215 238 229;
+  --ok-bg: 218 238 228;
   --gap: 179 20 79;
-  --gap-bg: 249 220 231;
-  --busy: 154 169 168;
+  --gap-bg: 250 223 232;
+  --busy: 168 170 176;
   --accent: 31 111 178;
   --accent-ink: 255 255 255;
   --warn: 168 98 0;
-  --warn-bg: 250 232 210;
+  --warn-bg: 250 233 212;
 }
 
 :root[data-theme="dark"] {
-  --bg: 15 30 30;
-  --panel: 23 42 42;
-  --ink: 227 239 237;
-  --muted: 147 175 172;
-  --line: 44 69 68;
+  --bg: 17 22 31;
+  --panel: 26 33 45;
+  --ink: 232 236 242;
+  --muted: 152 162 178;
+  --line: 46 56 72;
   --ok: 92 199 162;
   --ok-bg: 22 57 47;
   --gap: 242 114 159;
   --gap-bg: 64 26 41;
-  --busy: 97 121 122;
+  --busy: 100 110 126;
   --accent: 111 176 234;
   --accent-ink: 10 22 34;
   --warn: 230 169 75;
@@ -38,16 +38,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: 15 30 30;
-    --panel: 23 42 42;
-    --ink: 227 239 237;
-    --muted: 147 175 172;
-    --line: 44 69 68;
+    --bg: 17 22 31;
+    --panel: 26 33 45;
+    --ink: 232 236 242;
+    --muted: 152 162 178;
+    --line: 46 56 72;
     --ok: 92 199 162;
     --ok-bg: 22 57 47;
     --gap: 242 114 159;
     --gap-bg: 64 26 41;
-    --busy: 97 121 122;
+    --busy: 100 110 126;
     --accent: 111 176 234;
     --accent-ink: 10 22 34;
     --warn: 230 169 75;
@@ -78,6 +78,27 @@ body {
   font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
 }
 
+/* Times and hour counts line up in neat columns (every digit the same width). */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A soft, warm shadow used for the header, the schedule grid and the main button: depth without heavy borders. */
+:root {
+  --shadow: 0 1px 2px rgb(27 36 48 / 0.06), 0 4px 14px rgb(27 36 48 / 0.06);
+}
+:root[data-theme="dark"] {
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px rgb(0 0 0 / 0.25);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px rgb(0 0 0 / 0.25);
+  }
+}
+.soft-shadow {
+  box-shadow: var(--shadow);
+}
+
 h1,
 h2,
 h3 {
@@ -87,6 +108,28 @@ h3 {
 :focus-visible {
   outline: 3px solid rgb(var(--accent));
   outline-offset: 2px;
+}
+
+/* Text size (Settings -> Display). Everything is sized in rem, so changing the page's base size
+   scales the whole app together. "Medium" is the 17px set just above. */
+html[data-text-size="small"] {
+  font-size: 15px;
+}
+html[data-text-size="large"] {
+  font-size: 20px;
+}
+html[data-text-size="xlarge"] {
+  font-size: 24px;
+}
+
+/* "Reduce motion" chosen in Settings -> Display: the same switch-off as the device setting below. */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -127,4 +170,217 @@ h3 {
   .no-print {
     display: none !important;
   }
+}
+
+/* LogoLoader (src/components/ui/LogoLoader.tsx): the three bars brighten one after another,
+   and the dot beats. `currentColor` means it takes the color of the text next to it. */
+.logo-loader-bar {
+  animation: logo-loader-bar 1.2s ease-in-out infinite;
+}
+.logo-loader-bar-2 {
+  animation-delay: 0.2s;
+}
+.logo-loader-bar-3 {
+  animation-delay: 0.4s;
+}
+.logo-loader-beat {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-loader-beat 1.2s ease-in-out infinite;
+}
+@keyframes logo-loader-bar {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes logo-loader-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.5);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   MOTION (see .claude/skills/cadence-motion-design/SKILL.md)
+   Every animation here starts from a "hidden-ish" look and ends at the element's NORMAL look, so if
+   animations are switched off (reduced motion, above) the element simply shows normally.
+   Only `opacity` and `transform` move: they are the cheap, smooth ones.
+   --------------------------------------------------------------------------- */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 260ms;
+}
+
+/* Fades in (a dialog's dim backdrop, a banner that changed). */
+.anim-fade {
+  animation: anim-fade var(--dur-base) var(--ease-out) both;
+}
+/* A quicker fade for swapping the schedule view (Grid / By student / By day). */
+.anim-fade-quick {
+  animation: anim-fade var(--dur-fast) var(--ease-out) both;
+}
+/* Fades in while rising a few pixels (dialogs and messages settling into place). */
+.anim-rise {
+  animation: anim-rise var(--dur-base) var(--ease-out) both;
+}
+/* The side help panel slides in from the right edge. */
+.anim-slide-in {
+  animation: anim-slide-in var(--dur-base) var(--ease-out) both;
+}
+/* The first ten students in the list arrive one after another (40ms apart); the rest appear together. */
+.stagger > li {
+  animation: anim-rise var(--dur-base) var(--ease-out) both;
+}
+.stagger > li:nth-child(2) { animation-delay: 40ms; }
+.stagger > li:nth-child(3) { animation-delay: 80ms; }
+.stagger > li:nth-child(4) { animation-delay: 120ms; }
+.stagger > li:nth-child(5) { animation-delay: 160ms; }
+.stagger > li:nth-child(6) { animation-delay: 200ms; }
+.stagger > li:nth-child(7) { animation-delay: 240ms; }
+.stagger > li:nth-child(8) { animation-delay: 280ms; }
+.stagger > li:nth-child(9) { animation-delay: 320ms; }
+.stagger > li:nth-child(10) { animation-delay: 360ms; }
+
+@keyframes anim-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes anim-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes anim-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+/* A small "pop" for a good moment, such as the icon when every hour becomes covered. */
+.anim-pop {
+  animation: anim-pop 480ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes anim-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* EmptyMark (src/components/ui/EmptyMark.tsx): the three dashed bars drift up and down in turn. */
+.empty-float {
+  animation: empty-float 3.2s ease-in-out infinite;
+}
+.empty-float-2 {
+  animation-delay: 0.35s;
+}
+.empty-float-3 {
+  animation-delay: 0.7s;
+}
+@keyframes empty-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   EASIER TO SEE AND CLICK (Settings -> Display)
+   --------------------------------------------------------------------------- */
+
+/* "Bigger buttons and more space": every control gets a comfortable minimum height (2.75rem is
+   about 47px at Medium text, above the 44px touch-target guideline), and grid boxes get taller. */
+html[data-comfort="roomy"] :is(button, select, summary, input:not([type="checkbox"]):not([type="file"]):not([type="hidden"])) {
+  min-height: 2.75rem;
+}
+html[data-comfort="roomy"] td button {
+  min-height: 3rem;
+}
+html[data-comfort="roomy"] ul[aria-label="Student list"] > li {
+  margin-bottom: 0.75rem;
+}
+/* The small "?" help buttons sit inside sentences, so they grow their clickable area invisibly instead of getting taller. */
+html[data-comfort="roomy"] button[aria-expanded][aria-label]:has(> svg:only-child) {
+  min-height: 0;
+  position: relative;
+}
+html[data-comfort="roomy"] button[aria-expanded][aria-label]:has(> svg:only-child)::after {
+  content: "";
+  position: absolute;
+  inset: -0.75rem;
+}
+
+/* "High contrast": the same color names, with much stronger values (every text color is at least 7:1
+   against its background, the "AAA" level; indicators are at least 4.5:1). Three blocks, because dark
+   can come from the Dark button or from the computer's own setting (the second block repeats the first). */
+:root[data-contrast="high"] {
+  --bg: 255 255 255;
+  --panel: 255 255 255;
+  --ink: 0 0 0;
+  --muted: 60 60 60;
+  --line: 80 80 80;
+  --ok: 0 95 60;
+  --ok-bg: 214 242 226;
+  --gap: 150 0 55;
+  --gap-bg: 252 222 232;
+  --busy: 100 100 100;
+  --accent: 0 70 140;
+  --accent-ink: 255 255 255;
+  --warn: 120 60 0;
+  --warn-bg: 252 235 205;
+}
+
+:root[data-theme="dark"][data-contrast="high"] {
+  --bg: 0 0 0;
+  --panel: 12 12 14;
+  --ink: 255 255 255;
+  --muted: 215 215 215;
+  --line: 160 160 170;
+  --ok: 110 235 185;
+  --ok-bg: 10 60 40;
+  --gap: 255 150 185;
+  --gap-bg: 80 10 35;
+  --busy: 150 150 150;
+  --accent: 140 200 255;
+  --accent-ink: 0 0 0;
+  --warn: 255 200 100;
+  --warn-bg: 70 45 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-contrast="high"] {
+    --bg: 0 0 0;
+    --panel: 12 12 14;
+    --ink: 255 255 255;
+    --muted: 215 215 215;
+    --line: 160 160 170;
+    --ok: 110 235 185;
+    --ok-bg: 10 60 40;
+    --gap: 255 150 185;
+    --gap-bg: 80 10 35;
+    --busy: 150 150 150;
+    --accent: 140 200 255;
+    --accent-ink: 0 0 0;
+    --warn: 255 200 100;
+    --warn-bg: 70 45 0;
+  }
+}
+
+/* High contrast also draws the keyboard focus outline thicker, so it is easy to see where you are. */
+:root[data-contrast="high"] :focus-visible {
+  outline-width: 4px;
 }

@@ -392,6 +392,93 @@ tested and switched off. Docs (README, GITHUB-SETTINGS, N8N_ARCHITECTURE, ROADMA
 
 `npm test` (490 passed), `npm run lint` and `npm run build` are clean after this round.
 
+## Part 13: Vercel hosting and screenshot reading (2026-10-14)
+
+Asked for by Christroi: host Cadence on Vercel's free Hobby plan, and read class times from screenshots, in the
+browser first (Tesseract) with OCR.space as a fallback. Built as a pull request for James to review, since it changes
+his "GitHub Pages only" decision (`docs/DECISIONS.md`, 2026-10-14). GitHub Pages keeps working unchanged.
+
+| What | How it works | How it was checked |
+| --- | --- | --- |
+| Vercel functions (`api/[route].js`, `api/scheduler/[action].js`) | Thin wrappers that call `src/server/vercel.ts`, packed by `npm run build` into `server-dist/vercel.js`. | **Real bug found and avoided:** the obvious version (TypeScript files importing `src/server/`) built fine with `vercel build` but crashed when called, with `ERR_MODULE_NOT_FOUND`, because this is an ES-module project whose imports have no `.js` ending. With the packed file, a local `vercel build` (Vercel CLI 64.0.2) was run and the built functions were called directly in Node: `/api/ocr` reported on/off correctly, sign-in accepted the right passcode and refused a wrong one, `/api/publish` stayed switched off without n8n, `/api/scheduler/health` answered. `vercel.test.ts` (8 tests). |
+| Vercel's rewritten addresses | Vercel sends `/api/ocr` to `/api/[route]?route=ocr`. `restoreAddress` puts the original address back whichever form arrives (only plain lowercase names). | `vercel.test.ts`: rewritten and normal addresses, odd names ignored, method, headers and body kept. |
+| `vercel.json` | Build command, `dist`, 60-second function limit, the same security headers as `netlify.toml`, a week's caching for `/ocr/` files. | `vercel.test.ts` compares the headers to `netlify.toml` word for word; the local `vercel build` output carried them. |
+| Sign-in without n8n | `/api/session` now needs only `MANAGER_PASSCODE`, so a manager can sign in for enhanced reading before n8n exists. The n8n addresses still need all their settings. | `gateway.test.ts`: the "switched off" test now checks `/api/publish` with each missing setting, plus a new test for passcode-only sign-in. |
+| `/api/ocr` (`src/server/ocr.ts`) | GET answers `{ enabled }` with no passcode; POST needs the passcode, checks the upload (PNG/JPEG, 1 MB max), sends it to OCR.space with engine 2, English, table mode, and returns only `{ text }`. Daily-limit (403/429 or a "maximum" message), `IsErroredOnProcessing`, timeouts and odd replies become plain messages; OCR.space's own wording is never passed on. Nothing is stored or logged. | `ocr-server.test.ts` (7 tests) with a stand-in for OCR.space. **Not tested against the real OCR.space**: this sandbox can't reach it, and there is no key. |
+| Reading in the browser (`src/features/import/ocr/`) | Picture enlarged (to ~2000 px wide, max 3x), grayed, dark mode flipped, contrast stretched; Tesseract (LSTM engine, English "best_int" data) runs in a worker; files served from `/ocr/` on the same site; tesseract.js loaded only on first use. | `ocr.test.ts` (21 tests) for the pixel maths, text clean-up and server client. **Real Tesseract in Chromium** (`npm run test:browser`) on the 3 samples in `test-assets/`: the Workday-style table and the dark-mode phone screenshot were read exactly (about 1.5 s each); the blurry one misread a "9" as "%" and was correctly marked for fixing. No console errors under the real security headers. The main bundle grew 11 KB (316 to 327 KB); Tesseract's own code is a separate 17 KB file, and its ~7 MB engine and data download only when a screenshot is read. |
+| **Bug found by the real-browser check** | The blurry sample's "TTh %:00AM - 10:15AM" was first turned into "00 AM-10:15 AM": a class quietly losing its days and real start time. Now a range can't start inside another time, and a line that looks like a time but can't be fully read is kept from its first day word, marked with a red ✕. Any such line also brings up "Try enhanced reading". | A unit test that failed first (`ocr.test.ts`, "never drops or shortens a half-read time"), then the real-browser check. |
+| Turning text into class times (`ocr-text.ts`) | Fixes digit look-alikes (O/0, l/1) and odd colons only inside times, evens out dashes and "a m", then picks "days + start-end" from each row (days before, after, or on the line above; several patterns per row). Output goes into the class-times box and through the **existing** parser, so typed and read text follow the same rules; the existing review list is the editable preview. | `ocr.test.ts`, including that every line it produces from the samples parses with no errors. |
+| The screen (`ImportPanel.tsx`) | "Use a screenshot instead" always shows (no server needed), or paste a screenshot into the box. Progress bar while reading. "Try enhanced reading" appears only when the server has it on, after a reading, with a line saying the picture goes to OCR.space, and needs the manager passcode; it never runs by itself. When OCR.space is off but the n8n AI reader is configured, the same button uses that instead, so James's reader stays reachable. | `import-panel.test.tsx` (9 tests): progress, results land in the box and the review list, paste, typed text kept (also when typed during a reading), a second reading replaces the first, errors, button hidden/shown, never sent without a click, full sign-in then enhanced flow. |
+| Security policy | Adds `'wasm-unsafe-eval'` (WebAssembly only) and `worker-src 'self'`, in `contentSecurityPolicy.ts`, `netlify.toml` and `vercel.json`. | `privacy.test.ts` still forbids `'unsafe-inline'` and `'unsafe-eval'`; the real-browser check ran under the exact `vercel.json` headers with no violations. |
+| Size limits | Screenshots for the n8n reader: 5 MB down to 4 MB (Vercel refuses requests over 4.5 MB). For OCR.space: shrunk in the browser to under 1,000 KB (PNG first, then JPEG, then smaller). | `automation.test.ts` updated; the enhanced check in Chromium sent a 13 KB PNG. |
+
+**Not done, and why**
+- **No Vercel deploy, preview or `vercel dev`**: this sandbox can't reach vercel.com or OCR.space, and connecting
+  the repository needs a team member's Vercel account. The local `vercel build` and direct function calls above are
+  the closest check possible here. Steps are in the README, "Deploy".
+- **Real OCR.space not tried**, only a stand-in that answers like it. Try it once the key is set (`test-assets/README.md`).
+- **Real Workday screenshots not tried**; the samples are made up. Expect to tune `ocr-text.ts` on real ones.
+- The wrong-passcode lock-out lives in memory, so on Vercel it resets when a function restarts and isn't shared
+  between copies. It slows guessing; the 12-character passcode minimum is the real protection.
+- `npm audit` now reports advisories in Tailwind 3's own build tools (`braces`, `postcss-selector-parser`). They
+  were published after Part 12, aren't caused by this change, and only affect the build machine; the fix is
+  Tailwind 4 (already an optional item on the ROADMAP).
+
+`npm test` (548 passed in 31 files), `npm run lint`, `npm run build` and `npm run test:browser` are clean after this round.
+
+## Part 14: audit of master after Christroi's merge, and the fixes (2026-10-07 to 2026-10-09)
+
+Master after PR #5 (Semester/Break) and PR #8 (build fix) was checked by running it (type check, build, all
+tests, auto-fill in both terms, the app in a browser) and by reading the server and calendar code.
+
+| Finding | Fix |
+| --- | --- |
+| **Real bug:** the day now ends at midnight (1440 minutes), and a shift ending then was written as hour 24: `DTEND...T240000` in `.ics` files and `T24:00:00` in the Google Calendar request. Hour 24 is not a valid calendar time. No test covered it. | `rollOverMidnight` in `ics.ts`, used by both; 3 tests, plus whole-week Semester and Break checks (`term-calendar.test.ts`). |
+| `local-reader/` (screenshot reader) could not work with the app: no `/api/session`, blocked the `Authorization` header; its CORS setting only hid answers, so any localhost page could still spend API credit; upload size trusted a header; model id and beta flag were unverified. | Speaks the gateway protocol, needs `READER_PASSCODE`, refuses non-local origins with 403, counts bytes while streaming, valid model id, no beta flag. Auth/CORS smoke-tested with curl. |
+| Built site's security policy allowed connections to any `https:` address. | Now only the app's own server, or nobody when there is none (`contentSecurityPolicyFor`). |
+| PR #4 (backup reminders) conflicted with master, and once merged the "backup due" reminder would have ignored the schedule that isn't showing. | Merged; the other-term schedule is now part of the backup fingerprint. |
+| `npm audit`: 8 issues (6 high), all dev tooling. | `source-map-js` fixed. `braces` and `postcss-selector-parser` need Tailwind 4 (breaking), left alone. |
+| The "Protect master" rule requires a pull request but not a passing check, which is how merge markers reached master. | **Not fixed from here** (changing repo rules was blocked). Add the `checks` job as a required status check. |
+
+Added in the same round: a splash screen and animated logo loader, a warmer color palette, `GET /api/health`
+on the gateway, locked-down headers on every gateway answer, and `.github/dependabot.yml`.
+
+Christroi's other repositories were read too: `cadence-test-ui` is an empty README; his `cadence` fork has no
+secrets or key files in its history, but its default branch is a stale feature branch.
+
+**Update (2026-10-13): Christroi's screenshot reader joined this stack.** His fork's `feature/vercel-ocr` branch (Tesseract in the browser, optional OCR.space, Vercel hosting; Part 13 above) was merged with these fixes: 5 file conflicts resolved (gateway routes, Netlify wrapper, import panel, two docs/test files), `/api/health` now also reports which parts are set up (`ready`, `n8n`, `ocr`), and his `test:browser` script was fixed for Windows (`.pathname` gave `C:\C:\...`). Result: lint, build and 581 tests pass. Read in real Chrome by hand: both `phone-dark.png` and `workday-light.png` gave exactly the expected class times. **Not verified:** the `test:browser` script itself still fails on this Windows machine (Tesseract's language file arrives as an empty 204 answer under Playwright's Chrome, but loads fine in a normal Chrome); the real OCR.space service; `small-blurry.jpg`; any real Vercel deploy. n8n automation is postponed by team decision (2026-10-13).
+
+**Not verified:** anything against a real Google Calendar, n8n or the Claude API (`local-reader` has never called
+Claude); real phones, slow networks or screen readers; the Pages deploy of these changes (it runs on merge).
+
+## Part 15: Saturday, office-hour choices, breaks and text size (2026-10-16)
+
+Asked for by Christroi. Built on James's `integrate-troi-ocr` branch, as a pull request for James and Jared to
+review, because it changes shared files (`types.ts`, the store, `App.tsx`, `app.test.tsx`).
+
+| What | How it works | How it was checked |
+| --- | --- | --- |
+| **Saturday** | `Day` now includes `"sat"`. A new setting, **Days open** (Mon–Fri or Mon–Sat, in Settings), decides which days the grid, auto-fill, coverage, "opening shift" and "By day" use (`days.ts`, the only place that decides). New schedules open Mon–Sat; a schedule saved before this has no setting and stays Mon–Fri, so nothing moves. "Sat", "SA" and "Saturday" are read in class times; Sunday is still refused with a plain message. Calendar files put Saturday shifts on real Saturdays. Days per week now goes up to 6. | `saturday-and-breaks.test.ts` (auto-fill uses Saturday only when open, Saturday classes respected, opening shift, "By day" never hides saved Saturday shifts, `.ics` dates, saved data and screenshot reader accept 6 days but not 7); `parser.test.ts`; `coverage.test.ts`; app test: End key reaches Saturday. |
+| **Office hours** | Settings shows four choices: 7:00am–12:00am, 7:00am–5:00pm, 8:00am–12:00am, 8:00am–5:00pm (`OFFICE_HOURS_OPTIONS`), replacing the separate opening-time choice. The closing-time box in "Rules" was removed so there is one place to set hours. | App test "Settings: office hours, days open and text size" (choosing 8–5 removes the 7am and 5pm rows). |
+| **Breaks** (replaces the single "lunch" time) | Each student has 0–3 breaks, each with a start time (every half hour, 6:00am–11:30pm) and a length (15, 30, 45 minutes or 1 hour), edited in the student form (`BreakEditor.tsx`). Nobody is scheduled during a break and break time is never counted as worked. Because the grid is in half hours, a 15-minute break keeps its whole half hour free (the help tip says so). The conflict code is now `break_conflict` ("is on a break"). Old saves and old screenshot-reader answers with `lunchStart` become one 30-minute break at that time. | `saturday-and-breaks.test.ts` (old saves converted, impossible break lists refused, auto-fill leaves every break free, reader accepts both forms); `scheduling.test.ts` / `issues.test.ts` break tests; app test "a student's breaks" (add, change, remove, saved). |
+| **Text size** | Settings → Text size: Small, Normal, Large, Extra large (87.5–125%). It changes the page's base font size, and every size in the app is in `rem`, so everything grows together. Saved in this browser only, like the theme (`useTextSize.ts`). | App test (choice applied to the page and remembered); looked at in Chromium at Normal and Extra large: the Settings row wraps cleanly, nothing overlaps. |
+| Sample roster | A seventh made-up student (Sione F.) with a Saturday class and a 15-minute break, so the sample still fills Monday to Saturday. | App tests updated for the bigger sample (hours, cell counts, backups). |
+
+**Not done, and why**
+- **Break rules by shift length** ("after N hours, a break of M minutes") were asked for earlier but replaced by the
+  simpler request to pick break times; not built.
+- The word "break" now means two things: a student's **break** (lunch or rest) and the **Break** term between
+  semesters (the Semester/Break switch). The code calls the first `WorkBreak` to keep them apart; the screen
+  wording may need a design look.
+- Google Calendar is not connected (Christroi: not needed for now).
+- The n8n templates (`n8n/`) still use Monday–Friday and a single `lunchStart`. n8n is postponed (2026-10-13); the app
+  still accepts `lunchStart` from them and turns it into a break, so nothing breaks. Update them when n8n comes back.
+- Not tried on a real phone or with a screen reader.
+
+`npm test` (602 passed in 37 files), `npm run lint`, `npm run build` and `npm run test:browser` are clean after this round.
+
+---
+
 ---
 
 ## Part 13: protecting schedules without a database (2026-10-01)

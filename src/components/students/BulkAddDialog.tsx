@@ -29,7 +29,7 @@ export function BulkAddDialog({
   return (
     <Modal
       title="Add several students at once"
-      description="Paste your whole list. Cadence checks every line before adding anyone."
+      description="Paste your whole list. Syncro checks every line before adding anyone."
       size="lg"
       onClose={onClose}
       footer={
@@ -83,7 +83,7 @@ export function BulkAddDialog({
         {parsed.rows.length > 0 && (
           <div className="space-y-2 rounded-xl border border-line p-3" aria-live="polite">
             <h3 className="text-sm font-semibold">
-              Here is what Cadence understood{" "}
+              Here is what Syncro understood{" "}
               <span className="font-normal text-muted">
                 ({parsed.valid.length} of {parsed.rows.length} lines{bad ? `, ${bad} will be skipped` : ""})
               </span>
@@ -122,7 +122,7 @@ export function BulkAddDialog({
         ))}
 
         <p className="rounded-lg bg-bg p-3 text-xs text-muted">
-          Everyone starts with no time-of-day preference, up to 5 days a week, and lunch at 12:00pm. You can change any of that for each
+          Everyone starts with no time-of-day preference, up to 5 days a week, and a 30-minute break at 12:00pm. You can change any of that for each
           person afterwards with their Edit button.
         </p>
       </div>

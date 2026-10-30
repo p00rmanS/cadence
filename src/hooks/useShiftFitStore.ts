@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { canAssign, isAssigned, softViolations } from "../features/scheduling/availability";
-import { weeklyLimit } from "../features/scheduling/term";
+import { breakLimit } from "../features/scheduling/term";
 import { scheduleVersion } from "../features/scheduling/blocks";
-import { BREAK_WEEKLY_HOURS, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
+import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
@@ -18,13 +18,14 @@ import type {
   SemesterConfig,
   ShiftBlock,
   Student,
+  WorkBreak,
 } from "../features/scheduling/types";
 
 /**
  * ============================================================================
  *  THE APP'S "BRAIN": ALL STATE LIVES HERE
  * ============================================================================
- * This is the single most important file for understanding how Cadence
+ * This is the single most important file for understanding how Syncro
  * actually works. Every screen (`src/components/...`) is just a "view" —
  * it displays data and reports clicks, but it never changes anything by
  * itself. Instead, every user action (add a student, click a grid box, press
@@ -57,8 +58,14 @@ export type NewStudentInput = {
   classText: string;
   blockedText: string;
   latestEnd: number;
-  lunchStart: number | null;
+  breaks: WorkBreak[];
   needsOpeningShift: boolean;
+  /** Days they want to work (empty or missing: any day). */
+  workDays?: Day[];
+  /** Their own weekly hours (missing: the office limit). */
+  weeklyHours?: number;
+  /** Earliest time they can start, in minutes after midnight (missing or 0: no limit). */
+  earliestStart?: number;
 };
 
 /** Everything the manager can undo. Selection, toasts and dialogs are deliberately not part of it. */
@@ -145,8 +152,12 @@ function toStudent(id: string, input: NewStudentInput, color: string): Student {
     blockedText: input.blockedText,
     busy: buildBusy(input.classText, input.blockedText).busy,
     latestEnd: input.latestEnd,
-    lunchStart: input.lunchStart,
+    breaks: input.breaks,
     needsOpeningShift: input.needsOpeningShift,
+    // Optional preferences are only written down when the manager chose something, so untouched students stay as they were.
+    ...(input.workDays && input.workDays.length > 0 ? { workDays: input.workDays } : {}),
+    ...(input.weeklyHours !== undefined ? { weeklyHours: input.weeklyHours } : {}),
+    ...(input.earliestStart ? { earliestStart: input.earliestStart } : {}),
   };
 }
 
@@ -264,7 +275,7 @@ export function reducer(state: State, action: Action): State {
     case "ADD_STUDENTS": {
       const room = Math.max(0, MAX_STUDENTS - doc.students.length);
       const entries = action.entries.slice(0, room);
-      if (!entries.length) return { ...state, toast: toast(`Cadence can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
+      if (!entries.length) return { ...state, toast: toast(`Syncro can hold up to ${MAX_STUDENTS} students, so nobody was added.`) };
       const students = [...doc.students];
       for (const e of entries) students.push(toStudent(e.id, e.input, nextColor(students)));
       const cut = action.entries.length - entries.length;
@@ -373,7 +384,7 @@ export function reducer(state: State, action: Action): State {
       const swapped: Doc = { ...doc, settings, assignments: doc.otherTermAssignments, otherTermAssignments: doc.assignments };
       const message =
         settings.term === "break"
-          ? `Showing the break schedule. Tuesday 11am–12pm is open, and students can work up to ${BREAK_WEEKLY_HOURS} hours a week. Your semester schedule is kept as it was.`
+          ? `Showing the break schedule. Tuesday 11am–12pm is open, and students can work up to ${breakLimit(settings)} hours a week. Your semester schedule is kept as it was.`
           : `Showing the semester schedule. Nobody works during Tuesday devotional (11am–12pm), and the limit is ${settings.weeklyTargetHours} hours a week. Your break schedule is kept as it was.`;
       return commit(state, swapped, settings.term === "break" ? "Switched to semester break" : "Switched to semester", {
         lastAutofill: null,
@@ -382,7 +393,7 @@ export function reducer(state: State, action: Action): State {
     }
     case "IMPORT_SHIFTS": {
       // Each pasted shift goes through the same rule checks as a click on the grid. A shift that
-      // breaks a hard rule (class, lunch, cutoff) or a limit is skipped and counted, never forced.
+      // breaks a hard rule (class, break, cutoff) or a limit is skipped and counted, never forced.
       let assignments = doc.assignments;
       let placed = 0;
       let skipped = 0;
@@ -419,7 +430,7 @@ export function reducer(state: State, action: Action): State {
       const changed = scheduleVersion(result.assignments) !== scheduleVersion(doc.assignments);
       const notes: string[] = [];
       if (result.openingShiftUnmet.length) notes.push(`${plural(result.openingShiftUnmet.length, "student")} still need an opening shift`);
-      if (result.unmet.length) notes.push(`${plural(result.unmet.length, "student")} can't reach ${weeklyLimit(doc.settings)} hours`);
+      if (result.unmet.length) notes.push(`${plural(result.unmet.length, "student")} can't reach their weekly hours`);
       const tail = notes.length ? ` Heads up: ${notes.join("; ")}. See Insights for why.` : " Everyone is at their target.";
       const added = Math.max(0, result.assignments.length - doc.assignments.length);
       const message = !changed
@@ -577,7 +588,7 @@ export function useShiftFitStore() {
               classText: r.classText,
               blockedText: "",
               latestEnd: NO_CUTOFF,
-              lunchStart: 12 * 60,
+              breaks: [{ start: DEFAULT_BREAK_START, minutes: DEFAULT_BREAK_MINUTES }],
               needsOpeningShift: false,
             },
           })),

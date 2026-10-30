@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, Download, FileSpreadsheet, RotateCcw, Save, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "../ui/Button";
+import { LogoLoader } from "../ui/LogoLoader";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Modal } from "../ui/Modal";
 import { buildStudentIcs, icsFileName, isSemesterConfigured } from "../../features/calendar/ics";
@@ -25,7 +26,7 @@ import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, St
  * The biggest dialog in the app — it's really five features bundled behind
  * one button, each in its own `<Section>` below: backup file (save/load),
  * spreadsheet export, per-student calendar (.ics) files, publishing to
- * Google Calendar through the Cadence server (after a manager signs in), or a
+ * Google Calendar through the Syncro server (after a manager signs in), or a
  * harmless "practice run" if no server is connected — see `client.kind` and
  * `../../services/automation`, and the
  * "start over" reset/clear actions. Read each `Section` block independently;
@@ -139,7 +140,7 @@ export function SaveShareDialog(props: Props) {
   // browser to keep this site's saved data (asked here because it's right after the manager acted).
   function handleBackup() {
     const state: PersistedStateV1 = { version: 1, settings, students, assignments, otherTermAssignments, selectedStudentId, semester };
-    downloadTextFile(`cadence-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
+    downloadTextFile(`syncro-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
     recordBackup({ settings, students, assignments, otherTermAssignments, semester });
     setMessage({ tone: "ok", text: "Backup saved to your Downloads folder. It contains student names and class times, so keep it private." });
     void requestPersistentStorage().then(setStorageKept);
@@ -149,7 +150,7 @@ export function SaveShareDialog(props: Props) {
   async function handleFile(file: File) {
     // Check the size first: reading a huge file into memory would freeze the page.
     if (file.size > MAX_BACKUP_BYTES) {
-      setMessage({ tone: "error", text: "That file is too big to be a Cadence backup, so it wasn't opened." });
+      setMessage({ tone: "error", text: "That file is too big to be a Syncro backup, so it wasn't opened." });
       return;
     }
     const result = parseBackup(await file.text());
@@ -248,7 +249,7 @@ export function SaveShareDialog(props: Props) {
             <Button
               variant="secondary"
               disabled={!hasShifts}
-              onClick={() => downloadTextFile(`cadence-schedule-${todayStamp()}.csv`, shiftsToCsv(students, assignments, settings.slotMinutes), "text/csv")}
+              onClick={() => downloadTextFile(`syncro-schedule-${todayStamp()}.csv`, shiftsToCsv(students, assignments, settings.slotMinutes), "text/csv")}
             >
               <Download className="h-4 w-4" aria-hidden /> Download spreadsheet
             </Button>
@@ -258,7 +259,7 @@ export function SaveShareDialog(props: Props) {
           <Section
             icon={<Send className="h-4 w-4" aria-hidden />}
             title="Calendar files for students"
-            help="Gives each student a file that puts their weekly shifts on their own phone or computer calendar. Cadence needs the semester dates and timezone from you. It never guesses."
+            help="Gives each student a file that puts their weekly shifts on their own phone or computer calendar. Syncro needs the semester dates and timezone from you. It never guesses."
           >
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
@@ -398,7 +399,7 @@ export function SaveShareDialog(props: Props) {
             help={
               client.kind === "server"
                 ? "Sends the approved schedule to the shared Google Calendar. Running it again updates the same events instead of making duplicates."
-                : "This copy of Cadence isn't connected to Google Calendar, so this only does a practice run: it checks your schedule and shows what would be sent. Nothing leaves your computer."
+                : "This copy of Syncro isn't connected to Google Calendar, so this only does a practice run: it checks your schedule and shows what would be sent. Nothing leaves your computer."
             }
           >
             {/* With a real server: the passcode box, which becomes "Signed in as manager" + Sign out once accepted. */}
@@ -421,7 +422,7 @@ export function SaveShareDialog(props: Props) {
                 disabled={busy || !hasShifts || needsSignIn}
                 onClick={() => (client.kind === "server" ? setConfirm("publish") : void runPublish())}
               >
-                <Send className="h-4 w-4" aria-hidden /> {busy ? "Working…" : client.kind === "server" ? "Approve and send" : "Do a practice run"}
+                {busy ? <LogoLoader className="h-4 w-4" /> : <Send className="h-4 w-4" aria-hidden />} {busy ? "Working…" : client.kind === "server" ? "Approve and send" : "Do a practice run"}
               </Button>
             )}
             {calendarReady && !hasShifts && <p className="mt-2 text-xs text-muted">Add some shifts first.</p>}
@@ -520,8 +521,8 @@ export function SaveShareDialog(props: Props) {
           }}
         >
           <p>
-            This deletes {oldEvents.length} {oldEvents.length === 1 ? "event" : "events"} (every week of each) that Cadence made earlier for shifts that
-            are no longer in the schedule. Students will no longer see them. This can&apos;t be undone from Cadence.
+            This deletes {oldEvents.length} {oldEvents.length === 1 ? "event" : "events"} (every week of each) that Syncro made earlier for shifts that
+            are no longer in the schedule. Students will no longer see them. This can&apos;t be undone from Syncro.
           </p>
         </ConfirmDialog>
       )}

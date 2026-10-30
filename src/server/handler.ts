@@ -7,7 +7,7 @@ import { fail, isAuthorized, json, readBody } from "./http";
  * ============================================================================
  *  THE SERVER SIDE: "CHECK MY SCHEDULE" AND "MAKE ME A SCHEDULE"
  * ============================================================================
- * ShiftFit mostly runs inside the browser, but some jobs must NOT trust the browser: before a schedule is
+ * Syncro mostly runs inside the browser, but some jobs must NOT trust the browser: before a schedule is
  * published to Google Calendar, a server should re-check it with the same rules (a browser can be edited by
  * anyone). This file is that server. It is Workflow B in `docs/N8N_ARCHITECTURE.md`. It reuses the exact same
  * rule code as the app (`src/features/scheduling`), so the browser and the server can never disagree.

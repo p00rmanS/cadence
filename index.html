@@ -3,20 +3,58 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0F1E1E" />
-    <title>Cadence — Shift Coverage Planner</title>
+    <meta name="theme-color" content="#11161F" />
+    <title>Syncro — Shift Coverage Planner</title>
     <meta
       name="description"
-      content="Class-aware shift scheduling for student workers. Cadence builds a weekly coverage grid that respects class times, weekly hour targets, and manager constraints."
+      content="Class-aware shift scheduling for student workers. Syncro builds a weekly coverage grid that respects class times, weekly hour targets, and manager constraints."
     />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/syncro-logo.png" type="image/png" />
     <!-- Lets the site be installed as an app (name, icons, colors): see public/manifest.webmanifest. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- The icon an iPhone/iPad uses when the site is added to the home screen. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="ShiftFit" />
+    <meta name="apple-mobile-web-app-title" content="Syncro" />
+    <!--
+      SPLASH SCREEN: the animated logo shown while the app loads. It lives in this file (plain HTML + CSS,
+      no script) so it appears instantly, before any of the app's code has downloaded. `src/main.tsx`
+      fades it out and removes it once the app is ready. Its colors copy the app's light/dark colors.
+    -->
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #f6f3ee;
+        color: #1b2430;
+        transition: opacity 0.45s ease, visibility 0.45s;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash { background: #11161f; color: #e8ecf2; }
+      }
+      #splash.splash-done { opacity: 0; visibility: hidden; }
+      /* The Syncro logo pops in, then keeps a slow, gentle pulse while the app loads. */
+      #splash img { width: 96px; height: 96px; border-radius: 22px; animation: splash-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both, splash-pulse 1.8s 0.6s ease-in-out infinite; }
+      #splash .word { font: 700 1.6rem "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: 0.02em; animation: splash-fade 0.6s 0.35s both; }
+      @keyframes splash-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      @keyframes splash-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+      @keyframes splash-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      /* People who asked their device for less motion get the finished logo, standing still. */
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash { animation: none !important; transition-duration: 0.01ms !important; }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="Loading Syncro">
+      <img src="/syncro-logo.png" alt="" aria-hidden="true" />
+      <div class="word">Syncro</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -11,7 +11,7 @@ import { currentPasscode, problemFromStatus, serverBaseUrl, signOutManager } fro
  * between this real client and `mockAutomationClient.ts` (a "practice run" that pretends nothing is
  * connected) based on one environment variable.
  *
- * The browser NEVER talks to n8n directly any more. It talks to the ShiftFit server
+ * The browser NEVER talks to n8n directly any more. It talks to the Syncro server
  * (`src/server/gateway.ts`, deployed as a Netlify Function at /api/...), which:
  *   1. checks the manager passcode,
  *   2. re-checks the schedule against every rule and rebuilds the calendar events itself,
@@ -23,7 +23,7 @@ import { currentPasscode, problemFromStatus, serverBaseUrl, signOutManager } fro
 const TIMEOUT_MS = 30_000;
 
 /**
- * Sends one JSON request to the ShiftFit server with the manager passcode and returns the reply's
+ * Sends one JSON request to the Syncro server with the manager passcode and returns the reply's
  * JSON. Any problem (not signed in, wrong passcode, slow, not 2xx) becomes an Error with a plain
  * message, so the screen shows it instead of a silent success.
  */
@@ -46,7 +46,7 @@ async function postToServer(baseUrl: string, path: string, body: unknown): Promi
     return await res.json();
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw new Error("The server took too long to answer.");
-    throw err instanceof Error ? err : new Error("Could not reach the ShiftFit server.");
+    throw err instanceof Error ? err : new Error("Could not reach the Syncro server.");
   } finally {
     clearTimeout(timer);
   }
@@ -63,7 +63,7 @@ async function explainFailure(res: Response): Promise<string> {
   return problemFromStatus(res.status);
 }
 
-/** The real client: every call goes to the ShiftFit server at `baseUrl`. */
+/** The real client: every call goes to the Syncro server at `baseUrl`. */
 function createServerClient(baseUrl: string): AutomationClient {
   return {
     kind: "server",
