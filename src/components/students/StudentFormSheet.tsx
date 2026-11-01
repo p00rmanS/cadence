@@ -71,31 +71,45 @@ function withCurrent(options: Opt[], current: number | null, label: (v: number) 
 /** The add/edit student form: name, photo, class times, blocked times and work preferences. */
 export function StudentFormSheet({
   student,
+  prefill = null,
+  title,
+  saveLabel,
+  hidePhoto = false,
   settings,
   existingNames,
   onSave,
   onClose,
 }: {
   student: Student | null;
+  /** Starting values for a NEW student (a student's own link being reviewed): it is still added as new, not edited. */
+  prefill?: Student | null;
+  /** Replaces the usual "Add a student" / "Edit ..." heading (the student's own page says "Your details"). */
+  title?: string;
+  /** Replaces the usual "Add student" / "Save changes" button words. */
+  saveLabel?: string;
+  /** Leaves out the photo choice (a student's link carries no photo). */
+  hidePhoto?: boolean;
   /** The office rules, for the days the office is open and the office weekly limit shown next to the hours box. */
   settings: ScheduleSettings;
   existingNames: string[];
   onSave: (input: NewStudentInput) => void;
   onClose: () => void;
 }) {
-  const [name, setName] = useState(student?.name ?? "");
-  const [preference, setPreference] = useState<NewStudentInput["preference"]>(student?.preference ?? "any");
-  const [daysPerWeek, setDaysPerWeek] = useState(student?.daysPerWeek ?? 5);
-  const [latestEnd, setLatestEnd] = useState(student?.latestEnd ?? NO_CUTOFF);
+  // Where the form's starting values come from: the student being edited, or the prefill for a new one.
+  const start = student ?? prefill;
+  const [name, setName] = useState(start?.name ?? "");
+  const [preference, setPreference] = useState<NewStudentInput["preference"]>(start?.preference ?? "any");
+  const [daysPerWeek, setDaysPerWeek] = useState(start?.daysPerWeek ?? 5);
+  const [latestEnd, setLatestEnd] = useState(start?.latestEnd ?? NO_CUTOFF);
   // A new student starts with the usual 30-minute lunch at noon; the manager can change or remove it.
-  const [breaks, setBreaks] = useState<WorkBreak[]>(student ? student.breaks : [{ start: DEFAULT_BREAK_START, minutes: DEFAULT_BREAK_MINUTES }]);
-  const [needsOpeningShift, setNeedsOpeningShift] = useState(student?.needsOpeningShift ?? false);
-  const [workDays, setWorkDays] = useState<Day[]>(student?.workDays ?? []);
-  const [weeklyHoursText, setWeeklyHoursText] = useState(student?.weeklyHours === undefined ? "" : String(student.weeklyHours));
-  const [earliestStart, setEarliestStart] = useState(student?.earliestStart ?? 0);
-  const [classText, setClassText] = useState(student?.classText ?? "");
-  const [blockedText, setBlockedText] = useState(student?.blockedText ?? "");
-  const [avatar, setAvatar] = useState<string | null>(student?.avatar ?? null);
+  const [breaks, setBreaks] = useState<WorkBreak[]>(start ? start.breaks : [{ start: DEFAULT_BREAK_START, minutes: DEFAULT_BREAK_MINUTES }]);
+  const [needsOpeningShift, setNeedsOpeningShift] = useState(start?.needsOpeningShift ?? false);
+  const [workDays, setWorkDays] = useState<Day[]>(start?.workDays ?? []);
+  const [weeklyHoursText, setWeeklyHoursText] = useState(start?.weeklyHours === undefined ? "" : String(start.weeklyHours));
+  const [earliestStart, setEarliestStart] = useState(start?.earliestStart ?? 0);
+  const [classText, setClassText] = useState(start?.classText ?? "");
+  const [blockedText, setBlockedText] = useState(start?.blockedText ?? "");
+  const [avatar, setAvatar] = useState<string | null>(start?.avatar ?? null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
@@ -175,7 +189,7 @@ export function StudentFormSheet({
 
   return (
     <Modal
-      title={student ? `Edit ${student.name}` : "Add a student"}
+      title={title ?? (student ? `Edit ${student.name}` : "Add a student")}
       description="Tell Syncro when they have class and any limits. You can change this later."
       onClose={onClose}
       footer={
@@ -184,7 +198,7 @@ export function StudentFormSheet({
             Cancel
           </Button>
           <Button variant="primary" onClick={handleSubmit}>
-            {student ? "Save changes" : "Add student"}
+            {saveLabel ?? (student ? "Save changes" : "Add student")}
           </Button>
         </>
       }
@@ -228,39 +242,41 @@ export function StudentFormSheet({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Avatar name={trimmed || "?"} color={student?.color ?? "#1F6FB2"} avatar={avatar ?? undefined} size="lg" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">
-              Photo <span className="font-normal text-muted">(optional)</span>
-            </p>
-            <input
-              ref={photoInput}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              hidden
-              aria-label="Choose a photo file"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handlePhoto(file);
-                e.target.value = "";
-              }}
-            />
-            <div className="mt-1 flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => photoInput.current?.click()} disabled={photoBusy}>
-                {photoBusy ? "Working…" : avatar ? "Change photo" : "Choose a photo"}
-              </Button>
-              {avatar && (
-                <Button variant="ghost" onClick={() => setAvatar(null)} disabled={photoBusy}>
-                  Remove photo
+        {!hidePhoto && (
+          <div className="flex items-center gap-3">
+            <Avatar name={trimmed || "?"} color={student?.color ?? "#1F6FB2"} avatar={avatar ?? undefined} size="lg" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Photo <span className="font-normal text-muted">(optional)</span>
+              </p>
+              <input
+                ref={photoInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                aria-label="Choose a photo file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handlePhoto(file);
+                  e.target.value = "";
+                }}
+              />
+              <div className="mt-1 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => photoInput.current?.click()} disabled={photoBusy}>
+                  {photoBusy ? "Working…" : avatar ? "Change photo" : "Choose a photo"}
                 </Button>
-              )}
+                {avatar && (
+                  <Button variant="ghost" onClick={() => setAvatar(null)} disabled={photoBusy}>
+                    Remove photo
+                  </Button>
+                )}
+              </div>
+              <p className={photoError ? "mt-1 text-xs text-gap" : "mt-1 text-xs text-muted"} role={photoError ? "alert" : undefined}>
+                {photoError ?? "PNG, JPG or WebP, up to 5 MB. It is shrunk and kept in this browser only."}
+              </p>
             </div>
-            <p className={photoError ? "mt-1 text-xs text-gap" : "mt-1 text-xs text-muted"} role={photoError ? "alert" : undefined}>
-              {photoError ?? "PNG, JPG or WebP, up to 5 MB. It is shrunk and kept in this browser only."}
-            </p>
           </div>
-        </div>
+        )}
 
         <ImportPanel classText={classText} onClassTextChange={setClassText} onExtracted={handleExtracted} />
         {aiNote && <p className="rounded-lg bg-warn-bg p-2 text-xs text-ink">{aiNote}</p>}

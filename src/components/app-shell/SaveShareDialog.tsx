@@ -6,6 +6,8 @@ import { LogoLoader } from "../ui/LogoLoader";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Modal } from "../ui/Modal";
 import { buildStudentIcs, icsFileName, isSemesterConfigured } from "../../features/calendar/ics";
+import { CopyButton } from "../share/CopyField";
+import { buildShiftsCode, shiftsLink } from "../../features/sharing/links";
 import { MAX_BACKUP_BYTES, exportBackup, parseBackup } from "../../features/persistence/storage";
 import { shiftsToCsv } from "../../features/scheduling/blocks";
 import { isIsoDate, isValidTimeZone } from "../../features/scheduling/time";
@@ -344,6 +346,10 @@ export function SaveShareDialog(props: Props) {
               </p>
             )}
             <p className="mt-2 text-xs text-muted">Shifts repeat every week from the first day to the last day, at the times shown in the schedule.</p>
+            <p className="mt-1 text-xs text-muted">
+              &ldquo;Link for student&rdquo; copies a link to a page that shows that student only their own shifts, with an Add to calendar button. The shifts travel
+              inside the link and nothing is stored anywhere, so send it only to that student.
+            </p>
 
             <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
               {students.map((s) => {
@@ -369,6 +375,13 @@ export function SaveShareDialog(props: Props) {
                       >
                         <Download className="h-4 w-4" aria-hidden /> Calendar file
                       </Button>
+                      <CopyButton
+                        text={() => shiftsLink(buildShiftsCode(s, assignments, settings, semester))}
+                        label="Link for student"
+                        copiedLabel="Link copied"
+                        ariaLabel={`Copy a link that shows ${s.name} their own shifts`}
+                        disabled={mine === 0}
+                      />
                     </span>
                   </li>
                 );
