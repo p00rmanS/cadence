@@ -283,6 +283,15 @@ describe("the schedule grid with a keyboard", () => {
     expect(within(pink).getByText("Need 1")).toBeTruthy();
   });
 
+  it("says \"Need 1\" once at the start of an empty stretch, not in every half hour of it", () => {
+    boot();
+    const first = cell(/^Monday 7:00am to 7:30am/);
+    const second = cell(/^Monday 7:30am to 8:00am/);
+    expect(second.getAttribute("aria-label")).toMatch(/Needs 1 more/); // screen readers still hear it in every box
+    expect(within(first).queryByText("Need 1")).toBeTruthy();
+    expect(within(second).queryByText("Need 1")).toBeNull();
+  });
+
   it("asks before going over someone's weekly hours, then keeps a visible warning", async () => {
     const { user } = boot();
     await user.click(cell(/^Tuesday 2:00pm to 2:30pm/)); // Troy is already at 19 hours

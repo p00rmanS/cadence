@@ -39,10 +39,16 @@ type CellModel = {
   mine: boolean;
   hardBlocked: boolean;
   label: string;
+  /** True on the first box of a run of boxes that all need the same number of people: only that box says "Need N". */
+  gapStart: boolean;
+  /** True on the first box of a closed stretch (the Tuesday devotional): only that box shows the word. */
+  closedStart: boolean;
+  /** Students who were ALSO working in the box just above: they show as a thin bar, not their initials again. */
+  continuing: Set<string>;
 };
 
 const STRIPES =
-  "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_5px,rgb(var(--busy)/0.55)_5px,rgb(var(--busy)/0.55)_7px)]";
+  "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_8px,rgb(var(--busy)/0.28)_8px,rgb(var(--busy)/0.28)_9px)]";
 
 /**
  * The week grid: one row per half hour, one column per weekday. Clicking a box adds or removes
@@ -126,8 +132,18 @@ export function ScheduleGrid({
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
           else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label });
+        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, continuing: new Set() });
       }
+    }
+    // Calmer to read: a shift is drawn as one block (initials once, then a thin bar), and a gap says "Need N" once.
+    for (const day of days) {
+      slots.forEach((start, i) => {
+        const here = out.get(`${day}|${start}`)!;
+        const above = i > 0 ? out.get(`${day}|${slots[i - 1]}`) : undefined;
+        here.gapStart = here.need > 0 && above?.need !== here.need;
+        here.closedStart = here.closed && !above?.closed;
+        for (const id of here.staffIds) if (above?.staffIds.includes(id)) here.continuing.add(id);
+      });
     }
     return out;
   }, [slots, assignments, students, studentById, settings, selectedStudent]);
@@ -271,7 +287,7 @@ export function ScheduleGrid({
       {/* Only the three things a manager looks for; the rest is explained behind the "?" above. */}
       <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted" aria-label="What the boxes mean">
         <li className="flex items-center gap-1.5">
-          <span className="h-4 w-4 rounded-sm bg-ok-bg ring-1 ring-inset ring-ok/40" aria-hidden /> Enough people
+          <span className="h-4 w-4 rounded-sm bg-panel ring-1 ring-inset ring-line" aria-hidden /> Enough people
         </li>
         <li className="flex items-center gap-1.5">
           <span className="h-4 w-4 rounded-sm bg-gap-bg ring-1 ring-inset ring-gap" aria-hidden /> Needs someone
@@ -322,7 +338,7 @@ export function ScheduleGrid({
                   scope="row"
                   className={clsx(
                     "sticky left-0 z-10 whitespace-nowrap bg-panel p-1 pr-2 text-right align-top text-xs",
-                    slot % 60 === 0 ? "border-t border-line/70 font-semibold text-ink" : "border-t border-dashed border-line/40 font-normal text-muted",
+                    slot % 60 === 0 ? "border-t border-line/60 font-semibold text-ink" : "border-t border-line/15 font-normal text-muted/70",
                   )}
                 >
                   {formatMinutes(slot)}
@@ -334,7 +350,7 @@ export function ScheduleGrid({
                     <td
                       key={day}
                       role="gridcell"
-                      className={clsx("border-l border-line/50 p-[3px] align-middle", slot % 60 === 0 ? "border-t border-line/70" : "border-t border-dashed border-line/40")}
+                      className={clsx("px-[3px] py-0 align-middle", slot % 60 === 0 ? "border-t border-line/60" : "border-t border-line/15")}
                     >
                       <button
                         type="button"
@@ -359,18 +375,18 @@ export function ScheduleGrid({
                           activate(day, slot, e.shiftKey);
                         }}
                         className={clsx(
-                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-lg px-1 text-left transition duration-100 ease-out",
-                          cell.closed ? "bg-line/40" : cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg/70",
+                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-md px-1 text-left transition duration-100 ease-out",
+                          cell.closed ? "bg-line/30" : cell.need > 0 ? "bg-gap-bg/70" : "bg-transparent",
                           cell.mine && "ring-2 ring-inset ring-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
                               ? "bg-accent/25 outline outline-2 -outline-offset-2 outline-accent"
                               : "outline outline-2 -outline-offset-2 outline-dashed outline-muted"),
-                          cell.hardBlocked ? "cursor-not-allowed" : "hover:brightness-95",
+                          cell.hardBlocked ? "cursor-not-allowed" : "hover:bg-line/30",
                         )}
                       >
                         {cell.hardBlocked && !cell.closed && <span className={clsx("pointer-events-none absolute inset-0", STRIPES)} aria-hidden />}
-                        {cell.closed && !cell.staffIds.length && (
+                        {cell.closedStart && !cell.staffIds.length && (
                           <span className="relative text-xs font-semibold text-muted" aria-hidden>
                             Devotional
                           </span>
@@ -379,6 +395,9 @@ export function ScheduleGrid({
                           const s = studentById.get(id);
                           if (!s) return null;
                           const broken = problemSlots.has(`${id}|${day}|${slot}`);
+                          if (cell.continuing.has(id) && !broken) {
+                            return <span key={id} className="relative h-full w-1.5 shrink-0 rounded-full opacity-80" style={{ backgroundColor: s.color }} aria-hidden />;
+                          }
                           return (
                             <span
                               key={id}
@@ -391,8 +410,8 @@ export function ScheduleGrid({
                             </span>
                           );
                         })}
-                        {cell.need > 0 && (
-                          <span className="relative ml-auto pr-0.5 text-xs font-semibold text-gap" aria-hidden>
+                        {cell.gapStart && (
+                          <span className="relative ml-auto pr-0.5 text-xs font-medium text-gap" aria-hidden>
                             Need {cell.need}
                           </span>
                         )}
