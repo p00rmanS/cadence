@@ -129,7 +129,7 @@ export const FAQ: FaqItem[] = [
     question: "What do the colors and patterns in the grid mean?",
     answer: [
       "Green: enough people are working. Pink with the words “Need 1”: this half hour still needs someone. Diagonal stripes: the student you picked can't work then (class, break, or too late).",
-      "A blue outline means the student you picked is working in that box. The colored badges with letters show who is working. We never use color alone, so you can tell states apart by the words and patterns too.",
+      "A blue box means the student you picked is working there. The colored name tags show who is working, with a thin bar of the same color for the rest of their shift. Pink boxes say “Need 1” in words, and grey boxes say why the picked student cannot work (for example “Class”).",
     ],
     keywords: ["legend", "pink", "green", "stripes", "colors"],
   },
