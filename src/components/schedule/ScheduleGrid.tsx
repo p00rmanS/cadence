@@ -60,9 +60,11 @@ const BLOCKED_WORDS: Record<string, string> = {
   devotional: "Devotional",
 };
 
-/** The full name fits in a box; with three or more people in one box, initials are used instead. */
-function shortName(name: string, crowded: boolean): string {
-  return crowded ? initials(name) : name;
+/** How much of a name fits in a box: all of it alone, the first name for two people, initials for three or more. */
+function shortName(name: string, peopleInBox: number): string {
+  if (peopleInBox >= 3) return initials(name);
+  if (peopleInBox === 2) return name.split(/\s+/)[0];
+  return name;
 }
 
 /**
@@ -424,7 +426,7 @@ export function ScheduleGrid({
                               style={{ backgroundColor: s.color }}
                               aria-hidden
                             >
-                              {shortName(s.name, cell.staffIds.length > 2)}
+                              {shortName(s.name, cell.staffIds.length)}
                               {broken && <AlertTriangle className="h-4 w-4 shrink-0" />}
                             </span>
                           );
