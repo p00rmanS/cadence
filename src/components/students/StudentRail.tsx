@@ -49,7 +49,7 @@ export function StudentRail({
         </Button>
       </div>
       <p className="text-sm text-muted">
-        Click a name, then click the schedule.{" "}
+        Drag a name onto a time, or click a name and then the times.{" "}
         <button type="button" onClick={onAddMany} className="font-medium text-accent underline underline-offset-2">
           Add several at once
         </button>

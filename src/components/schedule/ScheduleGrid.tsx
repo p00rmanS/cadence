@@ -7,6 +7,8 @@ import { describeGap } from "../../features/scheduling/issues";
 import { isDevotional, isOnBreak, studentLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
+import { MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
+import { droppedStudentId, isStudentDrag } from "../../lib/studentDrag";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import { openDays } from "../../features/scheduling/days";
 import { useLayoutQuery } from "../../hooks/useMediaQuery";
@@ -79,6 +81,7 @@ export function ScheduleGrid({
   selectedStudent,
   onToggle,
   onRange,
+  onDropStudent,
 }: {
   settings: ScheduleSettings;
   students: Student[];
@@ -87,6 +90,8 @@ export function ScheduleGrid({
   selectedStudent: Student | null;
   onToggle: (day: Day, start: number) => void;
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
+  /** A student card was dropped on a time: give that student the shift from `from` to `to` (the last half hour). */
+  onDropStudent?: (studentId: string, day: Day, from: number, to: number) => void;
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
   const wide = useLayoutQuery(640);
@@ -105,6 +110,8 @@ export function ScheduleGrid({
   const dragLast = useRef<{ day: Day; start: number } | null>(null);
   const suppressClick = useRef(false);
   const [drag, setDrag] = useState<{ day: Day; from: number; to: number; assign: boolean } | null>(null);
+  // A student card being dragged over the grid: the stretch (one minimum-length shift) it would fill if dropped here.
+  const [dropRange, setDropRange] = useState<{ day: Day; from: number; to: number } | null>(null);
   const onRangeRef = useRef(onRange);
   onRangeRef.current = onRange;
   const cells = useRef(new Map<string, HTMLButtonElement>());
@@ -251,6 +258,15 @@ export function ScheduleGrid({
     };
   }, []);
 
+  // The shift a drop on this box would make: starts here and lasts the minimum shift, stopping at closing time.
+  function dropRangeAt(day: Day, start: number) {
+    const lastSlot = slots[slots.length - 1];
+    return { day, from: start, to: Math.min(start + MIN_SHIFT_MINUTES - settings.slotMinutes, lastSlot) };
+  }
+
+  // True if this box is inside the stretch a dropped student card would fill (so it can be outlined).
+  const inDrop = (day: Day, slot: number) => dropRange !== null && dropRange.day === day && slot >= dropRange.from && slot <= dropRange.to;
+
   // True if this box is inside the range currently being dragged (so it can be highlighted).
   const inDrag = (day: Day, slot: number) =>
     drag !== null && drag.day === day && slot >= Math.min(drag.from, drag.to) && slot <= Math.max(drag.from, drag.to);
@@ -297,7 +313,7 @@ export function ScheduleGrid({
               </span>
             </>
           ) : (
-            <span className="font-medium">Step 1: pick a student on the left. Step 2: click the times they work.</span>
+            <span className="font-medium">Drag a student from the left onto a time, or pick a student and click the times they work.</span>
           )}
         </p>
       </div>
@@ -349,7 +365,13 @@ export function ScheduleGrid({
               ))}
             </tr>
           </thead>
-          <tbody onMouseLeave={() => setInfo(null)}>
+          <tbody
+            onMouseLeave={() => setInfo(null)}
+            onDragLeave={(e) => {
+              // Leaving the table altogether (not just moving between two boxes) clears the outline.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropRange(null);
+            }}
+          >
             {slots.map((slot, r) => (
               <tr key={slot}>
                 <th
@@ -385,6 +407,20 @@ export function ScheduleGrid({
                           setInfo({ day, start: slot });
                         }}
                         onMouseEnter={() => setInfo({ day, start: slot })}
+                        onDragOver={(e) => {
+                          if (!onDropStudent || !isStudentDrag(e)) return;
+                          e.preventDefault(); // this is what tells the browser "yes, dropping here is allowed"
+                          e.dataTransfer.dropEffect = "copy";
+                          if (dropRange?.day !== day || dropRange.from !== slot) setDropRange(dropRangeAt(day, slot));
+                        }}
+                        onDrop={(e) => {
+                          const studentId = droppedStudentId(e);
+                          if (!onDropStudent || !studentId) return;
+                          e.preventDefault();
+                          const target = dropRangeAt(day, slot);
+                          setDropRange(null);
+                          onDropStudent(studentId, day, target.from, target.to);
+                        }}
                         onPointerDown={(e) => beginDrag(e, day, slot)}
                         onPointerEnter={() => extendDrag(day, slot)}
                         onKeyDown={(e) => onCellKeyDown(e, r, c)}
@@ -395,6 +431,7 @@ export function ScheduleGrid({
                         className={clsx(
                           "relative flex h-11 w-full min-w-[72px] items-center gap-1 overflow-hidden rounded-md px-1 text-left transition duration-100 ease-out",
                           cell.mine ? "bg-accent/25" : cell.closed || cell.blockedWhy ? "bg-line/40" : cell.need > 0 ? "border-l-4 border-gap bg-gap-bg" : "bg-transparent",
+                          inDrop(day, slot) && "outline outline-2 -outline-offset-2 outline-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
                               ? "bg-accent/25 outline outline-2 -outline-offset-2 outline-accent"
@@ -448,7 +485,11 @@ export function ScheduleGrid({
 
       {/* Sighted helper text. Screen readers already hear the same words from the focused box. */}
       <p aria-hidden className="min-h-12 rounded-lg bg-bg px-3 py-2 text-base leading-snug">
-        {infoCell ? infoCell.label : "Point at a box to see who is working."}
+        {dropRange
+          ? `Let go to give them ${formatMinutes(dropRange.from)} to ${formatMinutes(dropRange.to + settings.slotMinutes)}. Anything that breaks a rule is skipped.`
+          : infoCell
+            ? infoCell.label
+            : "Point at a box to see who is working."}
       </p>
     </section>
   );

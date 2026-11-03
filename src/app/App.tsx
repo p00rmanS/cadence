@@ -258,6 +258,11 @@ export function App() {
             onToggle={store.toggleSlot}
             onRange={store.setRange}
             onNotify={store.notify}
+            onDropStudent={(studentId, day, from, to) => {
+              // Dropping a card picks that student too, so the grid then shows them and the next click is theirs.
+              store.selectStudent(studentId);
+              store.fillGap(studentId, day, from, to);
+            }}
             detailsOpen={detailsOpen}
             onToggleDetails={() => setDetailsOpen(!detailsOpen)}
           />
