@@ -23,8 +23,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={clsx(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        variant === "primary" && "border-accent bg-accent text-accent-ink hover:opacity-90",
+        "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
+        variant === "primary" && "soft-shadow border-accent bg-accent text-accent-ink hover:-translate-y-px hover:opacity-90 active:translate-y-0",
         variant === "secondary" && "border-line bg-panel text-ink hover:bg-line/30",
         variant === "ghost" && "border-transparent bg-transparent text-ink hover:bg-line/30",
         variant === "danger" && "border-gap/50 bg-transparent text-gap hover:bg-gap-bg",

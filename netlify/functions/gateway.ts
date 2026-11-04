@@ -28,5 +28,5 @@ export default async function gateway(request: Request): Promise<Response> {
 
 /** The web addresses this function answers (Netlify reads this). */
 export const config = {
-  path: ["/api/session", "/api/publish", "/api/remove", "/api/interpret"],
+  path: ["/api/session", "/api/publish", "/api/remove", "/api/interpret", "/api/health"],
 };

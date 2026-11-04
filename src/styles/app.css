@@ -3,33 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --bg: 234 241 240;
+  --bg: 246 243 238;
   --panel: 255 255 255;
-  --ink: 18 48 47;
-  --muted: 79 104 102;
-  --line: 201 216 214;
+  --ink: 27 36 48;
+  --muted: 94 102 112;
+  --line: 221 215 205;
   --ok: 24 113 85;
-  --ok-bg: 215 238 229;
+  --ok-bg: 218 238 228;
   --gap: 179 20 79;
-  --gap-bg: 249 220 231;
-  --busy: 154 169 168;
+  --gap-bg: 250 223 232;
+  --busy: 168 170 176;
   --accent: 31 111 178;
   --accent-ink: 255 255 255;
   --warn: 168 98 0;
-  --warn-bg: 250 232 210;
+  --warn-bg: 250 233 212;
 }
 
 :root[data-theme="dark"] {
-  --bg: 15 30 30;
-  --panel: 23 42 42;
-  --ink: 227 239 237;
-  --muted: 147 175 172;
-  --line: 44 69 68;
+  --bg: 17 22 31;
+  --panel: 26 33 45;
+  --ink: 232 236 242;
+  --muted: 152 162 178;
+  --line: 46 56 72;
   --ok: 92 199 162;
   --ok-bg: 22 57 47;
   --gap: 242 114 159;
   --gap-bg: 64 26 41;
-  --busy: 97 121 122;
+  --busy: 100 110 126;
   --accent: 111 176 234;
   --accent-ink: 10 22 34;
   --warn: 230 169 75;
@@ -38,16 +38,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: 15 30 30;
-    --panel: 23 42 42;
-    --ink: 227 239 237;
-    --muted: 147 175 172;
-    --line: 44 69 68;
+    --bg: 17 22 31;
+    --panel: 26 33 45;
+    --ink: 232 236 242;
+    --muted: 152 162 178;
+    --line: 46 56 72;
     --ok: 92 199 162;
     --ok-bg: 22 57 47;
     --gap: 242 114 159;
     --gap-bg: 64 26 41;
-    --busy: 97 121 122;
+    --busy: 100 110 126;
     --accent: 111 176 234;
     --accent-ink: 10 22 34;
     --warn: 230 169 75;
@@ -76,6 +76,27 @@ body {
   background: rgb(var(--bg));
   color: rgb(var(--ink));
   font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+
+/* Times and hour counts line up in neat columns (every digit the same width). */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A soft, warm shadow used for the header, the schedule grid and the main button: depth without heavy borders. */
+:root {
+  --shadow: 0 1px 2px rgb(27 36 48 / 0.06), 0 4px 14px rgb(27 36 48 / 0.06);
+}
+:root[data-theme="dark"] {
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px rgb(0 0 0 / 0.25);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px rgb(0 0 0 / 0.25);
+  }
+}
+.soft-shadow {
+  box-shadow: var(--shadow);
 }
 
 h1,

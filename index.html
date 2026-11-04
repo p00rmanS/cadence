@@ -3,15 +3,67 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0F1E1E" />
+    <meta name="theme-color" content="#11161F" />
     <title>Cadence — Shift Coverage Planner</title>
     <meta
       name="description"
       content="Class-aware shift scheduling for student workers. Cadence builds a weekly coverage grid that respects class times, weekly hour targets, and manager constraints."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!--
+      SPLASH SCREEN: the animated logo shown while the app loads. It lives in this file (plain HTML + CSS,
+      no script) so it appears instantly, before any of the app's code has downloaded. `src/main.tsx`
+      fades it out and removes it once the app is ready. Its colors copy the app's light/dark colors.
+    -->
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #f6f3ee;
+        color: #1b2430;
+        transition: opacity 0.45s ease, visibility 0.45s;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash { background: #11161f; color: #e8ecf2; }
+      }
+      #splash.splash-done { opacity: 0; visibility: hidden; }
+      #splash svg { width: 96px; height: 96px; overflow: visible; }
+      /* The three white bars slide in one after another, like shifts being laid down on a week. */
+      #splash .bar { transform-box: fill-box; transform-origin: left center; animation: splash-bar 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+      #splash .bar-2 { animation-delay: 0.18s; }
+      #splash .bar-3 { animation-delay: 0.36s; }
+      /* The light dot is the "beat": it pops in, then keeps a slow steady pulse while loading. */
+      #splash .beat { transform-box: fill-box; transform-origin: center; animation: splash-pop 0.5s 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) both, splash-pulse 1.4s 1.2s ease-in-out infinite; }
+      #splash .word { font: 700 1.6rem "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: 0.02em; animation: splash-fade 0.6s 0.55s both; }
+      #splash .sub { margin-top: -10px; font: 400 0.95rem "Atkinson Hyperlegible", system-ui, sans-serif; opacity: 0.7; animation: splash-fade 0.6s 0.8s both; }
+      @keyframes splash-bar { from { transform: translateX(-5px) scaleX(0.3); opacity: 0; } to { transform: none; opacity: 1; } }
+      @keyframes splash-pop { from { transform: scale(0); } to { transform: scale(1); } }
+      @keyframes splash-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5); } }
+      @keyframes splash-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      /* People who asked their device for less motion get the finished logo, standing still. */
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash { animation: none !important; transition-duration: 0.01ms !important; }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="Loading Cadence">
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <rect width="32" height="32" rx="8" fill="#1F6FB2" />
+        <rect class="bar bar-1" x="11" y="8.25" width="13.5" height="4.5" rx="2.25" fill="#fff" />
+        <rect class="bar bar-2" x="7.5" y="13.75" width="9" height="4.5" rx="2.25" fill="#fff" />
+        <circle class="beat" cx="21.25" cy="16" r="2.25" fill="#9CCBF2" />
+        <rect class="bar bar-3" x="11" y="19.25" width="13.5" height="4.5" rx="2.25" fill="#fff" />
+      </svg>
+      <div class="word">Cadence</div>
+      <div class="sub">Work schedules that fit around classes</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
