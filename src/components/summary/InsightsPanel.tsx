@@ -129,7 +129,7 @@ export function InsightsPanel({
         <div className="mt-3 flex flex-col gap-4">
           <Meter
             label="Hours with enough people"
-            help={`Of every 30-minute box in the week, how many have at least ${settings.minStaffPerSlot} ${settings.minStaffPerSlot === 1 ? "person" : "people"} working.`}
+            help={`Of every 30-minute box in the week, how many have enough people working (${settings.minStaffPerSlot} ${settings.minStaffPerSlot === 1 ? "person" : "people"}, or more at times you marked as busier).`}
             percent={summary.fullyStaffedPercent}
             detail={`${summary.fullyStaffedSlots} of ${summary.totalSlots} boxes are covered.`}
           />
@@ -137,7 +137,7 @@ export function InsightsPanel({
             label="Staffing filled"
             help="Counts every person you need, not just every box. If you need 2 people and only 1 is working, the box isn't covered, but half of the staffing is filled."
             percent={summary.demandFulfilledPercent}
-            detail={`You need ${settings.minStaffPerSlot} at once, all ${summary.totalSlots} boxes.`}
+            detail={settings.staffingNeeds?.length ? `You usually need ${settings.minStaffPerSlot} at once; some times need more.` : `You need ${settings.minStaffPerSlot} at once, all ${summary.totalSlots} boxes.`}
           />
 
           <dl className="grid grid-cols-2 gap-2 text-sm">

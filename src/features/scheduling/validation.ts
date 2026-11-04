@@ -1,11 +1,13 @@
 import { DEFAULT_BREAK_MINUTES, MAX_ASSIGNMENTS, MAX_BREAKS, MAX_DAYS_PER_WEEK, MAX_STUDENTS, STUDENT_COLORS } from "./constants";
 import { isValidAvatar } from "../../lib/image";
 import { isIsoDate, isValidTimeZone } from "./time";
+import { MAX_STAFFING_NEEDS } from "./staffing";
 import { DAYS } from "./types";
 import type {
   BusyBlock,
   Day,
   PersistedStateV1,
+  StaffingNeed,
   ScheduleSettings,
   SemesterConfig,
   ShiftBlock,
@@ -68,13 +70,41 @@ function removeControlCharacters(text: string): string {
   return text.replace(CONTROL_CHARACTERS, " ");
 }
 
+/** Reads the "this time needs N people" exceptions (absent in older saved schedules). Returns the clean list, or null with an error recorded. */
+function readStaffingNeeds(input: unknown, errors: string[]): StaffingNeed[] | null {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > MAX_STAFFING_NEEDS) {
+    errors.push("Settings: the staffing times are not a valid list.");
+    return null;
+  }
+  const clean: StaffingNeed[] = [];
+  for (const item of input) {
+    const valid =
+      isRecord(item) &&
+      isDay(item.day) &&
+      isMinutes(item.from) &&
+      isMinutes(item.to) &&
+      item.from < item.to &&
+      typeof item.people === "number" &&
+      Number.isInteger(item.people) &&
+      item.people >= 1 &&
+      item.people <= 10;
+    if (!valid) {
+      errors.push("Settings: one of the staffing times is not valid (a day, a start before the end, and 1 to 10 people).");
+      return null;
+    }
+    clean.push({ day: item.day as Day, from: item.from as number, to: item.to as number, people: item.people as number });
+  }
+  return clean;
+}
+
 /** Checks the office-wide rules (open hours, staff per slot, weekly target) and returns a clean copy, or null. */
 function readSettings(input: unknown, errors: string[]): ScheduleSettings | null {
   if (!isRecord(input)) {
     errors.push("Missing settings.");
     return null;
   }
-  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, openDays } = input;
+  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, openDays, staffingNeeds } = input;
   if (!isMinutes(openTime) || !isMinutes(closeTime) || openTime >= closeTime) {
     errors.push("Settings: open and close times must be valid, with opening before closing.");
     return null;
@@ -100,6 +130,8 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Settings: the shortest shift must be between half an hour and 4 hours, in half-hour steps.");
     return null;
   }
+  const needs = readStaffingNeeds(staffingNeeds, errors);
+  if (needs === null) return null;
   // Schedules saved before the Semester/Break switch existed have no term; they were made for the semester.
   return {
     openTime,
@@ -110,6 +142,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     term: term === "break" ? "break" : "semester",
     ...(breakWeeklyHours !== undefined ? { breakWeeklyHours } : {}),
     ...(minShiftHours !== undefined ? { minShiftHours } : {}),
+    ...(needs.length ? { staffingNeeds: needs } : {}),
     // Schedules saved before Saturday existed have no openDays: they stay Monday to Friday. Anything
     // other than the two real choices is dropped, which also means Monday to Friday.
     ...(openDays === "mon-sat" || openDays === "mon-fri" ? { openDays } : {}),

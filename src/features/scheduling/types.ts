@@ -134,6 +134,9 @@ export type Term = "semester" | "break";
 /** The days the office is open: weekdays only, or weekdays plus Saturday. */
 export type OpenDays = "mon-fri" | "mon-sat";
 
+/** Times that need a different number of people than the standard: from `from` up to (not including) `to` on `day`, `people` are needed. */
+export type StaffingNeed = { day: Day; from: Minutes; to: Minutes; people: number };
+
 /** The office-wide rules that apply to every student (as opposed to per-student rules, which live on `Student`). Editable in the app's "Rules" dialog. */
 export type ScheduleSettings = {
   /** When the visible schedule grid starts each day. */
@@ -142,6 +145,8 @@ export type ScheduleSettings = {
   closeTime: Minutes;
   /** How many students must be on shift at once for a slot to count as "fully staffed". */
   minStaffPerSlot: number;
+  /** Times that need more (or fewer) people than `minStaffPerSlot`, for example two people over lunch. Missing means none. */
+  staffingNeeds?: StaffingNeed[];
   /** Size of one grid box in minutes. The whole app works in units of this size (default 30). */
   slotMinutes: number;
   /** Default weekly hour cap offered to each new student (BYU–Hawaii's student-employment limit; see `docs/DECISIONS.md`). */

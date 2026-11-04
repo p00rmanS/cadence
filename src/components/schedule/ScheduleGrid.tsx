@@ -10,6 +10,7 @@ import { endSentence } from "../../features/scheduling/time";
 import { MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
 import { droppedShift, droppedStudentId, isStudentDrag, startShiftDrag } from "../../lib/studentDrag";
 import { PlaceShiftDialog } from "./PlaceShiftDialog";
+import { requiredStaff } from "../../features/scheduling/staffing";
 import type { TimeRow } from "./PlaceShiftDialog";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import { openDays } from "../../features/scheduling/days";
@@ -41,6 +42,10 @@ type Anchor = { day: Day; start: number; assign: boolean };
 type CellModel = {
   staffIds: string[];
   need: number;
+  /** How many people this box needs in total (the standard number, or a special number set for this time). */
+  required: number;
+  /** True on the first box of a stretch that needs more than one person: only that box prints "Needs N". */
+  requiredStart: boolean;
   /** Tuesday devotional during the semester: nobody works, nobody is needed. */
   closed: boolean;
   mine: boolean;
@@ -99,7 +104,11 @@ export function ScheduleGrid({
    * The manager confirmed the pop-up after dropping a student card (or a shift) on the schedule: give that
    * student these stretches (each `to` is the last half hour). `remove` is the old shift when one was moved.
    */
-  onPlaceShifts?: (studentId: string, ranges: { day: Day; from: number; to: number }[], remove?: { day: Day; from: number; to: number }) => void;
+  onPlaceShifts?: (
+    studentId: string,
+    ranges: { day: Day; from: number; to: number }[],
+    options: { remove?: { day: Day; from: number; to: number }; alsoStudentIds?: string[]; needPeople?: number },
+  ) => void;
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
   const wide = useLayoutQuery(640);
@@ -147,7 +156,8 @@ export function ScheduleGrid({
         const staffIds = staffAt(day, start, assignments);
         const names = staffIds.map((id) => studentById.get(id)?.name ?? "Unknown");
         const closed = isDevotional(day, start, settings);
-        const need = closed ? 0 : settings.minStaffPerSlot - staffIds.length;
+        const required = requiredStaff(settings, day, start);
+        const need = closed ? 0 : required - staffIds.length;
         const mine = selectedStudent ? isAssigned(selectedStudent.id, day, start, assignments) : false;
         const violation = selectedStudent && !mine ? canAssign(selectedStudent, day, start, assignments, settings) : null;
         const hardBlocked = Boolean(
@@ -162,11 +172,12 @@ export function ScheduleGrid({
         label += names.length ? ` ${endSentence(`Working: ${names.join(", ")}`)}` : " Nobody is working.";
         if (closed) label += " Tuesday devotional. Nobody works now.";
         else label += need > 0 ? ` Needs ${need} more. ${describeGap(students, assignments, settings, day, start)}` : " Enough people.";
+        if (!closed && required > 1) label += ` This time needs ${required} people.`;
         if (selectedStudent) {
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
           else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
+        out.set(`${day}|${start}`, { staffIds, need, required: closed ? 0 : required, requiredStart: false, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
       }
     }
     // Calmer to read: a shift is drawn as one block (initials once, then a thin bar), and a gap says "Need N" once.
@@ -176,6 +187,7 @@ export function ScheduleGrid({
         const above = i > 0 ? out.get(`${day}|${slots[i - 1]}`) : undefined;
         here.gapStart = here.need > 0 && above?.need !== here.need;
         here.closedStart = here.closed && !above?.closed;
+        here.requiredStart = here.required > 1 && above?.required !== here.required;
         here.blockedStart = here.blockedWhy !== "" && above?.blockedWhy !== here.blockedWhy;
         for (const id of here.staffIds) if (above?.staffIds.includes(id)) here.continuing.add(id);
       });
@@ -509,6 +521,11 @@ export function ScheduleGrid({
                             </span>
                           );
                         })}
+                        {cell.requiredStart && !cell.gapStart && (
+                          <span className="relative ml-auto pr-1 text-sm font-semibold text-muted" aria-hidden>
+                            Needs {cell.required}
+                          </span>
+                        )}
                         {cell.gapStart && (
                           <span className="relative ml-auto pr-1 text-sm font-bold text-gap" aria-hidden>
                             Need {cell.need}
@@ -543,10 +560,12 @@ export function ScheduleGrid({
           slots={slots}
           slotMinutes={settings.slotMinutes}
           onCancel={() => setPlacing(null)}
-          onConfirm={(day, rows) => {
+          others={students.filter((s) => s.id !== placing.studentId).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
+          currentNeed={requiredStaff(settings, placing.day, placing.rows[0].from)}
+          onConfirm={(day, rows, extra) => {
             // The dialog's end time is when they stop; the store wants the last half hour they work.
             const ranges = rows.map((row) => ({ day, from: row.from, to: row.to - settings.slotMinutes }));
-            onPlaceShifts(placing.studentId, ranges, placing.moving ?? undefined);
+            onPlaceShifts(placing.studentId, ranges, { remove: placing.moving ?? undefined, ...extra });
             setPlacing(null);
           }}
         />

@@ -27,7 +27,11 @@ export function SchedulePanel(props: {
   onToggle: (day: Day, start: number) => void;
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
   onNotify: (message: string) => void;
-  onPlaceShifts?: (studentId: string, ranges: { day: Day; from: number; to: number }[], remove?: { day: Day; from: number; to: number }) => void;
+  onPlaceShifts?: (
+    studentId: string,
+    ranges: { day: Day; from: number; to: number }[],
+    options: { remove?: { day: Day; from: number; to: number }; alsoStudentIds?: string[]; needPeople?: number },
+  ) => void;
   /** The side column with the schedule's health (shown or hidden), and how to flip it. Both optional. */
   detailsOpen?: boolean;
   onToggleDetails?: () => void;

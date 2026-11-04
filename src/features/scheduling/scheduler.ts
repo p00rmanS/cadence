@@ -9,6 +9,7 @@ import { isDevotional, minShiftMinutes, studentLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 import { DAYS, DAY_LABEL } from "./types";
 import { openDays } from "./days";
+import { requiredStaff } from "./staffing";
 import type {
   AutoFillExplanation,
   AutoFillResult,
@@ -258,7 +259,7 @@ export function autoFill(
     for (const s of blockSlots) {
       const count = plan.staff(day, s);
       staffSum += count;
-      if (count < settings.minStaffPerSlot) gain++;
+      if (count < requiredStaff(settings, day, s)) gain++;
       else over++;
     }
 
@@ -349,7 +350,7 @@ export function autoFill(
   for (const day of days) {
     for (let i = 0; i < slots.length; i++) {
       if (isDevotional(day, slots[i], settings)) continue;
-      while (plan.staff(day, slots[i]) < settings.minStaffPerSlot) {
+      while (plan.staff(day, slots[i]) < requiredStaff(settings, day, slots[i])) {
         let best: Candidate | null = null;
         for (let studentIndex = 0; studentIndex < students.length; studentIndex++) {
           for (let len = 1; len <= maxSlots; len++) {
@@ -428,7 +429,7 @@ export function autoFill(
         if (boxes.some((b) => b.source !== "autofill")) continue;
         for (let t = 1; t <= boxes.length - minSlots; t++) {
           for (const cut of [boxes.slice(-t), boxes.slice(0, t)]) {
-            if (cut.every((b) => plan.staff(day, b.start) > settings.minStaffPerSlot)) trims.push({ day, boxes: cut.map((b) => b.start) });
+            if (cut.every((b) => plan.staff(day, b.start) > requiredStaff(settings, day, b.start))) trims.push({ day, boxes: cut.map((b) => b.start) });
           }
         }
       }
@@ -452,7 +453,7 @@ export function autoFill(
           let after = 0;
           while (keptSlots.has(`${day}|${newBoxes[len - 1] + (after + 1) * settings.slotMinutes}`)) after++;
           if (before + len + after < minSlots) continue;
-          const gain = newBoxes.filter((m) => plan.staff(day, m) < settings.minStaffPerSlot).length;
+          const gain = newBoxes.filter((m) => plan.staff(day, m) < requiredStaff(settings, day, m)).length;
           // Smallest change first, then the new shift that covers the most empty time, then the earliest.
           const rank = [trim.boxes.length, -gain, DAYS.indexOf(day), startIdx];
           if (!best || rankedBefore(rank, best.rank)) best = { trim, day, startIdx, len, rank };

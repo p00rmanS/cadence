@@ -28,9 +28,17 @@ type Props = {
   /** Every half-hour the office is open (the first one is opening time). */
   slots: number[];
   slotMinutes: number;
-  onConfirm: (day: Day, rows: TimeRow[]) => void;
+  /** The other students, so a pair (or more) can be put on the same times at once. */
+  others: { id: string; name: string; color: string }[];
+  /** How many people these times need right now (shown as the starting answer). */
+  currentNeed: number;
+  /** `needPeople` is only sent when the manager changed the answer. */
+  onConfirm: (day: Day, rows: TimeRow[], extra: { alsoStudentIds?: string[]; needPeople?: number }) => void;
   onCancel: () => void;
 };
+
+/** The numbers of people a manager can ask for at a time. */
+const PEOPLE_CHOICES = [1, 2, 3, 4, 5, 6];
 
 /** How long a new second row lasts when "Add another time" is pressed (the shortest normal shift). */
 const NEW_ROW_MINUTES = MIN_SHIFT_MINUTES;
@@ -38,9 +46,11 @@ const NEW_ROW_MINUTES = MIN_SHIFT_MINUTES;
 const NEW_ROW_GAP_MINUTES = 60;
 
 /** The dialog: a day picker, one or more From/To rows, an "Add another time" button and the confirm button. */
-export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows: startRows, slots, slotMinutes, onConfirm, onCancel }: Props) {
+export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows: startRows, slots, slotMinutes, others, currentNeed, onConfirm, onCancel }: Props) {
   const [day, setDay] = useState<Day>(startDay);
   const [rows, setRows] = useState<TimeRow[]>(startRows);
+  const [alsoIds, setAlsoIds] = useState<string[]>([]);
+  const [people, setPeople] = useState(currentNeed);
 
   const opening = slots[0];
   const closing = slots[slots.length - 1] + slotMinutes;
@@ -73,7 +83,8 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
       footer={
         <>
           <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" disabled={!canConfirm} onClick={() => onConfirm(day, rows)}>
+          <Button variant="primary" disabled={!canConfirm} onClick={() => onConfirm(day, rows, { alsoStudentIds: alsoIds.length ? alsoIds : undefined, needPeople: people !== currentNeed ? people : undefined })}
+          >
             {mode === "move" ? "Move shift" : "Add shifts"}
           </Button>
         </>
@@ -145,6 +156,43 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
             </Button>
           </div>
         )}
+
+        {mode === "add" && others.length > 0 && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-base font-semibold">Also working these times with {studentName}</legend>
+            <div className="flex flex-wrap gap-2">
+              {others.map((other) => {
+                const on = alsoIds.includes(other.id);
+                return (
+                  <label
+                    key={other.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-base ${on ? "border-accent bg-accent/15 font-semibold" : "border-line bg-panel"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => setAlsoIds(on ? alsoIds.filter((id) => id !== other.id) : [...alsoIds, other.id])}
+                    />
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: other.color }} aria-hidden />
+                    {other.name}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
+
+        <label className="flex flex-wrap items-center gap-2 text-base">
+          <span className="font-semibold">People needed at these times</span>
+          <select value={people} onChange={(e) => setPeople(Number(e.target.value))} className={selectClass}>
+            {PEOPLE_CHOICES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <span className="text-sm text-muted">A time with fewer people than this turns pink.</span>
+        </label>
 
         {shortShift && (
           <p className="rounded-lg bg-bg px-3 py-2 text-sm">

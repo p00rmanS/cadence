@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { canAssign, isAssigned, softViolations } from "../features/scheduling/availability";
 import { breakLimit } from "../features/scheduling/term";
+import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
 import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
@@ -109,7 +110,7 @@ export type Action =
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
-  | { type: "PLACE_SHIFTS"; studentId: string; ranges: ShiftRange[]; remove?: ShiftRange }
+  | { type: "PLACE_SHIFTS"; studentId: string; alsoStudentIds?: string[]; ranges: ShiftRange[]; remove?: ShiftRange; needPeople?: number }
   | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
   | { type: "SET_SEMESTER"; semester: SemesterConfig | null }
@@ -381,26 +382,40 @@ export function reducer(state: State, action: Action): State {
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
     }
     case "PLACE_SHIFTS": {
-      const student = doc.students.find((s) => s.id === action.studentId);
-      if (!student) return state;
-      // Moving a shift: take the old one off first, so it does not count against the student's own limits.
+      const main = doc.students.find((s) => s.id === action.studentId);
+      if (!main) return state;
+      const people = [main, ...doc.students.filter((s) => (action.alsoStudentIds ?? []).includes(s.id) && s.id !== main.id)];
       let working = doc;
+      // Moving a shift: take the old one off first, so it does not count against the student's own limits.
       if (action.remove) {
-        const removed = fillRange(doc, student, action.remove.day, action.remove.from, action.remove.to, false);
+        const removed = fillRange(doc, main, action.remove.day, action.remove.from, action.remove.to, false);
         working = { ...doc, assignments: removed.assignments };
       }
       let added = 0;
       const notes: string[] = [];
-      for (const range of action.ranges) {
-        const outcome = fillRange(working, student, range.day, range.from, range.to, true);
-        working = { ...working, assignments: outcome.assignments };
-        added += outcome.changed;
-        notes.push(outcome.message);
+      for (const student of people) {
+        for (const range of action.ranges) {
+          const outcome = fillRange(working, student, range.day, range.from, range.to, true);
+          working = { ...working, assignments: outcome.assignments };
+          added += outcome.changed;
+          notes.push(`${student.name}: ${outcome.message}`);
+        }
       }
-      // If nothing could be placed, change nothing at all (a move must never lose the original shift).
-      if (added === 0) return { ...state, toast: toast(notes.join(" ") || "Nothing was added.") };
+      // "These times need N people": recorded for every stretch, even if no one could be placed, since it is the manager's rule.
+      let needChanged = false;
+      if (action.needPeople !== undefined) {
+        let needs = working.settings.staffingNeeds;
+        for (const range of action.ranges) {
+          needs = withStaffingNeed({ ...working.settings, staffingNeeds: needs }, range.day, range.from, range.to + working.settings.slotMinutes, action.needPeople);
+        }
+        working = { ...working, settings: { ...working.settings, staffingNeeds: needs?.length ? needs : undefined } };
+        needChanged = true;
+      }
+      // If nothing could be placed and no rule was changed, change nothing at all (a move must never lose the original shift).
+      if (added === 0 && !needChanged) return { ...state, toast: toast(notes.join(" ") || "Nothing was added.") };
       const verb = action.remove ? "Moved" : "Added";
-      return commit(state, working, `${verb} shifts for ${student.name}`, { toast: toast(`${verb} ${student.name}. ${notes.join(" ")}`) });
+      const needNote = needChanged ? ` Those times now need ${(action.needPeople ?? 1) + ((action.needPeople ?? 1) === 1 ? " person" : " people")}.` : "";
+      return commit(state, working, `${verb} shifts for ${people.map((s) => s.name).join(" and ")}`, { toast: toast(`${notes.join(" ")}${needNote}`) });
     }
     case "SET_SETTINGS": {
       const settings = { ...doc.settings, ...action.settings };
@@ -625,7 +640,8 @@ export function useShiftFitStore() {
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
-      placeShifts: (studentId: string, ranges: ShiftRange[], remove?: ShiftRange) => dispatch({ type: "PLACE_SHIFTS", studentId, ranges, remove }),
+      placeShifts: (studentId: string, ranges: ShiftRange[], options: { remove?: ShiftRange; alsoStudentIds?: string[]; needPeople?: number } = {}) =>
+        dispatch({ type: "PLACE_SHIFTS", studentId, ranges, ...options }),
       importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
       confirmOverride: () => dispatch({ type: "CONFIRM_OVERRIDE" }),
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
