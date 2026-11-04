@@ -42,7 +42,7 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   onOpenHelp: () => void;
-  onOpenRules: () => void;
+  onOpenSettings: () => void;
   onOpenShare: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
@@ -66,7 +66,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenHelp,
-  onOpenRules,
+  onOpenSettings,
   onOpenShare,
   theme,
   onThemeChange,
@@ -105,7 +105,7 @@ export function TopBar({
           </HelpTip>
         </div>
         <Button variant="ghost" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
-          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Settings
+          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Plan options
           <ChevronDown className={clsx("h-4 w-4 transition-transform", showOptions && "rotate-180")} aria-hidden />
         </Button>
 
@@ -120,7 +120,7 @@ export function TopBar({
           <Button variant="secondary" onClick={onOpenShare}>
             <CalendarDays className="h-4 w-4" aria-hidden /> Save &amp; share
           </Button>
-          <Button variant="ghost" onClick={onOpenRules} aria-label="Rules" title="Rules">
+          <Button variant="ghost" onClick={onOpenSettings} aria-label="Settings" title="Settings (text size, colors, rules)">
             <Settings className="h-4 w-4" aria-hidden />
           </Button>
           <Button variant="ghost" onClick={onOpenHelp} aria-label="Help" title="Help">

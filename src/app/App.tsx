@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, Users, HeartPulse } from "lucide-react";
 import { TopBar } from "../components/app-shell/TopBar";
 import { NextStepBanner } from "../components/app-shell/NextStepBanner";
-import { RulesDialog } from "../components/app-shell/RulesDialog";
+import { SettingsDialog } from "../components/app-shell/SettingsDialog";
 import { SaveShareDialog } from "../components/app-shell/SaveShareDialog";
 import { HelpDrawer } from "../components/help/HelpDrawer";
 import { WelcomeDialog } from "../components/help/WelcomeDialog";
@@ -22,8 +22,9 @@ import type { GuidanceAction } from "../features/scheduling/guidance";
 import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
 import { weeklyLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
-import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useLayoutQuery } from "../hooks/useMediaQuery";
 import { useShiftFitStore } from "../hooks/useShiftFitStore";
+import { useDisplayPrefs } from "../hooks/useDisplayPrefs";
 import { useTheme } from "../hooks/useTheme";
 import { clsx } from "../lib/clsx";
 
@@ -48,7 +49,7 @@ type Dialog =
   | { kind: "bulk" }
   | { kind: "import-shifts" }
   | { kind: "help"; tab?: "start" | "faq" }
-  | { kind: "rules" }
+  | { kind: "settings" }
   | { kind: "share" }
   | { kind: "remove"; id: string }
   | { kind: "clear-shifts" }
@@ -71,10 +72,17 @@ function isTyping(target: EventTarget | null): boolean {
 export function App() {
   const store = useShiftFitStore();
   const { theme, setTheme } = useTheme();
+  const display = useDisplayPrefs();
   const { showWelcome, markWelcomed } = useFirstRun();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>("schedule");
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  // Window-size checks that account for the chosen text size (bigger text needs a bigger window for three columns).
+  const isDesktop = useLayoutQuery(1024);
+  const isXWide = useLayoutQuery(1280);
+  // Tell the stylesheet which layout applies (before the page is drawn, so there is no flash of the wrong one).
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-layout", isXWide ? "xwide" : isDesktop ? "wide" : "narrow");
+  }, [isDesktop, isXWide]);
   const healthRef = useRef<HTMLDivElement>(null);
   const [healthFlash, setHealthFlash] = useState(false);
 
@@ -155,7 +163,7 @@ export function App() {
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col lg:h-dvh">
+    <div className="flex min-h-dvh flex-col wide:h-dvh">
       <a
         href="#schedule-panel"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-ink"
@@ -179,7 +187,7 @@ export function App() {
         onUndo={store.undo}
         onRedo={store.redo}
         onOpenHelp={() => setDialog({ kind: "help" })}
-        onOpenRules={() => setDialog({ kind: "rules" })}
+        onOpenSettings={() => setDialog({ kind: "settings" })}
         onOpenShare={() => setDialog({ kind: "share" })}
         theme={theme}
         onThemeChange={setTheme}
@@ -210,8 +218,8 @@ export function App() {
         </div>
       )}
 
-      <main className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xl:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]">
-        <div className={clsx(mobileTab === "students" ? "block" : "hidden", "min-h-0 border-line lg:block lg:border-r")}>
+      <main className="grid flex-1 grid-cols-1 wide:min-h-0 wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]">
+        <div className={clsx(mobileTab === "students" ? "block" : "hidden", "min-h-0 border-line wide:block wide:border-r")}>
           <StudentRail
             students={students}
             assignments={assignments}
@@ -228,7 +236,7 @@ export function App() {
             onAddMany={() => setDialog({ kind: "bulk" })}
           />
         </div>
-        <div id="schedule-panel" tabIndex={-1} className={clsx(mobileTab === "schedule" ? "block" : "hidden", "min-h-0 outline-none lg:block")}>
+        <div id="schedule-panel" tabIndex={-1} className={clsx(mobileTab === "schedule" ? "block" : "hidden", "min-h-0 outline-none wide:block")}>
           <SchedulePanel
             settings={settings}
             students={students}
@@ -240,7 +248,7 @@ export function App() {
             onNotify={store.notify}
           />
         </div>
-        <div ref={healthRef} tabIndex={-1} className={clsx(mobileTab === "health" ? "block" : "hidden", "min-h-0 border-line outline-none lg:block lg:border-l", healthFlash && "ring-2 ring-inset ring-accent")}>
+        <div ref={healthRef} tabIndex={-1} className={clsx(mobileTab === "health" ? "block" : "hidden", "min-h-0 border-line outline-none wide:block wide:border-l", healthFlash && "ring-2 ring-inset ring-accent")}>
           <InsightsPanel
             students={students}
             assignments={assignments}
@@ -256,7 +264,7 @@ export function App() {
         </div>
       </main>
 
-      <nav aria-label="Sections" className="sticky bottom-0 z-30 grid grid-cols-3 border-t border-line bg-panel lg:hidden">
+      <nav aria-label="Sections" className="sticky bottom-0 z-30 grid grid-cols-3 border-t border-line bg-panel wide:hidden">
         {tabs.map(({ id, label, icon: Icon, badge }) => (
           <button
             key={id}
@@ -327,7 +335,16 @@ export function App() {
         />
       )}
       {dialog?.kind === "help" && <HelpDrawer initialTab={dialog.tab} onClose={() => setDialog(null)} />}
-      {dialog?.kind === "rules" && <RulesDialog settings={settings} onSave={store.setSettings} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "settings" && (
+        <SettingsDialog
+          settings={settings}
+          onSaveRules={store.setSettings}
+          theme={theme}
+          onThemeChange={setTheme}
+          display={display}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog?.kind === "share" && (
         <SaveShareDialog
           settings={settings}

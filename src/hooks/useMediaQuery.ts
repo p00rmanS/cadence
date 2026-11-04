@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTextScale } from "./useDisplayPrefs";
 
 /**
  * Lets a screen react to the window size (or other CSS "media queries"), e.g. switching to the
@@ -26,4 +27,16 @@ export function useMediaQuery(query: string): boolean {
   }, [query]);
 
   return matches;
+}
+
+/**
+ * "Is the window at least `minDesignPx` wide?", where the number is measured as if the text were
+ * Medium size. With bigger text everything takes more room, so the window must be bigger before
+ * the same layout fits: at Extra large (1.41 times) a layout that needs 1024px at Medium needs
+ * about 1445px. This is what lets older managers who choose big text get the roomy one-column
+ * layout instead of three cramped columns.
+ */
+export function useLayoutQuery(minDesignPx: number): boolean {
+  const scale = useTextScale();
+  return useMediaQuery(`(min-width: ${Math.round(minDesignPx * scale)}px)`);
 }

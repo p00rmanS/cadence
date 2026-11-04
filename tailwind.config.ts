@@ -1,3 +1,4 @@
+import plugin from "tailwindcss/plugin";
 import type { Config } from "tailwindcss";
 
 /**
@@ -35,5 +36,13 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // `wide:` and `xwide:` work like Tailwind's `lg:` and `xl:`, but the window size is measured
+    // as if the text were Medium (see `useLayoutQuery` in src/hooks/useMediaQuery.ts, which writes
+    // the page's `data-layout` marker). So bigger text switches to the roomy one-column layout sooner.
+    plugin(({ addVariant }) => {
+      addVariant("wide", ['html[data-layout="wide"] &', 'html[data-layout="xwide"] &']);
+      addVariant("xwide", 'html[data-layout="xwide"] &');
+    }),
+  ],
 } satisfies Config;

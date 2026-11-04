@@ -916,8 +916,9 @@ describe("quick fixes for empty times", () => {
 describe("rules dialog", () => {
   it("changes the weekly hours and the closing time, and rejects nonsense", async () => {
     const { user } = boot();
-    await user.click(screen.getByRole("button", { name: "Rules" }));
-    const dialog = screen.getByRole("dialog", { name: "Rules" });
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    await user.click(within(dialog).getByRole("tab", { name: "Schedule rules" }));
     const hours = within(dialog).getByLabelText(/most hours a student can work/i);
     await user.clear(hours);
     await user.type(hours, "abc");
@@ -935,8 +936,9 @@ describe("rules dialog", () => {
 describe("rules dialog: break limit and shortest shift", () => {
   it("saves a new break hour limit and shows it when switching to Break", async () => {
     const { user } = boot();
-    await user.click(screen.getByRole("button", { name: "Rules" }));
-    const dialog = screen.getByRole("dialog", { name: "Rules" });
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    await user.click(within(dialog).getByRole("tab", { name: "Schedule rules" }));
     const breakHours = within(dialog).getByLabelText(/weekly hour limit during a break/i);
     await user.clear(breakHours);
     await user.type(breakHours, "100");
@@ -1132,10 +1134,17 @@ describe("accessibility rules", () => {
     expect(await violations()).toEqual([]);
   });
 
-  it.each(["Help", "Save & share", "Rules"])("%s dialog has no violations", async (name) => {
+  it.each(["Help", "Save & share", "Settings"])("%s dialog has no violations", async (name) => {
     const { user } = boot();
     if (name === "Save & share") await openShare(user);
     else await user.click(screen.getByRole("button", { name }));
+    expect(await violations()).toEqual([]);
+  });
+
+  it("Settings dialog's Schedule rules tab has no violations", async () => {
+    const { user } = boot();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("tab", { name: "Schedule rules" }));
     expect(await violations()).toEqual([]);
   });
 

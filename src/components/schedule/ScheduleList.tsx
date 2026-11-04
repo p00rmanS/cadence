@@ -64,7 +64,7 @@ export function ScheduleList({
             {!students.length ? "Add a student first." : "There are no shifts yet. Press “Fill schedule for me”, or click the grid to add some."}
           </p>
         ) : mode === "student" ? (
-          <ul className="grid gap-3 xl:grid-cols-2 print:block print:columns-2">
+          <ul className="grid gap-3 xwide:grid-cols-2 print:block print:columns-2">
             {summarizeByStudent(students, assignments, settings).map(({ student, hours, shifts }) => (
               <li key={student.id} className="break-inside-avoid rounded-xl border border-line bg-panel p-3 print:mb-3">
                 <div className="flex items-center gap-2">
