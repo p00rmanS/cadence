@@ -23,6 +23,7 @@ import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
 import { studentLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
 import { useLayoutQuery } from "../hooks/useMediaQuery";
+import { useDetailsPanel } from "../hooks/useDetailsPanel";
 import { useShiftFitStore } from "../hooks/useShiftFitStore";
 import { useDisplayPrefs } from "../hooks/useDisplayPrefs";
 import { useTheme } from "../hooks/useTheme";
@@ -83,6 +84,8 @@ export function App() {
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-layout", isXWide ? "xwide" : isDesktop ? "wide" : "narrow");
   }, [isDesktop, isXWide]);
+  // The side column with the schedule health starts hidden, so the manager sees only students and schedule.
+  const [detailsOpen, setDetailsOpen] = useDetailsPanel();
   const healthRef = useRef<HTMLDivElement>(null);
   const [healthFlash, setHealthFlash] = useState(false);
 
@@ -102,6 +105,8 @@ export function App() {
 
   const showHealth = useCallback(() => {
     setMobileTab("health");
+    setDetailsOpen(true); // on a wide screen the health column may be hidden; open it so the banner's button leads somewhere
+
     // Wait a tick so the panel exists on small screens before moving focus into it.
     setTimeout(() => {
       healthRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -110,7 +115,7 @@ export function App() {
       setHealthFlash(true);
       setTimeout(() => setHealthFlash(false), 1600);
     }, 0);
-  }, []);
+  }, [setDetailsOpen]);
 
   // If the browser is refusing to save, closing the tab would lose the work, so ask first.
   useEffect(() => {
@@ -218,7 +223,14 @@ export function App() {
         </div>
       )}
 
-      <main className="grid flex-1 grid-cols-1 wide:min-h-0 wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]">
+      <main
+        className={clsx(
+          "grid flex-1 grid-cols-1 wide:min-h-0",
+          detailsOpen
+            ? "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]"
+            : "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)]",
+        )}
+      >
         <div className={clsx(mobileTab === "students" ? "block" : "hidden", "min-h-0 border-line wide:block wide:border-r")}>
           <StudentRail
             students={students}
@@ -246,9 +258,26 @@ export function App() {
             onToggle={store.toggleSlot}
             onRange={store.setRange}
             onNotify={store.notify}
+            onDropStudent={(studentId, day, from, to) => {
+              // Dropping a card picks that student too, so the grid then shows them and the next click is theirs.
+              store.selectStudent(studentId);
+              store.fillGap(studentId, day, from, to);
+            }}
+            detailsOpen={detailsOpen}
+            onToggleDetails={() => setDetailsOpen(!detailsOpen)}
           />
         </div>
-        <div ref={healthRef} tabIndex={-1} className={clsx(mobileTab === "health" ? "block" : "hidden", "min-h-0 border-line outline-none wide:block wide:border-l", healthFlash && "ring-2 ring-inset ring-accent")}>
+        <div
+          id="schedule-details"
+          ref={healthRef}
+          tabIndex={-1}
+          className={clsx(
+            mobileTab === "health" ? "block" : "hidden",
+            detailsOpen ? "wide:block" : "wide:hidden",
+            "min-h-0 border-line outline-none wide:border-l",
+            healthFlash && "ring-2 ring-inset ring-accent",
+          )}
+        >
           <InsightsPanel
             students={students}
             assignments={assignments}

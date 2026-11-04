@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Clock, Pencil, Trash2 } from "lucide-react";
 import { clsx } from "../../lib/clsx";
+import { startStudentDrag } from "../../lib/studentDrag";
 import { Avatar } from "../ui/Avatar";
 import { hoursLabel } from "../../features/scheduling/time";
 import type { StudentSummary } from "../../features/scheduling/selectors";
@@ -44,7 +45,11 @@ export function StudentCard({
 
   return (
     <li
-      className={clsx("mb-2 rounded-xl border border-line border-l-4 bg-panel p-3 transition duration-150 hover:-translate-y-px hover:shadow-md", selected && "ring-2 ring-accent")}
+      // The whole card can be dragged onto a time in the schedule (the clickable way still works too).
+      draggable
+      onDragStart={(e) => startStudentDrag(e, student.id)}
+      title="Drag onto a time in the schedule, or click to pick"
+      className={clsx("mb-2 cursor-grab rounded-xl border border-line border-l-4 bg-panel p-3 transition duration-150 hover:-translate-y-px hover:shadow-md active:cursor-grabbing", selected && "ring-2 ring-accent")}
       style={{ borderLeftColor: student.color }}
     >
       {/* One real button owns "pick this student"; Edit and Remove are siblings, never nested inside it. */}

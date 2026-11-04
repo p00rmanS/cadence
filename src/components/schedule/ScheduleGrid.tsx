@@ -7,6 +7,8 @@ import { describeGap } from "../../features/scheduling/issues";
 import { isDevotional, isOnBreak, studentLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
+import { MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
+import { droppedStudentId, isStudentDrag } from "../../lib/studentDrag";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import { openDays } from "../../features/scheduling/days";
 import { useLayoutQuery } from "../../hooks/useMediaQuery";
@@ -39,10 +41,33 @@ type CellModel = {
   mine: boolean;
   hardBlocked: boolean;
   label: string;
+  /** True on the first box of a run of boxes that all need the same number of people: only that box says "Need N". */
+  gapStart: boolean;
+  /** Why the picked student can't work here, in one or two plain words ("Class", "Day off"); empty if they can. */
+  blockedWhy: string;
+  /** True on the first box of a stretch with the same blocked reason: only that box prints the words. */
+  blockedStart: boolean;
+  /** True on the first box of a closed stretch (the Tuesday devotional): only that box shows the word. */
+  closedStart: boolean;
+  /** Students who were ALSO working in the box just above: they show as a thin bar, not their initials again. */
+  continuing: Set<string>;
 };
 
-const STRIPES =
-  "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_5px,rgb(var(--busy)/0.55)_5px,rgb(var(--busy)/0.55)_7px)]";
+/** The short, plain words printed in a box where the picked student can't work (instead of a pattern to decode). */
+const BLOCKED_WORDS: Record<string, string> = {
+  class_conflict: "Class",
+  unavailable: "Day off",
+  after_cutoff: "Too late",
+  break_conflict: "Break",
+  devotional: "Devotional",
+};
+
+/** How much of a name fits in a box: all of it alone, the first name for two people, initials for three or more. */
+function shortName(name: string, peopleInBox: number): string {
+  if (peopleInBox >= 3) return initials(name);
+  if (peopleInBox === 2) return name.split(/\s+/)[0];
+  return name;
+}
 
 /**
  * The week grid: one row per half hour, one column per weekday. Clicking a box adds or removes
@@ -56,6 +81,7 @@ export function ScheduleGrid({
   selectedStudent,
   onToggle,
   onRange,
+  onDropStudent,
 }: {
   settings: ScheduleSettings;
   students: Student[];
@@ -64,6 +90,8 @@ export function ScheduleGrid({
   selectedStudent: Student | null;
   onToggle: (day: Day, start: number) => void;
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
+  /** A student card was dropped on a time: give that student the shift from `from` to `to` (the last half hour). */
+  onDropStudent?: (studentId: string, day: Day, from: number, to: number) => void;
 }) {
   const slots = useMemo(() => daySlots(settings), [settings]);
   const wide = useLayoutQuery(640);
@@ -82,6 +110,8 @@ export function ScheduleGrid({
   const dragLast = useRef<{ day: Day; start: number } | null>(null);
   const suppressClick = useRef(false);
   const [drag, setDrag] = useState<{ day: Day; from: number; to: number; assign: boolean } | null>(null);
+  // A student card being dragged over the grid: the stretch (one minimum-length shift) it would fill if dropped here.
+  const [dropRange, setDropRange] = useState<{ day: Day; from: number; to: number } | null>(null);
   const onRangeRef = useRef(onRange);
   onRangeRef.current = onRange;
   const cells = useRef(new Map<string, HTMLButtonElement>());
@@ -126,8 +156,19 @@ export function ScheduleGrid({
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
           else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label });
+        out.set(`${day}|${start}`, { staffIds, need, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
       }
+    }
+    // Calmer to read: a shift is drawn as one block (initials once, then a thin bar), and a gap says "Need N" once.
+    for (const day of days) {
+      slots.forEach((start, i) => {
+        const here = out.get(`${day}|${start}`)!;
+        const above = i > 0 ? out.get(`${day}|${slots[i - 1]}`) : undefined;
+        here.gapStart = here.need > 0 && above?.need !== here.need;
+        here.closedStart = here.closed && !above?.closed;
+        here.blockedStart = here.blockedWhy !== "" && above?.blockedWhy !== here.blockedWhy;
+        for (const id of here.staffIds) if (above?.staffIds.includes(id)) here.continuing.add(id);
+      });
     }
     return out;
   }, [slots, assignments, students, studentById, settings, selectedStudent]);
@@ -217,6 +258,15 @@ export function ScheduleGrid({
     };
   }, []);
 
+  // The shift a drop on this box would make: starts here and lasts the minimum shift, stopping at closing time.
+  function dropRangeAt(day: Day, start: number) {
+    const lastSlot = slots[slots.length - 1];
+    return { day, from: start, to: Math.min(start + MIN_SHIFT_MINUTES - settings.slotMinutes, lastSlot) };
+  }
+
+  // True if this box is inside the stretch a dropped student card would fill (so it can be outlined).
+  const inDrop = (day: Day, slot: number) => dropRange !== null && dropRange.day === day && slot >= dropRange.from && slot <= dropRange.to;
+
   // True if this box is inside the range currently being dragged (so it can be highlighted).
   const inDrag = (day: Day, slot: number) =>
     drag !== null && drag.day === day && slot >= Math.min(drag.from, drag.to) && slot <= Math.max(drag.from, drag.to);
@@ -245,16 +295,16 @@ export function ScheduleGrid({
   return (
     <section aria-labelledby="grid-heading" className="flex h-full min-h-0 flex-col gap-2 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="grid-heading" className="font-display text-lg font-semibold">
+        <h2 id="grid-heading" className="font-display text-xl font-semibold">
           {isOnBreak(settings) ? "Break schedule" : "Semester schedule"}
           <HelpTip label="Weekly schedule">
             Each box is 30 minutes. Pick a student on the left, then click a box to give them that half hour. Click again to take
-            it away. To fill a stretch, drag down a column or hold Shift and click. A blue outline means the picked student works
+            it away. To fill a stretch, drag down a column or hold Shift and click. A blue box means the picked student works
             that box, and a ⚠ means a rule is broken there. Shifts must be at least 2 hours. The semester and break schedules
             are kept separately: the Semester / Break switch at the top chooses which one you see and change.
           </HelpTip>
         </h2>
-        <p className="text-sm" aria-live="polite">
+        <p className="text-base" aria-live="polite">
           {selectedStudent ? (
             <>
               Scheduling <strong>{selectedStudent.name}</strong>{" "}
@@ -263,21 +313,21 @@ export function ScheduleGrid({
               </span>
             </>
           ) : (
-            <span className="text-muted">Pick a student on the left to start.</span>
+            <span className="font-medium">Drag a student from the left onto a time, or pick a student and click the times they work.</span>
           )}
         </p>
       </div>
 
       {/* Only the three things a manager looks for; the rest is explained behind the "?" above. */}
-      <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted" aria-label="What the boxes mean">
-        <li className="flex items-center gap-1.5">
-          <span className="h-4 w-4 rounded-sm bg-ok-bg ring-1 ring-inset ring-ok/40" aria-hidden /> Enough people
+      <ul className="flex flex-wrap gap-x-6 gap-y-1 text-base" aria-label="What the boxes mean">
+        <li className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded bg-panel ring-1 ring-inset ring-line" aria-hidden /> Enough people
         </li>
-        <li className="flex items-center gap-1.5">
-          <span className="h-4 w-4 rounded-sm bg-gap-bg ring-1 ring-inset ring-gap" aria-hidden /> Needs someone
+        <li className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded border-l-4 border-gap bg-gap-bg" aria-hidden /> <span className="font-semibold text-gap">Needs someone</span>
         </li>
-        <li className="flex items-center gap-1.5">
-          <span className={clsx("h-4 w-4 rounded-sm bg-panel ring-1 ring-inset ring-line", STRIPES)} aria-hidden /> Picked student can&apos;t work
+        <li className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded bg-line/50" aria-hidden /> Picked student can&apos;t work
         </li>
       </ul>
 
@@ -304,25 +354,31 @@ export function ScheduleGrid({
         <table role="grid" aria-label="Weekly schedule. Use the arrow keys to move between boxes." className="w-full min-w-[280px] select-none border-separate border-spacing-0">
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 top-0 z-20 w-16 bg-panel p-1 text-right text-xs font-normal text-muted">
+              <th scope="col" className="sticky left-0 top-0 z-20 w-20 bg-panel p-1 text-right text-sm font-normal text-muted">
                 <span className="sr-only">Time</span>
               </th>
               {visibleDays.map((day) => (
-                <th key={day} scope="col" className="sticky top-0 z-10 border-b border-line bg-panel px-1.5 py-2 text-left text-[11px] font-semibold uppercase tracking-widest text-muted">
+                <th key={day} scope="col" className="sticky top-0 z-10 border-b border-line bg-panel px-2 py-2.5 text-left text-base font-bold text-ink">
                   <span aria-hidden>{DAY_LABEL[day]}</span>
                   <span className="sr-only">{DAY_LONG[day]}</span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody onMouseLeave={() => setInfo(null)}>
+          <tbody
+            onMouseLeave={() => setInfo(null)}
+            onDragLeave={(e) => {
+              // Leaving the table altogether (not just moving between two boxes) clears the outline.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropRange(null);
+            }}
+          >
             {slots.map((slot, r) => (
               <tr key={slot}>
                 <th
                   scope="row"
                   className={clsx(
-                    "sticky left-0 z-10 whitespace-nowrap bg-panel p-1 pr-2 text-right align-top text-xs",
-                    slot % 60 === 0 ? "border-t border-line/70 font-semibold text-ink" : "border-t border-dashed border-line/40 font-normal text-muted",
+                    "sticky left-0 z-10 whitespace-nowrap bg-panel p-1 pr-2 text-right align-top text-sm",
+                    slot % 60 === 0 ? "border-t border-line/70 font-semibold text-ink" : "border-t border-line/15 font-normal text-muted",
                   )}
                 >
                   {formatMinutes(slot)}
@@ -334,7 +390,7 @@ export function ScheduleGrid({
                     <td
                       key={day}
                       role="gridcell"
-                      className={clsx("border-l border-line/50 p-[3px] align-middle", slot % 60 === 0 ? "border-t border-line/70" : "border-t border-dashed border-line/40")}
+                      className={clsx("px-[3px] py-0 align-middle", slot % 60 === 0 ? "border-t border-line/60" : "border-t border-line/15")}
                     >
                       <button
                         type="button"
@@ -351,6 +407,20 @@ export function ScheduleGrid({
                           setInfo({ day, start: slot });
                         }}
                         onMouseEnter={() => setInfo({ day, start: slot })}
+                        onDragOver={(e) => {
+                          if (!onDropStudent || !isStudentDrag(e)) return;
+                          e.preventDefault(); // this is what tells the browser "yes, dropping here is allowed"
+                          e.dataTransfer.dropEffect = "copy";
+                          if (dropRange?.day !== day || dropRange.from !== slot) setDropRange(dropRangeAt(day, slot));
+                        }}
+                        onDrop={(e) => {
+                          const studentId = droppedStudentId(e);
+                          if (!onDropStudent || !studentId) return;
+                          e.preventDefault();
+                          const target = dropRangeAt(day, slot);
+                          setDropRange(null);
+                          onDropStudent(studentId, day, target.from, target.to);
+                        }}
                         onPointerDown={(e) => beginDrag(e, day, slot)}
                         onPointerEnter={() => extendDrag(day, slot)}
                         onKeyDown={(e) => onCellKeyDown(e, r, c)}
@@ -359,40 +429,47 @@ export function ScheduleGrid({
                           activate(day, slot, e.shiftKey);
                         }}
                         className={clsx(
-                          "relative flex h-10 w-full min-w-[56px] items-center gap-0.5 overflow-hidden rounded-lg px-1 text-left transition duration-100 ease-out",
-                          cell.closed ? "bg-line/40" : cell.need > 0 ? "bg-gap-bg ring-1 ring-inset ring-gap" : "bg-ok-bg/70",
-                          cell.mine && "ring-2 ring-inset ring-accent",
+                          "relative flex h-11 w-full min-w-[72px] items-center gap-1 overflow-hidden rounded-md px-1 text-left transition duration-100 ease-out",
+                          cell.mine ? "bg-accent/25" : cell.closed || cell.blockedWhy ? "bg-line/40" : cell.need > 0 ? "border-l-4 border-gap bg-gap-bg" : "bg-transparent",
+                          inDrop(day, slot) && "outline outline-2 -outline-offset-2 outline-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
                               ? "bg-accent/25 outline outline-2 -outline-offset-2 outline-accent"
                               : "outline outline-2 -outline-offset-2 outline-dashed outline-muted"),
-                          cell.hardBlocked ? "cursor-not-allowed" : "hover:brightness-95",
+                          cell.hardBlocked ? "cursor-not-allowed" : "hover:bg-line/30",
                         )}
                       >
-                        {cell.hardBlocked && !cell.closed && <span className={clsx("pointer-events-none absolute inset-0", STRIPES)} aria-hidden />}
-                        {cell.closed && !cell.staffIds.length && (
-                          <span className="relative text-xs font-semibold text-muted" aria-hidden>
+                        {cell.closedStart && !cell.staffIds.length && (
+                          <span className="relative text-sm font-semibold text-muted" aria-hidden>
                             Devotional
+                          </span>
+                        )}
+                        {cell.blockedStart && !cell.closed && !cell.staffIds.length && (
+                          <span className="relative text-sm font-medium text-muted" aria-hidden>
+                            {cell.blockedWhy}
                           </span>
                         )}
                         {cell.staffIds.map((id) => {
                           const s = studentById.get(id);
                           if (!s) return null;
                           const broken = problemSlots.has(`${id}|${day}|${slot}`);
+                          if (cell.continuing.has(id) && !broken) {
+                            return <span key={id} className="relative h-full w-2 shrink-0 rounded-full opacity-90" style={{ backgroundColor: s.color }} aria-hidden />;
+                          }
                           return (
                             <span
                               key={id}
-                              className="relative inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded px-1 text-xs font-bold text-white"
+                              className="relative inline-flex h-8 min-w-8 max-w-full items-center justify-center gap-1 truncate rounded-md px-2 text-sm font-bold text-white"
                               style={{ backgroundColor: s.color }}
                               aria-hidden
                             >
-                              {initials(s.name)}
-                              {broken && <AlertTriangle className="h-3 w-3" />}
+                              {shortName(s.name, cell.staffIds.length)}
+                              {broken && <AlertTriangle className="h-4 w-4 shrink-0" />}
                             </span>
                           );
                         })}
-                        {cell.need > 0 && (
-                          <span className="relative ml-auto pr-0.5 text-xs font-semibold text-gap" aria-hidden>
+                        {cell.gapStart && (
+                          <span className="relative ml-auto pr-1 text-sm font-bold text-gap" aria-hidden>
                             Need {cell.need}
                           </span>
                         )}
@@ -407,8 +484,12 @@ export function ScheduleGrid({
       </div>
 
       {/* Sighted helper text. Screen readers already hear the same words from the focused box. */}
-      <p aria-hidden className="min-h-10 rounded-lg bg-bg px-3 py-2 text-sm leading-snug">
-        {infoCell ? infoCell.label : "Point at a box to see who is working."}
+      <p aria-hidden className="min-h-12 rounded-lg bg-bg px-3 py-2 text-base leading-snug">
+        {dropRange
+          ? `Let go to give them ${formatMinutes(dropRange.from)} to ${formatMinutes(dropRange.to + settings.slotMinutes)}. Anything that breaks a rule is skipped.`
+          : infoCell
+            ? infoCell.label
+            : "Point at a box to see who is working."}
       </p>
     </section>
   );
