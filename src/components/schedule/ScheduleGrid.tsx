@@ -15,6 +15,11 @@ import { useLayoutQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
+/** The shift lengths (in hours) a manager can choose for a dropped name; the first is the shortest allowed shift. */
+const DROP_HOUR_CHOICES = [2, 3, 4, 5, 6, 7, 8];
+/** The length used until the manager picks another: the shortest allowed shift. */
+const DEFAULT_DROP_HOURS = MIN_SHIFT_MINUTES / 60;
+
 /**
  * ============================================================================
  *  THE WEEKLY SCHEDULE GRID
@@ -112,6 +117,8 @@ export function ScheduleGrid({
   const [drag, setDrag] = useState<{ day: Day; from: number; to: number; assign: boolean } | null>(null);
   // A student card being dragged over the grid: the stretch (one minimum-length shift) it would fill if dropped here.
   const [dropRange, setDropRange] = useState<{ day: Day; from: number; to: number } | null>(null);
+  // How many hours a dropped student card is given; the manager picks it in the list above the grid ("up to when").
+  const [dropHours, setDropHours] = useState(DEFAULT_DROP_HOURS);
   const onRangeRef = useRef(onRange);
   onRangeRef.current = onRange;
   const cells = useRef(new Map<string, HTMLButtonElement>());
@@ -258,10 +265,10 @@ export function ScheduleGrid({
     };
   }, []);
 
-  // The shift a drop on this box would make: starts here and lasts the minimum shift, stopping at closing time.
+  // The shift a drop on this box would make: starts here, lasts the chosen number of hours, stopping at closing time.
   function dropRangeAt(day: Day, start: number) {
     const lastSlot = slots[slots.length - 1];
-    return { day, from: start, to: Math.min(start + MIN_SHIFT_MINUTES - settings.slotMinutes, lastSlot) };
+    return { day, from: start, to: Math.min(start + dropHours * 60 - settings.slotMinutes, lastSlot) };
   }
 
   // True if this box is inside the stretch a dropped student card would fill (so it can be outlined).
@@ -317,6 +324,25 @@ export function ScheduleGrid({
           )}
         </p>
       </div>
+
+      {/* How long a shift made by dropping a student's name on a time will be. */}
+      {onDropStudent && (
+        <label className="flex flex-wrap items-center gap-2 text-base">
+          <span className="font-semibold">When I drop a name, give them</span>
+          <select
+            value={dropHours}
+            onChange={(e) => setDropHours(Number(e.target.value))}
+            className="rounded-lg border border-line bg-panel px-2 py-1.5 text-base font-semibold"
+          >
+            {DROP_HOUR_CHOICES.map((hours) => (
+              <option key={hours} value={hours}>
+                {hours} hours
+              </option>
+            ))}
+          </select>
+          <span className="text-muted">starting at that time</span>
+        </label>
+      )}
 
       {/* Only the three things a manager looks for; the rest is explained behind the "?" above. */}
       <ul className="flex flex-wrap gap-x-6 gap-y-1 text-base" aria-label="What the boxes mean">

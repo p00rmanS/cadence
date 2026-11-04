@@ -60,6 +60,20 @@ describe("dragging a student onto the schedule", () => {
     expect(box(/^Monday 9:00am to 9:30am/).getAttribute("aria-label")).not.toMatch(/Leilani P\. is working here/);
   });
 
+  it("gives the number of hours picked in the list above the grid, and says the end time while dragging", () => {
+    render(<App />);
+    const dataTransfer = makeDataTransfer();
+    fireEvent.change(screen.getByRole("combobox", { name: /when i drop a name/i }), { target: { value: "4" } });
+
+    fireEvent.dragStart(card("Leilani P."), { dataTransfer });
+    fireEvent.dragOver(box(/^Monday 7:00am to 7:30am/), { dataTransfer });
+    expect(screen.getByText(/Let go to give them 7:00am to 11:00am/)).toBeTruthy();
+    fireEvent.drop(box(/^Monday 7:00am to 7:30am/), { dataTransfer });
+
+    // 9:00am is past the old two-hour limit, so she only has it because 4 hours was picked
+    expect(box(/^Monday 9:00am to 9:30am/).getAttribute("aria-label")).toMatch(/Leilani P\. is working here/);
+  });
+
   it("outlines and explains what will happen while the card is held over a box, and clears it after", () => {
     render(<App />);
     const dataTransfer = makeDataTransfer();
