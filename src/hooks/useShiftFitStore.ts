@@ -109,6 +109,7 @@ export type Action =
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
+  | { type: "PLACE_SHIFTS"; studentId: string; ranges: ShiftRange[]; remove?: ShiftRange }
   | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
   | { type: "SET_SEMESTER"; semester: SemesterConfig | null }
@@ -122,6 +123,9 @@ export type Action =
   | { type: "TOAST"; message: string | null }
   | { type: "SAVE_STATUS"; failed: boolean }
   | { type: "OTHER_TAB_CHANGED" };
+
+/** One stretch of a day: `from` is the first half hour and `to` the last half hour (both are start times). */
+export type ShiftRange = { day: Day; from: number; to: number };
 
 /** How many undo steps are kept; older ones are forgotten so memory doesn't grow forever. */
 const HISTORY_LIMIT = 100;
@@ -376,6 +380,28 @@ export function reducer(state: State, action: Action): State {
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
     }
+    case "PLACE_SHIFTS": {
+      const student = doc.students.find((s) => s.id === action.studentId);
+      if (!student) return state;
+      // Moving a shift: take the old one off first, so it does not count against the student's own limits.
+      let working = doc;
+      if (action.remove) {
+        const removed = fillRange(doc, student, action.remove.day, action.remove.from, action.remove.to, false);
+        working = { ...doc, assignments: removed.assignments };
+      }
+      let added = 0;
+      const notes: string[] = [];
+      for (const range of action.ranges) {
+        const outcome = fillRange(working, student, range.day, range.from, range.to, true);
+        working = { ...working, assignments: outcome.assignments };
+        added += outcome.changed;
+        notes.push(outcome.message);
+      }
+      // If nothing could be placed, change nothing at all (a move must never lose the original shift).
+      if (added === 0) return { ...state, toast: toast(notes.join(" ") || "Nothing was added.") };
+      const verb = action.remove ? "Moved" : "Added";
+      return commit(state, working, `${verb} shifts for ${student.name}`, { toast: toast(`${verb} ${student.name}. ${notes.join(" ")}`) });
+    }
     case "SET_SETTINGS": {
       const settings = { ...doc.settings, ...action.settings };
       const termChanged = (settings.term ?? "semester") !== (doc.settings.term ?? "semester");
@@ -599,6 +625,7 @@ export function useShiftFitStore() {
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
+      placeShifts: (studentId: string, ranges: ShiftRange[], remove?: ShiftRange) => dispatch({ type: "PLACE_SHIFTS", studentId, ranges, remove }),
       importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
       confirmOverride: () => dispatch({ type: "CONFIRM_OVERRIDE" }),
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),

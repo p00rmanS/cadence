@@ -27,7 +27,7 @@ export function SchedulePanel(props: {
   onToggle: (day: Day, start: number) => void;
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
   onNotify: (message: string) => void;
-  onDropStudent?: (studentId: string, day: Day, from: number, to: number) => void;
+  onPlaceShifts?: (studentId: string, ranges: { day: Day; from: number; to: number }[], remove?: { day: Day; from: number; to: number }) => void;
   /** The side column with the schedule's health (shown or hidden), and how to flip it. Both optional. */
   detailsOpen?: boolean;
   onToggleDetails?: () => void;
@@ -95,7 +95,7 @@ export function SchedulePanel(props: {
             selectedStudent={props.selectedStudent}
             onToggle={props.onToggle}
             onRange={props.onRange}
-            onDropStudent={props.onDropStudent}
+            onPlaceShifts={props.onPlaceShifts}
           />
         ) : (
           <ScheduleList mode={view} students={props.students} assignments={props.assignments} settings={props.settings} onNotify={props.onNotify} />
