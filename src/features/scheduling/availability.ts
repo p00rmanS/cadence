@@ -2,7 +2,7 @@ import type { BusyBlock, ConstraintViolation, Day, Minutes, ScheduleSettings, Sh
 import { DAY_LABEL } from "./types";
 import { openDays } from "./days";
 import { DEVOTIONAL, MIN_OPENING_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
-import { isDevotional, weeklyLimit } from "./term";
+import { isDevotional, studentLimit } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 
 /**
@@ -128,6 +128,13 @@ export function blockedBySlot(
       ? { code: "class_conflict", message: `has class on ${DAY_LABEL[day]} at this time` }
       : { code: "unavailable", message: `is unavailable on ${DAY_LABEL[day]} at this time` };
   }
+  // Days the student does not want to work, and times before they can start, are "unavailable" like any other blocked time.
+  if (student.workDays && student.workDays.length > 0 && !student.workDays.includes(day)) {
+    return { code: "unavailable", message: `only wants to work ${student.workDays.map((d) => DAY_LABEL[d]).join(", ")}` };
+  }
+  if (student.earliestStart !== undefined && slotStart < student.earliestStart) {
+    return { code: "unavailable", message: `can't start before ${formatMinutes(student.earliestStart)}` };
+  }
   if (slotStart + settings.slotMinutes > student.latestEnd) {
     return { code: "after_cutoff", message: `can't work past ${formatMinutes(student.latestEnd)}` };
   }
@@ -160,8 +167,8 @@ export function softViolations(
 ): ConstraintViolation[] {
   if (blockedBySlot(student, day, slotStart, settings) || isAssigned(student.id, day, slotStart, assignments)) return [];
   const out: ConstraintViolation[] = [];
-  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
-    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` });
+  if (assignedHours(student.id, assignments, settings) >= studentLimit(student, settings)) {
+    out.push({ code: "over_weekly_target", message: `is already at ${hoursLabel(studentLimit(student, settings))}` });
   }
   if (!canUseDay(student, day, assignments, settings)) {
     out.push({ code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` });
@@ -186,8 +193,8 @@ export function canAssign(
   if (isAssigned(student.id, day, slotStart, assignments)) {
     return { code: "already_assigned", message: "is already working this slot" };
   }
-  if (assignedHours(student.id, assignments, settings) >= weeklyLimit(settings)) {
-    return { code: "over_weekly_target", message: `is already at ${hoursLabel(weeklyLimit(settings))}` };
+  if (assignedHours(student.id, assignments, settings) >= studentLimit(student, settings)) {
+    return { code: "over_weekly_target", message: `is already at ${hoursLabel(studentLimit(student, settings))}` };
   }
   if (!canUseDay(student, day, assignments, settings)) {
     return { code: "over_max_days", message: `only works ${student.daysPerWeek} ${student.daysPerWeek === 1 ? "day" : "days"} a week` };

@@ -3,6 +3,7 @@ import { scheduleVersion } from "./blocks";
 import { buildCoverageSlots, buildGapRanges, summarizeCoverage, uncoveredStaffHours } from "./coverage";
 import type { CoverageSummary } from "./coverage";
 import { findIssues, isBlockingIssue } from "./issues";
+import { studentLimit } from "./term";
 import type { GapRange, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "./types";
 
 /**
@@ -66,7 +67,7 @@ export function evaluateSchedule(students: Student[], assignments: ShiftBlock[],
     openingShiftMissing: studentsMissingOpeningShift(students, assignments, settings),
     students: students.map((s) => {
       const hours = assignedHours(s.id, assignments, settings);
-      return { studentId: s.id, name: s.name, hours, atTarget: hours >= settings.weeklyTargetHours };
+      return { studentId: s.id, name: s.name, hours, atTarget: hours >= studentLimit(s, settings) };
     }),
   };
 }

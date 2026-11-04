@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import { EmptyMark } from "../ui/EmptyMark";
 import { StudentCard } from "./StudentCard";
 import { summarizeStudent } from "../../features/scheduling/selectors";
-import { weeklyLimit } from "../../features/scheduling/term";
+import { studentLimit } from "../../features/scheduling/term";
 import type { ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /** The left-hand column: search box, "Add student"/"Add several at once" entry points, and the scrolling list of `StudentCard`s. Filtering by the search box happens entirely here (`filtered`) — it doesn't change what's actually stored. */
@@ -74,8 +74,8 @@ export function StudentRail({
           <StudentCard
             key={student.id}
             summary={summarizeStudent(student, assignments, settings)}
-            targetHours={weeklyLimit(settings)}
-            limitHours={weeklyLimit(settings)}
+            targetHours={studentLimit(student, settings)}
+            limitHours={studentLimit(student, settings)}
             selected={student.id === selectedStudentId}
             issueCount={issues.filter((i) => i.studentId === student.id && !i.overridden).length}
             onSelect={() => onSelect(student.id)}

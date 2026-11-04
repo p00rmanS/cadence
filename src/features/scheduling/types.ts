@@ -113,6 +113,15 @@ export type Student = {
   breaks: WorkBreak[];
   /** Requires one contiguous shift starting at OPENING_SHIFT_START (7:00am). */
   needsOpeningShift: boolean;
+  /**
+   * The days this student WANTS to work. Missing or empty means any day the office is open. A day left out is
+   * treated like any other time they can't work (see `blockedBySlot` in `availability.ts`).
+   */
+  workDays?: Day[];
+  /** This student's own weekly hours. Missing means the office limit; it can never go above the office limit (`studentLimit` in `term.ts`). */
+  weeklyHours?: number;
+  /** The earliest minute-of-day this student can start work. Missing means no limit (any time the office is open). */
+  earliestStart?: Minutes;
 };
 
 /**

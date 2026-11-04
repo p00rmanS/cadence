@@ -156,6 +156,16 @@ function readBreaks(student: Record<string, unknown>, label: string, errors: str
   return out.sort((a, b) => a.start - b.start);
 }
 
+/** Reads a student's optional list of days they want to work: known days only, no repeats. Anything else is an error. */
+function readWorkDays(input: unknown, label: string, errors: string[]): Day[] {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > DAYS.length || !input.every(isDay) || new Set(input).size !== input.length) {
+    errors.push(`${label}: days they want to work must be a list of days, each once.`);
+    return [];
+  }
+  return input as Day[];
+}
+
 /** Checks one student's list of class/blocked times; any bad entry rejects the list. */
 function readBusy(input: unknown, label: string, errors: string[]): BusyBlock[] | null {
   if (!Array.isArray(input)) {
@@ -209,6 +219,10 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
     if (typeof s.needsOpeningShift !== "boolean") errors.push(`${label}: needsOpeningShift must be true or false.`);
     const breaks = readBreaks(s, label, errors);
     const busy = readBusy(s.busy, label, errors);
+    // Optional work preferences (absent in older saves). Present but silly values are refused, never guessed at.
+    const workDays = readWorkDays(s.workDays, label, errors);
+    if (s.weeklyHours !== undefined && !isHalfHours(s.weeklyHours, 1, 40)) errors.push(`${label}: weekly hours must be between 1 and 40, in whole or half hours.`);
+    if (s.earliestStart !== undefined && !(isMinutes(s.earliestStart) && s.earliestStart < 24 * 60)) errors.push(`${label}: earliest start time is not valid.`);
     if (errors.length || busy === null || breaks === null) continue;
     ids.add(s.id as string);
     const preference = s.preference === "morning" || s.preference === "afternoon" ? s.preference : "any";
@@ -228,6 +242,9 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       latestEnd: s.latestEnd as number,
       breaks,
       needsOpeningShift: s.needsOpeningShift as boolean,
+      ...(workDays.length > 0 ? { workDays } : {}),
+      ...(s.weeklyHours !== undefined ? { weeklyHours: s.weeklyHours as number } : {}),
+      ...(typeof s.earliestStart === "number" && s.earliestStart > 0 ? { earliestStart: s.earliestStart } : {}),
     });
   }
   return errors.length ? null : out;

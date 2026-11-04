@@ -4,7 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { HelpTip } from "../help/HelpTip";
 import { assignedHours, canAssign, daySlots, isAssigned, staffAt } from "../../features/scheduling/availability";
 import { describeGap } from "../../features/scheduling/issues";
-import { isDevotional, isOnBreak, weeklyLimit } from "../../features/scheduling/term";
+import { isDevotional, isOnBreak, studentLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
 import { endSentence } from "../../features/scheduling/time";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
@@ -259,7 +259,7 @@ export function ScheduleGrid({
             <>
               Scheduling <strong>{selectedStudent.name}</strong>{" "}
               <span className="text-muted">
-                ({selectedHours} of {weeklyLimit(settings)} hours)
+                ({selectedHours} of {studentLimit(selectedStudent, settings)} hours)
               </span>
             </>
           ) : (
