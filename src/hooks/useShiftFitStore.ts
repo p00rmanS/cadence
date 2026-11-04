@@ -7,12 +7,14 @@ import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDE
 import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
-import { formatMinutes } from "../features/scheduling/time";
+import { endSentence, formatMinutes } from "../features/scheduling/time";
 import { DAY_LABEL } from "../features/scheduling/types";
 import { STORAGE_KEY, storage } from "../features/persistence/storage";
 import { createId } from "../lib/id";
 import type {
   AutoFillResult,
+  FormerStudent,
+  LeftReason,
   Day,
   PersistedStateV1,
   ScheduleSettings,
@@ -73,6 +75,8 @@ export type NewStudentInput = {
 type Doc = {
   settings: ScheduleSettings;
   students: Student[];
+  /** Students who have left (graduated, resigned, ...): kept for the record and so they can be brought back. They have no shifts. */
+  formerStudents: FormerStudent[];
   /** The schedule that is showing: semester or break, whichever `settings.term` says. */
   assignments: ShiftBlock[];
   /** The other schedule, kept untouched until the Semester/Break switch brings it back. */
@@ -104,6 +108,10 @@ export type Action =
   | { type: "ADD_STUDENTS"; entries: { id: string; input: NewStudentInput }[] }
   | { type: "UPDATE_STUDENT"; id: string; input: NewStudentInput }
   | { type: "REMOVE_STUDENT"; id: string }
+  | { type: "SET_GRADUATING"; id: string; graduating: boolean }
+  | { type: "STUDENT_LEFT"; id: string; reason: LeftReason; date: string }
+  | { type: "RESTORE_STUDENT"; id: string }
+  | { type: "FORGET_STUDENT"; id: string }
   | { type: "SELECT_STUDENT"; id: string | null }
   | { type: "TOGGLE_SLOT"; day: Day; start: number }
   | { type: "CONFIRM_OVERRIDE" }
@@ -182,6 +190,7 @@ export function initialState(): State {
       doc: {
         settings: saved.settings,
         students: saved.students,
+        formerStudents: saved.formerStudents ?? [],
         assignments: saved.assignments,
         otherTermAssignments: saved.otherTermAssignments ?? [],
         semester: saved.semester ?? null,
@@ -192,7 +201,7 @@ export function initialState(): State {
   const demo = buildDemoData();
   return {
     ...base,
-    doc: { settings: DEFAULT_SETTINGS, students: demo.students, assignments: demo.assignments, otherTermAssignments: [], semester: null },
+    doc: { settings: DEFAULT_SETTINGS, students: demo.students, formerStudents: [], assignments: demo.assignments, otherTermAssignments: [], semester: null },
     selectedStudentId: demo.students[0]?.id ?? null,
   };
 }
@@ -294,7 +303,7 @@ export function reducer(state: State, action: Action): State {
     case "UPDATE_STUDENT": {
       const existing = doc.students.find((s) => s.id === action.id);
       if (!existing) return state;
-      const updated = toStudent(action.id, action.input, existing.color);
+      const updated = { ...toStudent(action.id, action.input, existing.color), ...(existing.graduating ? { graduating: true } : {}) };
       return commit(
         state,
         { ...doc, students: doc.students.map((s) => (s.id === action.id ? updated : s)) },
@@ -314,6 +323,55 @@ export function reducer(state: State, action: Action): State {
       return commit(state, next, `Removed ${student.name}`, {
         selectedStudentId: fixSelection(next, state.selectedStudentId),
         toast: toast(`Removed ${student.name}. You can press Undo to bring them back.`),
+      });
+    }
+    case "SET_GRADUATING": {
+      const student = doc.students.find((s) => s.id === action.id);
+      if (!student) return state;
+      const { graduating: _old, ...without } = student;
+      void _old;
+      const flagged: Student = action.graduating ? { ...without, graduating: true } : without;
+      return commit(state, { ...doc, students: doc.students.map((s) => (s.id === action.id ? flagged : s)) }, `${action.graduating ? "Marked" : "Unmarked"} ${student.name} as graduating`, {
+        toast: toast(action.graduating ? `${student.name} is marked as graduating. They stay on the schedule until you mark them as left.` : `${student.name} is no longer marked as graduating.`),
+      });
+    }
+    case "STUDENT_LEFT": {
+      const student = doc.students.find((s) => s.id === action.id);
+      if (!student) return state;
+      const hours = (doc.assignments.filter((a) => a.studentId === action.id).length * doc.settings.slotMinutes) / 60;
+      const { graduating: _ignored, ...rest } = student;
+      void _ignored;
+      const next: Doc = {
+        ...doc,
+        students: doc.students.filter((s) => s.id !== action.id),
+        formerStudents: [{ ...rest, leftReason: action.reason, leftOn: action.date }, ...doc.formerStudents],
+        assignments: doc.assignments.filter((a) => a.studentId !== action.id),
+        otherTermAssignments: doc.otherTermAssignments.filter((a) => a.studentId !== action.id),
+      };
+      return commit(state, next, `${student.name} left`, {
+        selectedStudentId: fixSelection(next, state.selectedStudentId),
+        toast: toast(
+          hours > 0
+            ? `${endSentence(student.name)} moved to Former students. Their ${hours} hours are now open, so check the pink boxes.`
+            : `${endSentence(student.name)} moved to Former students.`,
+        ),
+      });
+    }
+    case "RESTORE_STUDENT": {
+      const former = doc.formerStudents.find((s) => s.id === action.id);
+      if (!former) return state;
+      if (doc.students.length >= MAX_STUDENTS) return { ...state, toast: toast(`Syncro can hold up to ${MAX_STUDENTS} students, so ${former.name} was not brought back.`) };
+      const { leftReason: _reason, leftOn: _on, ...student } = former;
+      void _reason;
+      void _on;
+      const next: Doc = { ...doc, students: [...doc.students, student], formerStudents: doc.formerStudents.filter((s) => s.id !== action.id) };
+      return commit(state, next, `Brought back ${student.name}`, { toast: toast(`${endSentence(student.name)} is back on the student list with no shifts yet.`) });
+    }
+    case "FORGET_STUDENT": {
+      const former = doc.formerStudents.find((s) => s.id === action.id);
+      if (!former) return state;
+      return commit(state, { ...doc, formerStudents: doc.formerStudents.filter((s) => s.id !== action.id) }, `Deleted ${former.name} for good`, {
+        toast: toast(`${endSentence(former.name)} deleted for good. You can press Undo to bring them back.`),
       });
     }
     case "SELECT_STUDENT":
@@ -499,6 +557,7 @@ export function reducer(state: State, action: Action): State {
       const next: Doc = {
         ...doc,
         students: demo.students,
+        formerStudents: [],
         assignments: onBreak ? [] : demo.assignments,
         otherTermAssignments: onBreak ? demo.assignments : [],
       };
@@ -509,7 +568,7 @@ export function reducer(state: State, action: Action): State {
       });
     }
     case "CLEAR_ALL": {
-      const next: Doc = { ...doc, students: [], assignments: [], otherTermAssignments: [] };
+      const next: Doc = { ...doc, students: [], formerStudents: [], assignments: [], otherTermAssignments: [] };
       return commit(state, next, "Cleared everything", {
         selectedStudentId: null,
         lastAutofill: null,
@@ -520,6 +579,7 @@ export function reducer(state: State, action: Action): State {
       const next: Doc = {
         settings: action.state.settings,
         students: action.state.students,
+        formerStudents: action.state.formerStudents ?? [],
         assignments: normalizeAssignments(action.state.assignments),
         otherTermAssignments: normalizeAssignments(action.state.otherTermAssignments ?? []),
         semester: action.state.semester ?? null,
@@ -587,6 +647,7 @@ export function useShiftFitStore() {
       version: 1,
       settings: state.doc.settings,
       students: state.doc.students,
+      ...(state.doc.formerStudents.length ? { formerStudents: state.doc.formerStudents } : {}),
       assignments: state.doc.assignments,
       otherTermAssignments: state.doc.otherTermAssignments,
       selectedStudentId: state.selectedStudentId,
@@ -636,6 +697,10 @@ export function useShiftFitStore() {
         }),
       updateStudent: (id: string, input: NewStudentInput) => dispatch({ type: "UPDATE_STUDENT", id, input }),
       removeStudent: (id: string) => dispatch({ type: "REMOVE_STUDENT", id }),
+      setGraduating: (id: string, graduating: boolean) => dispatch({ type: "SET_GRADUATING", id, graduating }),
+      studentLeft: (id: string, reason: LeftReason, date: string) => dispatch({ type: "STUDENT_LEFT", id, reason, date }),
+      restoreStudent: (id: string) => dispatch({ type: "RESTORE_STUDENT", id }),
+      forgetStudent: (id: string) => dispatch({ type: "FORGET_STUDENT", id }),
       selectStudent: (id: string | null) => dispatch({ type: "SELECT_STUDENT", id }),
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
@@ -663,6 +728,7 @@ export function useShiftFitStore() {
   return {
     settings: state.doc.settings,
     students: state.doc.students,
+    formerStudents: state.doc.formerStudents,
     assignments: state.doc.assignments,
     otherTermAssignments: state.doc.otherTermAssignments,
     semester: state.doc.semester,

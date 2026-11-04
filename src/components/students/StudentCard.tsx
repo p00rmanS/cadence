@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, GraduationCap, GripVertical, Pencil, Trash2, UserMinus } from "lucide-react";
 import { clsx } from "../../lib/clsx";
 import { startStudentDrag } from "../../lib/studentDrag";
 import { Avatar } from "../ui/Avatar";
@@ -22,6 +22,7 @@ export function StudentCard({
   issueCount,
   onSelect,
   onEdit,
+  onLeaving,
   onRemove,
 }: {
   summary: StudentSummary;
@@ -32,6 +33,8 @@ export function StudentCard({
   issueCount: number;
   onSelect: () => void;
   onEdit: () => void;
+  /** Opens the window for a student who is leaving or graduating. */
+  onLeaving: () => void;
   onRemove: () => void;
 }) {
   const { student, hours, pctOfTarget, atTarget, needsOpeningShift, openingShiftSatisfied } = summary;
@@ -57,6 +60,11 @@ export function StudentCard({
         <div className="flex items-center gap-2">
           <Avatar name={student.name} color={student.color} avatar={student.avatar} />
           <span className="min-w-0 flex-1 truncate font-semibold">{student.name}</span>
+          {student.graduating && (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn">
+              <GraduationCap className="h-3.5 w-3.5" aria-hidden /> Graduating
+            </span>
+          )}
           {selected && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">Selected</span>}
         </div>
         <p className="mt-1.5 text-sm">
@@ -101,9 +109,18 @@ export function StudentCard({
         </button>
         <button
           type="button"
+          onClick={onLeaving}
+          aria-label={`Mark ${student.name} as leaving or graduating`}
+          title="Left or graduating"
+          className="rounded-md p-2 text-muted hover:bg-line/40 hover:text-ink"
+        >
+          <UserMinus className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          type="button"
           onClick={onRemove}
           aria-label={`Remove ${student.name}`}
-          title="Remove"
+          title="Remove (added by mistake)"
           className="rounded-md p-2 text-muted hover:bg-gap-bg hover:text-gap"
         >
           <Trash2 className="h-4 w-4" aria-hidden />

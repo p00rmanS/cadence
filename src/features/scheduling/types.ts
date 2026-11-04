@@ -122,6 +122,18 @@ export type Student = {
   weeklyHours?: number;
   /** The earliest minute-of-day this student can start work. Missing means no limit (any time the office is open). */
   earliestStart?: Minutes;
+  /** True when the manager marked this student as leaving (for example graduating) at the end of the semester. They stay scheduled until then. */
+  graduating?: boolean;
+};
+
+/** Why a student is no longer working. Shown in the Former students list. */
+export type LeftReason = "graduated" | "resigned" | "other-job" | "other";
+
+/** A student who has left: everything we knew about them (so they can be brought back), plus why and when. Their shifts are gone. */
+export type FormerStudent = Student & {
+  leftReason: LeftReason;
+  /** The day they were marked as left, as YYYY-MM-DD (empty if unknown). */
+  leftOn: string;
 };
 
 /**
@@ -297,6 +309,8 @@ export type PersistedStateV1 = {
    * schedules are kept separately; switching swaps them. Missing in older saved data.
    */
   otherTermAssignments?: ShiftBlock[];
+  /** Students who have left (graduated, resigned, ...), kept so the manager has a record and can bring them back. Missing in older saved data. */
+  formerStudents?: FormerStudent[];
   selectedStudentId: string | null;
   /** Optional: only present once the manager configures calendar export. */
   semester?: SemesterConfig | null;

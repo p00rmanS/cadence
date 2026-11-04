@@ -26,6 +26,8 @@ import { studentLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
 import { useLayoutQuery } from "../hooks/useMediaQuery";
 import { useDetailsPanel } from "../hooks/useDetailsPanel";
+import { useRosterView } from "../hooks/useRosterView";
+import { LeaveStudentDialog } from "../components/students/LeaveStudentDialog";
 import { useShiftFitStore } from "../hooks/useShiftFitStore";
 import { useDisplayPrefs } from "../hooks/useDisplayPrefs";
 import { useTheme } from "../hooks/useTheme";
@@ -56,6 +58,8 @@ type Dialog =
   | { kind: "settings" }
   | { kind: "share" }
   | { kind: "remove"; id: string }
+  | { kind: "leaving"; id: string }
+  | { kind: "forget"; id: string }
   | { kind: "clear-shifts" }
   | null;
 
@@ -100,6 +104,7 @@ export function App({
   }, [isDesktop, isXWide]);
   // The side column with the schedule health starts hidden, so the manager sees only students and schedule.
   const [detailsOpen, setDetailsOpen] = useDetailsPanel();
+  const [rosterWide, toggleRosterWide] = useRosterView();
   const healthRef = useRef<HTMLDivElement>(null);
   const [healthFlash, setHealthFlash] = useState(false);
 
@@ -178,6 +183,8 @@ export function App({
 
   const editing = dialog?.kind === "student" && dialog.id !== "new" ? (students.find((s) => s.id === dialog.id) ?? null) : null;
   const removing = dialog?.kind === "remove" ? students.find((s) => s.id === dialog.id) : undefined;
+  const leaving = dialog?.kind === "leaving" ? students.find((s) => s.id === dialog.id) : undefined;
+  const forgetting = dialog?.kind === "forget" ? store.formerStudents.find((s) => s.id === dialog.id) : undefined;
   const hasAutoShifts = assignments.some((a) => a.source === "autofill");
   const overrideStudent = store.pendingOverride ? students.find((s) => s.id === store.pendingOverride?.studentId) : undefined;
 
@@ -246,14 +253,25 @@ export function App({
       <main
         className={clsx(
           "grid flex-1 grid-cols-1 wide:min-h-0",
-          detailsOpen
-            ? "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]"
-            : "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)]",
+          // The student list is wider when the roster look is on (it shows free times and filters).
+          rosterWide
+            ? detailsOpen
+              ? "wide:grid-cols-[minmax(340px,400px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)_minmax(270px,330px)]"
+              : "wide:grid-cols-[minmax(340px,400px)_minmax(0,1fr)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)]"
+            : detailsOpen
+              ? "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]"
+              : "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)]",
         )}
       >
         <div className={clsx(mobileTab === "students" ? "block" : "hidden", "min-h-0 border-line wide:block wide:border-r")}>
           <StudentRail
             students={students}
+            formerStudents={store.formerStudents}
+            wide={rosterWide}
+            onToggleWide={toggleRosterWide}
+            onLeaving={(id) => setDialog({ kind: "leaving", id })}
+            onRestore={store.restoreStudent}
+            onForget={(id) => setDialog({ kind: "forget", id })}
             assignments={assignments}
             settings={settings}
             issues={issues}
@@ -409,6 +427,7 @@ export function App({
         <SaveShareDialog
           settings={settings}
           students={students}
+          formerStudents={store.formerStudents}
           assignments={assignments}
           otherTermAssignments={store.otherTermAssignments}
           semester={store.semester}
@@ -420,6 +439,36 @@ export function App({
           onClearAll={store.clearAll}
           onClose={() => setDialog(null)}
         />
+      )}
+      {leaving && (
+        <LeaveStudentDialog
+          student={leaving}
+          shiftHours={(assignments.filter((a) => a.studentId === leaving.id).length * settings.slotMinutes) / 60}
+          onCancel={() => setDialog(null)}
+          onGraduating={(graduating) => {
+            store.setGraduating(leaving.id, graduating);
+            setDialog(null);
+          }}
+          onLeft={(reason) => {
+            store.studentLeft(leaving.id, reason, new Date().toISOString().slice(0, 10));
+            setDialog(null);
+          }}
+        />
+      )}
+      {forgetting && (
+        <ConfirmDialog
+          title={`Delete ${forgetting.name} for good?`}
+          danger
+          confirmLabel="Yes, delete for good"
+          onCancel={() => setDialog(null)}
+          onConfirm={() => {
+            store.forgetStudent(forgetting.id);
+            setDialog(null);
+          }}
+        >
+          <p>This removes their record from Former students.</p>
+          <p className="text-muted">You can press Undo afterwards to bring it back.</p>
+        </ConfirmDialog>
       )}
       {removing && (
         <ConfirmDialog

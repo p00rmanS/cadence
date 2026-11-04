@@ -6,6 +6,8 @@ import { DAYS } from "./types";
 import type {
   BusyBlock,
   Day,
+  FormerStudent,
+  LeftReason,
   PersistedStateV1,
   StaffingNeed,
   ScheduleSettings,
@@ -278,9 +280,40 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       ...(workDays.length > 0 ? { workDays } : {}),
       ...(s.weeklyHours !== undefined ? { weeklyHours: s.weeklyHours as number } : {}),
       ...(typeof s.earliestStart === "number" && s.earliestStart > 0 ? { earliestStart: s.earliestStart } : {}),
+      ...(s.graduating === true ? { graduating: true } : {}),
     });
   }
   return errors.length ? null : out;
+}
+
+/** The reasons a student can have left; anything else is read as "other". */
+const LEFT_REASONS: LeftReason[] = ["graduated", "resigned", "other-job", "other"];
+
+/** Most former students kept. Plenty for years of turnover, and it keeps a pasted file from being huge. */
+const MAX_FORMER_STUDENTS = 500;
+
+/**
+ * Reads the list of students who have left (absent in older saved data). Each one is checked like any
+ * student; one that is not valid, or that has the same id as a current student, is quietly left out.
+ */
+function readFormerStudents(input: unknown, current: Student[], notes: string[]): FormerStudent[] {
+  if (!Array.isArray(input)) return [];
+  const out: FormerStudent[] = [];
+  const takenIds = new Set(current.map((s) => s.id));
+  let dropped = 0;
+  for (const item of input.slice(0, MAX_FORMER_STUDENTS)) {
+    const checked = readStudents([item], []);
+    const student = checked?.[0];
+    if (!student || takenIds.has(student.id) || !isRecord(item)) {
+      dropped++;
+      continue;
+    }
+    takenIds.add(student.id);
+    const reason = LEFT_REASONS.includes(item.leftReason as LeftReason) ? (item.leftReason as LeftReason) : "other";
+    out.push({ ...student, leftReason: reason, leftOn: typeof item.leftOn === "string" && isIsoDate(item.leftOn) ? item.leftOn : "" });
+  }
+  if (dropped) notes.push(`${dropped} former ${dropped === 1 ? "student" : "students"} could not be read and ${dropped === 1 ? "was" : "were"} left out.`);
+  return out;
 }
 
 /** Checks the optional semester dates, timezone and days off used for calendar export. Missing is fine. */
@@ -381,6 +414,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
     return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a Syncro backup."] };
   }
 
+  const formerStudents = readFormerStudents(input.formerStudents, students, notes);
   const selected = typeof input.selectedStudentId === "string" && students.some((s) => s.id === input.selectedStudentId);
   return {
     ok: true,
@@ -391,6 +425,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
       students,
       assignments,
       otherTermAssignments,
+      ...(formerStudents.length ? { formerStudents } : {}),
       selectedStudentId: selected ? (input.selectedStudentId as string) : (students[0]?.id ?? null),
       semester,
     },

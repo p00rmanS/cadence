@@ -17,7 +17,7 @@ import type { PublishSummary } from "../../services/automation/contracts";
 import { getAutomationClient } from "../../services/automation/n8nClient";
 import { useManagerSession } from "../../hooks/useManagerSession";
 import { ManagerSignIn } from "./ManagerSignIn";
-import type { PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from "../../features/scheduling/types";
+import type { FormerStudent, PersistedStateV1, ScheduleSettings, SemesterConfig, ShiftBlock, Student } from "../../features/scheduling/types";
 
 /**
  * ============================================================================
@@ -38,6 +38,8 @@ type Props = {
   assignments: ShiftBlock[];
   /** The schedule that isn't showing (semester or break), so a backup keeps both. */
   otherTermAssignments: ShiftBlock[];
+  /** Students who have left; saved in the backup so the record is not lost. */
+  formerStudents?: FormerStudent[];
   semester: SemesterConfig | null;
   selectedStudentId: string | null;
   blockingIssues: number;
@@ -78,7 +80,7 @@ const zoneList: string[] = (() => {
 
 /** Save & share: backups, spreadsheet, semester dates, per-student calendar files, and sending to Google Calendar. */
 export function SaveShareDialog(props: Props) {
-  const { settings, students, assignments, otherTermAssignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
+  const { settings, students, formerStudents, assignments, otherTermAssignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ state: PersistedStateV1; notes: string[] } | null>(null);
@@ -135,7 +137,16 @@ export function SaveShareDialog(props: Props) {
 
   // Downloads the whole schedule as a backup file.
   function handleBackup() {
-    const state: PersistedStateV1 = { version: 1, settings, students, assignments, otherTermAssignments, selectedStudentId, semester };
+    const state: PersistedStateV1 = {
+      version: 1,
+      settings,
+      students,
+      ...(formerStudents?.length ? { formerStudents } : {}),
+      assignments,
+      otherTermAssignments,
+      selectedStudentId,
+      semester,
+    };
     downloadTextFile(`syncro-backup-${todayStamp()}.json`, exportBackup(state), "application/json");
     setMessage({ tone: "ok", text: "Backup saved to your Downloads folder. It contains student names and class times, so keep it private." });
   }
