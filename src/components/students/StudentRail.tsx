@@ -19,6 +19,7 @@ export function StudentRail({
   onRemove,
   onAddNew,
   onAddMany,
+  onImportLink,
 }: {
   students: Student[];
   assignments: ShiftBlock[];
@@ -30,6 +31,8 @@ export function StudentRail({
   onRemove: (id: string) => void;
   onAddNew: () => void;
   onAddMany: () => void;
+  /** Opens the "Student links" window (ask students for their details, or add one from a link they sent). */
+  onImportLink: () => void;
 }) {
   const [query, setQuery] = useState("");
 
@@ -52,6 +55,10 @@ export function StudentRail({
         Drag a name onto a time, or click a name and then the times.{" "}
         <button type="button" onClick={onAddMany} className="font-medium text-accent underline underline-offset-2">
           Add several at once
+        </button>
+        {" · "}
+        <button type="button" onClick={onImportLink} className="font-medium text-accent underline underline-offset-2">
+          Student links
         </button>
       </p>
 

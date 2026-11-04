@@ -8,6 +8,7 @@ import { HelpDrawer } from "../components/help/HelpDrawer";
 import { WelcomeDialog } from "../components/help/WelcomeDialog";
 import { StudentRail } from "../components/students/StudentRail";
 import { StudentFormSheet } from "../components/students/StudentFormSheet";
+import { ImportStudentDialog } from "../components/share/ImportStudentDialog";
 import { BulkAddDialog } from "../components/students/BulkAddDialog";
 import { ShiftImportDialog } from "../components/schedule/ShiftImportDialog";
 import { SchedulePanel } from "../components/schedule/SchedulePanel";
@@ -19,6 +20,7 @@ import { buildCoverageSlots } from "../features/scheduling/coverage";
 import { assignedHours } from "../features/scheduling/availability";
 import { nextStep } from "../features/scheduling/guidance";
 import type { GuidanceAction } from "../features/scheduling/guidance";
+import type { Student } from "../features/scheduling/types";
 import { findIssues, isBlockingIssue } from "../features/scheduling/issues";
 import { studentLimit } from "../features/scheduling/term";
 import { useFirstRun } from "../hooks/useFirstRun";
@@ -46,7 +48,8 @@ import { clsx } from "../lib/clsx";
  * at a time) so the rest of the file can just check `dialog?.kind`.
  */
 type Dialog =
-  | { kind: "student"; id: string | "new" }
+  | { kind: "student"; id: string | "new"; prefill?: Student }
+  | { kind: "import-link"; text?: string }
   | { kind: "bulk" }
   | { kind: "import-shifts" }
   | { kind: "help"; tab?: "start" | "faq" }
@@ -70,7 +73,18 @@ function isTyping(target: EventTarget | null): boolean {
  * on the right (tabs on a phone). It holds which dialog is open and hands the store's data and
  * actions down to each panel.
  */
-export function App() {
+/**
+ * The manager's app. `incomingStudentLink` is the text of a link a student sent (the manager opened it): the
+ * app then opens the "Student links" window already filled in, and calls `onIncomingStudentLinkHandled` so
+ * the link is not used twice. Both are optional: normally the app is opened without any link.
+ */
+export function App({
+  incomingStudentLink = null,
+  onIncomingStudentLinkHandled,
+}: {
+  incomingStudentLink?: string | null;
+  onIncomingStudentLinkHandled?: () => void;
+} = {}) {
   const store = useShiftFitStore();
   const { theme, setTheme } = useTheme();
   const display = useDisplayPrefs();
@@ -155,6 +169,12 @@ export function App() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [dialog, showWelcome, store.undo, store.redo]);
+
+  useEffect(() => {
+    if (!incomingStudentLink) return;
+    setDialog({ kind: "import-link", text: incomingStudentLink });
+    onIncomingStudentLinkHandled?.();
+  }, [incomingStudentLink, onIncomingStudentLinkHandled]);
 
   const editing = dialog?.kind === "student" && dialog.id !== "new" ? (students.find((s) => s.id === dialog.id) ?? null) : null;
   const removing = dialog?.kind === "remove" ? students.find((s) => s.id === dialog.id) : undefined;
@@ -246,6 +266,7 @@ export function App() {
             onRemove={(id) => setDialog({ kind: "remove", id })}
             onAddNew={() => setDialog({ kind: "student", id: "new" })}
             onAddMany={() => setDialog({ kind: "bulk" })}
+            onImportLink={() => setDialog({ kind: "import-link" })}
           />
         </div>
         <div id="schedule-panel" tabIndex={-1} className={clsx(mobileTab === "schedule" ? "block" : "hidden", "min-h-0 outline-none wide:block")}>
@@ -329,10 +350,19 @@ export function App() {
         />
       )}
 
+      {dialog?.kind === "import-link" && (
+        <ImportStudentDialog
+          initialText={dialog.text}
+          existingNames={students.map((s) => s.name)}
+          onClose={() => setDialog(null)}
+          onReview={(student) => setDialog({ kind: "student", id: "new", prefill: student })}
+        />
+      )}
       {dialog?.kind === "student" && (
         <StudentFormSheet
           key={dialog.id}
           student={editing}
+          prefill={dialog.prefill ?? null}
           settings={settings}
           existingNames={students.map((s) => s.name)}
           onClose={() => setDialog(null)}

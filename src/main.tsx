@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App } from "./app/App";
+import { Root } from "./app/Root";
 
 /**
  * The real entry point: the one line that tells the browser "render the
@@ -15,7 +15,7 @@ import "./styles/app.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Root />
   </React.StrictMode>,
 );
 
