@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ImageUp, Wand2 } from "lucide-react";
 import { Button } from "../ui/Button";
+import { LogoLoader } from "../ui/LogoLoader";
 import { HelpTip } from "../help/HelpTip";
 import { ManagerSignIn } from "../app-shell/ManagerSignIn";
 import { useManagerSession } from "../../hooks/useManagerSession";
@@ -87,6 +88,7 @@ export function ImportPanel({
             </Button>
             {image && signedIn && (
               <Button variant="primary" onClick={readScreenshot} disabled={busy}>
+                {busy && <LogoLoader className="h-4 w-4" />}
                 {busy ? "Reading…" : "Read the screenshot"}
               </Button>
             )}

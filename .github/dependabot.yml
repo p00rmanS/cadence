@@ -1,0 +1,23 @@
+# Tells GitHub's Dependabot to check once a week for newer versions of the libraries the app uses
+# (package.json) and of the GitHub Actions the checks use, and to open a pull request for each.
+# The normal checks (type check, tests, build) run on those pull requests like any other, so nothing
+# merges without a person reading it. Security fixes are opened right away, whatever this schedule says.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Library updates that only need a small version bump are grouped into one pull request.
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /local-reader
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

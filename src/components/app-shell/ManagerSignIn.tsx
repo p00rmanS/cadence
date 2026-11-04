@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { KeyRound, LogOut } from "lucide-react";
 import { Button } from "../ui/Button";
+import { LogoLoader } from "../ui/LogoLoader";
 import { useManagerSession } from "../../hooks/useManagerSession";
 import { signInManager, signOutManager } from "../../services/automation/managerSession";
 
@@ -65,7 +66,7 @@ export function ManagerSignIn({ purpose }: { purpose: string }) {
           className="rounded-lg border border-line bg-bg p-2 text-sm"
         />
         <Button variant="secondary" disabled={busy || !passcode} onClick={() => void handleSubmit()}>
-          <KeyRound className="h-4 w-4" aria-hidden /> {busy ? "Checking…" : "Sign in"}
+          {busy ? <LogoLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" aria-hidden />} {busy ? "Checking…" : "Sign in"}
         </Button>
       </div>
       {problem && (
