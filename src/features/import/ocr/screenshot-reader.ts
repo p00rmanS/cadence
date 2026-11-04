@@ -1,8 +1,9 @@
 import { parseClassText } from "../../scheduling/parser";
-import { LOW_CONFIDENCE, MAX_SCREENSHOT_BYTES, SCREENSHOT_TYPES } from "./constants";
+import { CALENDAR_THRESHOLD, LOW_CONFIDENCE, MAX_SCREENSHOT_BYTES, SCREENSHOT_TYPES } from "./constants";
 import { readWithEnhancedReader } from "./enhanced-reader";
+import { calendarWordsToClassText } from "./calendar-layout";
 import { ocrTextToClassText } from "./ocr-text";
-import { prepareScreenshot, shrinkForUpload } from "./preprocess";
+import { binarizedCopy, prepareScreenshot, shrinkForUpload } from "./preprocess";
 import { readWithTesseract } from "./tesseract-reader";
 import type { ReadingProgress } from "./tesseract-reader";
 
@@ -31,7 +32,16 @@ export type ScreenshotReading = {
   linesFound: number;
   /** True when the reading is probably poor: Tesseract wasn't confident, or no class times turned up. */
   lowConfidence: boolean;
+  /** A plain-language explanation to show instead of the usual "no class times found" (see `NO_TIMES_NOTE`). */
+  note?: string;
 };
+
+/**
+ * Shown when the picture is a weekly calendar but its boxes don't have the times written in them (some sites
+ * only show the course name and room and let the box's height show the time, which can't be read reliably).
+ */
+export const NO_TIMES_NOTE =
+  "This looks like a weekly calendar picture, but the class boxes don't have their times written in them, so the times can't be read. In Workday, switch to the List view (the Meeting Patterns column) and screenshot that instead, or type the times.";
 
 export type ReadOutcome = { ok: true; reading: ScreenshotReading } | { ok: false; error: string };
 
@@ -63,8 +73,24 @@ export async function readScreenshot(file: File, onProgress: (progress: ReadingP
   try {
     onProgress({ label: "Preparing the picture…", fraction: 0 });
     const picture = await prepareScreenshot(file, { enlarge: true });
-    const { text, confidence } = await readWithTesseract(picture, onProgress);
+    const { text, confidence, words } = await readWithTesseract(picture, onProgress);
+    // A weekly calendar (day names across the top, boxes below) is read by position; anything else, as plain text.
+    let calendar = calendarWordsToClassText(words);
+    if (calendar) {
+      // A calendar's grey class boxes can make the first reading skip whole columns of text, so it is read a second time
+      // with the text made pure black on white, and whichever reading found more classes is kept.
+      const second = await readWithTesseract(binarizedCopy(picture, CALENDAR_THRESHOLD), onProgress).catch(() => null);
+      const again = second ? calendarWordsToClassText(second.words) : null;
+      if (again && again.linesFound > calendar.linesFound) calendar = again;
+    }
+    if (calendar && calendar.linesFound > 0) {
+      const lowConfidence = confidence < LOW_CONFIDENCE || needsFixing(calendar.classText);
+      return { ok: true, reading: { classText: calendar.classText, linesFound: calendar.linesFound, lowConfidence } };
+    }
     const found = ocrTextToClassText(text);
+    if (calendar && found.linesFound === 0) {
+      return { ok: true, reading: { ...found, lowConfidence: true, note: NO_TIMES_NOTE } };
+    }
     return { ok: true, reading: { ...found, lowConfidence: confidence < LOW_CONFIDENCE || needsFixing(found.classText) } };
   } catch (err) {
     return { ok: false, error: messageFrom(err) };

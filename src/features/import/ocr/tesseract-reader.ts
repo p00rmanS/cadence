@@ -1,3 +1,4 @@
+import type { OcrWord } from "./calendar-layout";
 /**
  * ============================================================================
  *  READING A SCREENSHOT IN THE BROWSER (TESSERACT)
@@ -15,7 +16,7 @@
 export type ReadingProgress = { label: string; fraction: number };
 
 /** The text Tesseract found, and how sure it was (0 = guessing, 100 = certain). */
-export type TesseractReading = { text: string; confidence: number };
+export type TesseractReading = { text: string; confidence: number; words: OcrWord[] };
 
 /**
  * Turns Tesseract's own status words into plain labels. Everything before the actual reading is
@@ -46,6 +47,24 @@ export async function readWithTesseract(picture: HTMLCanvasElement, onProgress: 
   }
 }
 
+/** The part of Tesseract's detailed result we use: blocks -> paragraphs -> lines -> words, each word with its rectangle. */
+type TesseractBlocks = { paragraphs?: { lines?: { words?: { text: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }[] }[] }[] }[] | null;
+
+/** Flattens Tesseract's blocks into one list of words with their positions. */
+function wordsOf(blocks: TesseractBlocks): OcrWord[] {
+  const words: OcrWord[] = [];
+  for (const block of blocks ?? []) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        for (const word of line.words ?? []) {
+          if (word.text && word.bbox) words.push({ text: word.text, x0: word.bbox.x0, y0: word.bbox.y0, x1: word.bbox.x1, y1: word.bbox.y1 });
+        }
+      }
+    }
+  }
+  return words;
+}
+
 /** Does the actual reading for `readWithTesseract` (which turns any failure into a plain message). */
 async function runTesseract(picture: HTMLCanvasElement, onProgress: (progress: ReadingProgress) => void): Promise<TesseractReading> {
   const { createWorker, OEM, PSM } = await import("tesseract.js");
@@ -64,8 +83,9 @@ async function runTesseract(picture: HTMLCanvasElement, onProgress: (progress: R
     // columns apart. Screenshots carry no print resolution, so we state one (300 dots per inch, typical
     // for enlarged screen text); otherwise Tesseract guesses and logs a warning each time.
     await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO, preserve_interword_spaces: "1", user_defined_dpi: "300" });
-    const { data } = await worker.recognize(picture);
-    return { text: data.text, confidence: data.confidence };
+    // `blocks: true` also returns every word with the rectangle it occupies, which the weekly-calendar reader needs.
+    const { data } = await worker.recognize(picture, {}, { text: true, blocks: true });
+    return { text: data.text, confidence: data.confidence, words: wordsOf(data.blocks) };
   } finally {
     await worker.terminate();
   }

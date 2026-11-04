@@ -83,6 +83,7 @@ export function ImportPanel({
 
   /** The sentence shown after a reading: how many class times were found, and what to do next. */
   function describeReading(reading: ScreenshotReading): string {
+    if (reading.linesFound === 0 && reading.note) return reading.note;
     if (reading.linesFound === 0) {
       return "No class times were found in that screenshot. Try a clearer screenshot of just the class list, or type the times.";
     }

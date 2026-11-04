@@ -180,3 +180,31 @@ export async function shrinkForUpload(canvas: HTMLCanvasElement): Promise<Blob> 
   }
   throw new Error("This screenshot is too detailed to send for enhanced reading. Try a screenshot of just the class list.");
 }
+
+/**
+ * Turns every pixel darker than `threshold` pure black and every other pixel pure white (in place), on
+ * RGBA pixel data that has already been made grayscale. See `CALENDAR_THRESHOLD` for why.
+ */
+export function binarizePixels(rgba: Uint8ClampedArray, threshold: number): void {
+  for (let i = 0; i < rgba.length; i += 4) {
+    const value = rgba[i] < threshold ? 0 : 255;
+    rgba[i] = value;
+    rgba[i + 1] = value;
+    rgba[i + 2] = value;
+    rgba[i + 3] = 255;
+  }
+}
+
+/** A copy of a prepared (grayscale, enlarged) picture with the text made pure black on pure white, for the second calendar reading. */
+export function binarizedCopy(picture: HTMLCanvasElement, threshold: number): HTMLCanvasElement {
+  const copy = document.createElement("canvas");
+  copy.width = picture.width;
+  copy.height = picture.height;
+  const context = copy.getContext("2d", { willReadFrequently: true });
+  if (!context) return picture;
+  context.drawImage(picture, 0, 0);
+  const pixels = context.getImageData(0, 0, copy.width, copy.height);
+  binarizePixels(pixels.data, threshold);
+  context.putImageData(pixels, 0, 0);
+  return copy;
+}
