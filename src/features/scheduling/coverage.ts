@@ -2,6 +2,7 @@ import { daySlots, staffAt } from "./availability";
 import { isDevotional, weeklyLimit } from "./term";
 import { DAYS } from "./types";
 import { openDays } from "./days";
+import { requiredStaff } from "./staffing";
 import type { CoverageSlot, Day, GapRange, ScheduleSettings, ShiftBlock } from "./types";
 
 /**
@@ -24,13 +25,14 @@ export function buildCoverageSlots(assignments: ShiftBlock[], settings: Schedule
     for (const start of slots) {
       if (isDevotional(day, start, settings)) continue;
       const assignedStudentIds = staffAt(day, start, assignments);
+      const required = requiredStaff(settings, day, start);
       out.push({
         day,
         start,
         end: start + settings.slotMinutes,
         assignedStudentIds,
-        minRequired: settings.minStaffPerSlot,
-        fullyStaffed: assignedStudentIds.length >= settings.minStaffPerSlot,
+        minRequired: required,
+        fullyStaffed: assignedStudentIds.length >= required,
       });
     }
   }
@@ -80,9 +82,10 @@ export type CoverageSummary = {
 export function summarizeCoverage(coverage: CoverageSlot[], settings: ScheduleSettings): CoverageSummary {
   const totalSlots = coverage.length;
   const fullyStaffedSlots = coverage.filter((s) => s.fullyStaffed).length;
-  const demandSlots = totalSlots * settings.minStaffPerSlot;
+  // Each box can need a different number of people, so add up what every box needs.
+  const demandSlots = coverage.reduce((sum, s) => sum + s.minRequired, 0);
   const filledSlots = coverage.reduce((sum, s) => sum + Math.min(s.assignedStudentIds.length, s.minRequired), 0);
-  const theoreticalStaffingHours = (totalSlots * settings.slotMinutes * settings.minStaffPerSlot) / 60;
+  const theoreticalStaffingHours = (demandSlots * settings.slotMinutes) / 60;
   return {
     fullyStaffedPercent: totalSlots ? Math.round((fullyStaffedSlots / totalSlots) * 100) : 100,
     demandFulfilledPercent: demandSlots ? Math.round((filledSlots / demandSlots) * 100) : 100,

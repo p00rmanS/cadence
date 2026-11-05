@@ -1,8 +1,12 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { CalendarRange, LayoutGrid, PanelRight, Users } from "lucide-react";
+import { CalendarRange, Copy, LayoutGrid, PanelRight, Users, UsersRound } from "lucide-react";
 import { ScheduleGrid } from "./ScheduleGrid";
 import { ScheduleList } from "./ScheduleList";
+import { BusyTimesDialog } from "./BusyTimesDialog";
+import { CopyDayDialog } from "./CopyDayDialog";
+import { daySlots } from "../../features/scheduling/availability";
+import { openDays } from "../../features/scheduling/days";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
@@ -27,12 +31,23 @@ export function SchedulePanel(props: {
   onToggle: (day: Day, start: number) => void;
   onRange: (day: Day, from: number, to: number, assign: boolean) => void;
   onNotify: (message: string) => void;
-  onDropStudent?: (studentId: string, day: Day, from: number, to: number) => void;
+  onPlaceShifts?: (
+    studentId: string,
+    ranges: { day: Day; from: number; to: number }[],
+    options: { remove?: { day: Day; from: number; to: number }; alsoStudentIds?: string[]; needPeople?: number },
+  ) => void;
+  /** Copy every student's shifts from one day onto other days. */
+  onCopyDay?: (from: Day, to: Day[]) => void;
+  /** Say that some hours on some days need a different number of people. */
+  onSetStaffing?: (days: Day[], from: number, to: number, people: number) => void;
   /** The side column with the schedule's health (shown or hidden), and how to flip it. Both optional. */
   detailsOpen?: boolean;
   onToggleDetails?: () => void;
 }) {
   const [view, setView] = useState<View>("grid");
+  const [tool, setTool] = useState<"copy" | "busy" | null>(null);
+  const days = openDays(props.settings);
+  const firstDayWithShifts = days.find((d) => props.assignments.some((a) => a.day === d)) ?? days[0];
   const refs = useRef<Record<View, HTMLButtonElement | null>>({ grid: null, student: null, day: null });
 
   // Left/right arrow keys move between the view tabs (Grid, By student, By day).
@@ -72,18 +87,40 @@ export function SchedulePanel(props: {
             </button>
           ))}
         </div>
-        {props.onToggleDetails && (
-          // Only on wide screens: on a phone the "Health" tab at the bottom does this job.
-          <button
-            type="button"
-            aria-expanded={props.detailsOpen ?? false}
-            aria-controls="schedule-details"
-            onClick={props.onToggleDetails}
-            className="mb-1 ml-auto hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 wide:inline-flex"
-          >
-            <PanelRight className="h-4 w-4" aria-hidden /> {props.detailsOpen ? "Hide details" : "Show details"}
-          </button>
-        )}
+        <div className="mb-1 ml-auto flex items-center gap-1">
+          {view === "grid" && props.onCopyDay && (
+            <button
+              type="button"
+              onClick={() => setTool("copy")}
+              title="Copy one day's shifts onto other days"
+              className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 sm:inline-flex"
+            >
+              <Copy className="h-4 w-4" aria-hidden /> Copy a day
+            </button>
+          )}
+          {view === "grid" && props.onSetStaffing && (
+            <button
+              type="button"
+              onClick={() => setTool("busy")}
+              title="Say which hours need more people"
+              className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 sm:inline-flex"
+            >
+              <UsersRound className="h-4 w-4" aria-hidden /> Busy times
+            </button>
+          )}
+          {props.onToggleDetails && (
+            // Only on wide screens: on a phone the "Health" tab at the bottom does this job.
+            <button
+              type="button"
+              aria-expanded={props.detailsOpen ?? false}
+              aria-controls="schedule-details"
+              onClick={props.onToggleDetails}
+              className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 wide:inline-flex"
+            >
+              <PanelRight className="h-4 w-4" aria-hidden /> {props.detailsOpen ? "Hide details" : "Show details"}
+            </button>
+          )}
+        </div>
       </div>
       <div key={view} id="schedule-view" role="tabpanel" aria-labelledby={`view-tab-${view}`} className="anim-fade-quick min-h-0 flex-1">
         {view === "grid" ? (
@@ -95,12 +132,26 @@ export function SchedulePanel(props: {
             selectedStudent={props.selectedStudent}
             onToggle={props.onToggle}
             onRange={props.onRange}
-            onDropStudent={props.onDropStudent}
+            onPlaceShifts={props.onPlaceShifts}
           />
         ) : (
           <ScheduleList mode={view} students={props.students} assignments={props.assignments} settings={props.settings} onNotify={props.onNotify} />
         )}
       </div>
+      {tool === "copy" && props.onCopyDay && (
+        <CopyDayDialog
+          days={days}
+          defaultFrom={firstDayWithShifts}
+          onCancel={() => setTool(null)}
+          onConfirm={(from, to) => {
+            props.onCopyDay?.(from, to);
+            setTool(null);
+          }}
+        />
+      )}
+      {tool === "busy" && props.onSetStaffing && (
+        <BusyTimesDialog settings={props.settings} days={days} slots={daySlots(props.settings)} onSet={props.onSetStaffing} onClose={() => setTool(null)} />
+      )}
     </div>
   );
 }

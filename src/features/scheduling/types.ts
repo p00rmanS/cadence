@@ -122,6 +122,18 @@ export type Student = {
   weeklyHours?: number;
   /** The earliest minute-of-day this student can start work. Missing means no limit (any time the office is open). */
   earliestStart?: Minutes;
+  /** True when the manager marked this student as leaving (for example graduating) at the end of the semester. They stay scheduled until then. */
+  graduating?: boolean;
+};
+
+/** Why a student is no longer working. Shown in the Former students list. */
+export type LeftReason = "graduated" | "resigned" | "other-job" | "other";
+
+/** A student who has left: everything we knew about them (so they can be brought back), plus why and when. Their shifts are gone. */
+export type FormerStudent = Student & {
+  leftReason: LeftReason;
+  /** The day they were marked as left, as YYYY-MM-DD (empty if unknown). */
+  leftOn: string;
 };
 
 /**
@@ -134,6 +146,9 @@ export type Term = "semester" | "break";
 /** The days the office is open: weekdays only, or weekdays plus Saturday. */
 export type OpenDays = "mon-fri" | "mon-sat";
 
+/** Times that need a different number of people than the standard: from `from` up to (not including) `to` on `day`, `people` are needed. */
+export type StaffingNeed = { day: Day; from: Minutes; to: Minutes; people: number };
+
 /** The office-wide rules that apply to every student (as opposed to per-student rules, which live on `Student`). Editable in the app's "Rules" dialog. */
 export type ScheduleSettings = {
   /** When the visible schedule grid starts each day. */
@@ -142,6 +157,8 @@ export type ScheduleSettings = {
   closeTime: Minutes;
   /** How many students must be on shift at once for a slot to count as "fully staffed". */
   minStaffPerSlot: number;
+  /** Times that need more (or fewer) people than `minStaffPerSlot`, for example two people over lunch. Missing means none. */
+  staffingNeeds?: StaffingNeed[];
   /** Size of one grid box in minutes. The whole app works in units of this size (default 30). */
   slotMinutes: number;
   /** Default weekly hour cap offered to each new student (BYU–Hawaii's student-employment limit; see `docs/DECISIONS.md`). */
@@ -292,6 +309,8 @@ export type PersistedStateV1 = {
    * schedules are kept separately; switching swaps them. Missing in older saved data.
    */
   otherTermAssignments?: ShiftBlock[];
+  /** Students who have left (graduated, resigned, ...), kept so the manager has a record and can bring them back. Missing in older saved data. */
+  formerStudents?: FormerStudent[];
   selectedStudentId: string | null;
   /** Optional: only present once the manager configures calendar export. */
   semester?: SemesterConfig | null;

@@ -1,11 +1,15 @@
 import { DEFAULT_BREAK_MINUTES, MAX_ASSIGNMENTS, MAX_BREAKS, MAX_DAYS_PER_WEEK, MAX_STUDENTS, STUDENT_COLORS } from "./constants";
 import { isValidAvatar } from "../../lib/image";
 import { isIsoDate, isValidTimeZone } from "./time";
+import { MAX_STAFFING_NEEDS } from "./staffing";
 import { DAYS } from "./types";
 import type {
   BusyBlock,
   Day,
+  FormerStudent,
+  LeftReason,
   PersistedStateV1,
+  StaffingNeed,
   ScheduleSettings,
   SemesterConfig,
   ShiftBlock,
@@ -68,13 +72,41 @@ function removeControlCharacters(text: string): string {
   return text.replace(CONTROL_CHARACTERS, " ");
 }
 
+/** Reads the "this time needs N people" exceptions (absent in older saved schedules). Returns the clean list, or null with an error recorded. */
+function readStaffingNeeds(input: unknown, errors: string[]): StaffingNeed[] | null {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > MAX_STAFFING_NEEDS) {
+    errors.push("Settings: the staffing times are not a valid list.");
+    return null;
+  }
+  const clean: StaffingNeed[] = [];
+  for (const item of input) {
+    const valid =
+      isRecord(item) &&
+      isDay(item.day) &&
+      isMinutes(item.from) &&
+      isMinutes(item.to) &&
+      item.from < item.to &&
+      typeof item.people === "number" &&
+      Number.isInteger(item.people) &&
+      item.people >= 1 &&
+      item.people <= 10;
+    if (!valid) {
+      errors.push("Settings: one of the staffing times is not valid (a day, a start before the end, and 1 to 10 people).");
+      return null;
+    }
+    clean.push({ day: item.day as Day, from: item.from as number, to: item.to as number, people: item.people as number });
+  }
+  return clean;
+}
+
 /** Checks the office-wide rules (open hours, staff per slot, weekly target) and returns a clean copy, or null. */
 function readSettings(input: unknown, errors: string[]): ScheduleSettings | null {
   if (!isRecord(input)) {
     errors.push("Missing settings.");
     return null;
   }
-  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, openDays } = input;
+  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, openDays, staffingNeeds } = input;
   if (!isMinutes(openTime) || !isMinutes(closeTime) || openTime >= closeTime) {
     errors.push("Settings: open and close times must be valid, with opening before closing.");
     return null;
@@ -100,6 +132,8 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Settings: the shortest shift must be between half an hour and 4 hours, in half-hour steps.");
     return null;
   }
+  const needs = readStaffingNeeds(staffingNeeds, errors);
+  if (needs === null) return null;
   // Schedules saved before the Semester/Break switch existed have no term; they were made for the semester.
   return {
     openTime,
@@ -110,6 +144,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     term: term === "break" ? "break" : "semester",
     ...(breakWeeklyHours !== undefined ? { breakWeeklyHours } : {}),
     ...(minShiftHours !== undefined ? { minShiftHours } : {}),
+    ...(needs.length ? { staffingNeeds: needs } : {}),
     // Schedules saved before Saturday existed have no openDays: they stay Monday to Friday. Anything
     // other than the two real choices is dropped, which also means Monday to Friday.
     ...(openDays === "mon-sat" || openDays === "mon-fri" ? { openDays } : {}),
@@ -245,9 +280,40 @@ function readStudents(input: unknown, errors: string[]): Student[] | null {
       ...(workDays.length > 0 ? { workDays } : {}),
       ...(s.weeklyHours !== undefined ? { weeklyHours: s.weeklyHours as number } : {}),
       ...(typeof s.earliestStart === "number" && s.earliestStart > 0 ? { earliestStart: s.earliestStart } : {}),
+      ...(s.graduating === true ? { graduating: true } : {}),
     });
   }
   return errors.length ? null : out;
+}
+
+/** The reasons a student can have left; anything else is read as "other". */
+const LEFT_REASONS: LeftReason[] = ["graduated", "resigned", "other-job", "other"];
+
+/** Most former students kept. Plenty for years of turnover, and it keeps a pasted file from being huge. */
+const MAX_FORMER_STUDENTS = 500;
+
+/**
+ * Reads the list of students who have left (absent in older saved data). Each one is checked like any
+ * student; one that is not valid, or that has the same id as a current student, is quietly left out.
+ */
+function readFormerStudents(input: unknown, current: Student[], notes: string[]): FormerStudent[] {
+  if (!Array.isArray(input)) return [];
+  const out: FormerStudent[] = [];
+  const takenIds = new Set(current.map((s) => s.id));
+  let dropped = 0;
+  for (const item of input.slice(0, MAX_FORMER_STUDENTS)) {
+    const checked = readStudents([item], []);
+    const student = checked?.[0];
+    if (!student || takenIds.has(student.id) || !isRecord(item)) {
+      dropped++;
+      continue;
+    }
+    takenIds.add(student.id);
+    const reason = LEFT_REASONS.includes(item.leftReason as LeftReason) ? (item.leftReason as LeftReason) : "other";
+    out.push({ ...student, leftReason: reason, leftOn: typeof item.leftOn === "string" && isIsoDate(item.leftOn) ? item.leftOn : "" });
+  }
+  if (dropped) notes.push(`${dropped} former ${dropped === 1 ? "student" : "students"} could not be read and ${dropped === 1 ? "was" : "were"} left out.`);
+  return out;
 }
 
 /** Checks the optional semester dates, timezone and days off used for calendar export. Missing is fine. */
@@ -348,6 +414,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
     return { ok: false, errors: errors.length ? errors.slice(0, MAX_ERRORS) : ["That file is not a Syncro backup."] };
   }
 
+  const formerStudents = readFormerStudents(input.formerStudents, students, notes);
   const selected = typeof input.selectedStudentId === "string" && students.some((s) => s.id === input.selectedStudentId);
   return {
     ok: true,
@@ -358,6 +425,7 @@ export function validatePersistedState(input: unknown): ValidationResult<Persist
       students,
       assignments,
       otherTermAssignments,
+      ...(formerStudents.length ? { formerStudents } : {}),
       selectedStudentId: selected ? (input.selectedStudentId as string) : (students[0]?.id ?? null),
       semester,
     },

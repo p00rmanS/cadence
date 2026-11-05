@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import { canAssign, isAssigned, softViolations } from "../features/scheduling/availability";
+import { canAssign, isAssigned, shiftRuns, softViolations } from "../features/scheduling/availability";
 import { breakLimit } from "../features/scheduling/term";
+import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
 import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
-import { formatMinutes } from "../features/scheduling/time";
-import { DAY_LABEL } from "../features/scheduling/types";
+import { endSentence, formatMinutes } from "../features/scheduling/time";
+import { DAY_LABEL, DAY_LONG } from "../features/scheduling/types";
 import { STORAGE_KEY, storage } from "../features/persistence/storage";
 import { createId } from "../lib/id";
 import type {
   AutoFillResult,
+  FormerStudent,
+  LeftReason,
   Day,
   PersistedStateV1,
   ScheduleSettings,
@@ -72,6 +75,8 @@ export type NewStudentInput = {
 type Doc = {
   settings: ScheduleSettings;
   students: Student[];
+  /** Students who have left (graduated, resigned, ...): kept for the record and so they can be brought back. They have no shifts. */
+  formerStudents: FormerStudent[];
   /** The schedule that is showing: semester or break, whichever `settings.term` says. */
   assignments: ShiftBlock[];
   /** The other schedule, kept untouched until the Semester/Break switch brings it back. */
@@ -103,12 +108,19 @@ export type Action =
   | { type: "ADD_STUDENTS"; entries: { id: string; input: NewStudentInput }[] }
   | { type: "UPDATE_STUDENT"; id: string; input: NewStudentInput }
   | { type: "REMOVE_STUDENT"; id: string }
+  | { type: "SET_GRADUATING"; id: string; graduating: boolean }
+  | { type: "STUDENT_LEFT"; id: string; reason: LeftReason; date: string }
+  | { type: "RESTORE_STUDENT"; id: string }
+  | { type: "FORGET_STUDENT"; id: string }
   | { type: "SELECT_STUDENT"; id: string | null }
   | { type: "TOGGLE_SLOT"; day: Day; start: number }
   | { type: "CONFIRM_OVERRIDE" }
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
+  | { type: "COPY_DAY"; from: Day; to: Day[] }
+  | { type: "SET_STAFFING_NEED"; days: Day[]; from: number; to: number; people: number }
+  | { type: "PLACE_SHIFTS"; studentId: string; alsoStudentIds?: string[]; ranges: ShiftRange[]; remove?: ShiftRange; needPeople?: number }
   | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
   | { type: "SET_SEMESTER"; semester: SemesterConfig | null }
@@ -122,6 +134,9 @@ export type Action =
   | { type: "TOAST"; message: string | null }
   | { type: "SAVE_STATUS"; failed: boolean }
   | { type: "OTHER_TAB_CHANGED" };
+
+/** One stretch of a day: `from` is the first half hour and `to` the last half hour (both are start times). */
+export type ShiftRange = { day: Day; from: number; to: number };
 
 /** How many undo steps are kept; older ones are forgotten so memory doesn't grow forever. */
 const HISTORY_LIMIT = 100;
@@ -177,6 +192,7 @@ export function initialState(): State {
       doc: {
         settings: saved.settings,
         students: saved.students,
+        formerStudents: saved.formerStudents ?? [],
         assignments: saved.assignments,
         otherTermAssignments: saved.otherTermAssignments ?? [],
         semester: saved.semester ?? null,
@@ -187,7 +203,7 @@ export function initialState(): State {
   const demo = buildDemoData();
   return {
     ...base,
-    doc: { settings: DEFAULT_SETTINGS, students: demo.students, assignments: demo.assignments, otherTermAssignments: [], semester: null },
+    doc: { settings: DEFAULT_SETTINGS, students: demo.students, formerStudents: [], assignments: demo.assignments, otherTermAssignments: [], semester: null },
     selectedStudentId: demo.students[0]?.id ?? null,
   };
 }
@@ -289,7 +305,7 @@ export function reducer(state: State, action: Action): State {
     case "UPDATE_STUDENT": {
       const existing = doc.students.find((s) => s.id === action.id);
       if (!existing) return state;
-      const updated = toStudent(action.id, action.input, existing.color);
+      const updated = { ...toStudent(action.id, action.input, existing.color), ...(existing.graduating ? { graduating: true } : {}) };
       return commit(
         state,
         { ...doc, students: doc.students.map((s) => (s.id === action.id ? updated : s)) },
@@ -309,6 +325,55 @@ export function reducer(state: State, action: Action): State {
       return commit(state, next, `Removed ${student.name}`, {
         selectedStudentId: fixSelection(next, state.selectedStudentId),
         toast: toast(`Removed ${student.name}. You can press Undo to bring them back.`),
+      });
+    }
+    case "SET_GRADUATING": {
+      const student = doc.students.find((s) => s.id === action.id);
+      if (!student) return state;
+      const { graduating: _old, ...without } = student;
+      void _old;
+      const flagged: Student = action.graduating ? { ...without, graduating: true } : without;
+      return commit(state, { ...doc, students: doc.students.map((s) => (s.id === action.id ? flagged : s)) }, `${action.graduating ? "Marked" : "Unmarked"} ${student.name} as graduating`, {
+        toast: toast(action.graduating ? `${student.name} is marked as graduating. They stay on the schedule until you mark them as left.` : `${student.name} is no longer marked as graduating.`),
+      });
+    }
+    case "STUDENT_LEFT": {
+      const student = doc.students.find((s) => s.id === action.id);
+      if (!student) return state;
+      const hours = (doc.assignments.filter((a) => a.studentId === action.id).length * doc.settings.slotMinutes) / 60;
+      const { graduating: _ignored, ...rest } = student;
+      void _ignored;
+      const next: Doc = {
+        ...doc,
+        students: doc.students.filter((s) => s.id !== action.id),
+        formerStudents: [{ ...rest, leftReason: action.reason, leftOn: action.date }, ...doc.formerStudents],
+        assignments: doc.assignments.filter((a) => a.studentId !== action.id),
+        otherTermAssignments: doc.otherTermAssignments.filter((a) => a.studentId !== action.id),
+      };
+      return commit(state, next, `${student.name} left`, {
+        selectedStudentId: fixSelection(next, state.selectedStudentId),
+        toast: toast(
+          hours > 0
+            ? `${endSentence(student.name)} moved to Former students. Their ${hours} hours are now open, so check the pink boxes.`
+            : `${endSentence(student.name)} moved to Former students.`,
+        ),
+      });
+    }
+    case "RESTORE_STUDENT": {
+      const former = doc.formerStudents.find((s) => s.id === action.id);
+      if (!former) return state;
+      if (doc.students.length >= MAX_STUDENTS) return { ...state, toast: toast(`Syncro can hold up to ${MAX_STUDENTS} students, so ${former.name} was not brought back.`) };
+      const { leftReason: _reason, leftOn: _on, ...student } = former;
+      void _reason;
+      void _on;
+      const next: Doc = { ...doc, students: [...doc.students, student], formerStudents: doc.formerStudents.filter((s) => s.id !== action.id) };
+      return commit(state, next, `Brought back ${student.name}`, { toast: toast(`${endSentence(student.name)} is back on the student list with no shifts yet.`) });
+    }
+    case "FORGET_STUDENT": {
+      const former = doc.formerStudents.find((s) => s.id === action.id);
+      if (!former) return state;
+      return commit(state, { ...doc, formerStudents: doc.formerStudents.filter((s) => s.id !== action.id) }, `Deleted ${former.name} for good`, {
+        toast: toast(`${endSentence(former.name)} deleted for good. You can press Undo to bring them back.`),
       });
     }
     case "SELECT_STUDENT":
@@ -375,6 +440,78 @@ export function reducer(state: State, action: Action): State {
       const outcome = fillRange(doc, student, action.day, action.from, action.to, true);
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
+    }
+    case "COPY_DAY": {
+      const step = doc.settings.slotMinutes;
+      const sourceIds = new Set(doc.assignments.filter((a) => a.day === action.from).map((a) => a.studentId));
+      const targets = action.to.filter((day) => day !== action.from);
+      if (!sourceIds.size) return { ...state, toast: toast(`${DAY_LONG[action.from]} has no shifts to copy.`) };
+      if (!targets.length) return { ...state, toast: toast("Pick at least one other day to copy to.") };
+      let working = doc;
+      let added = 0;
+      let skipped = 0;
+      for (const target of targets) {
+        for (const student of doc.students.filter((s) => sourceIds.has(s.id))) {
+          // Each of the student's shifts on the source day is placed as one piece, so a rule that blocks part of it still lets the rest in.
+          for (const run of shiftRuns(student.id, action.from, doc.assignments, doc.settings)) {
+            const outcome = fillRange(working, student, target, run.start, run.end - step, true);
+            working = { ...working, assignments: outcome.assignments };
+            added += outcome.changed;
+            skipped += outcome.skipped;
+          }
+        }
+      }
+      const where = targets.map((d) => DAY_LONG[d]).join(", ");
+      if (added === 0) return { ...state, toast: toast(`Nothing could be copied to ${where}: every shift would break a rule (a class, the weekly hours or the days a student works).`) };
+      const skippedNote = skipped > 0 ? ` ${plural(skipped, "half hour")} could not be copied because they break a rule (a class, hours or days).` : "";
+      return commit(state, working, `Copied ${DAY_LONG[action.from]} to ${where}`, {
+        lastAutofill: null,
+        toast: toast(`Copied ${DAY_LONG[action.from]} to ${where}: ${plural(added, "half hour")} added.${skippedNote}`),
+      });
+    }
+    case "SET_STAFFING_NEED": {
+      let needs = doc.settings.staffingNeeds;
+      for (const day of action.days) {
+        needs = withStaffingNeed({ ...doc.settings, staffingNeeds: needs }, day, action.from, action.to, action.people);
+      }
+      const settings = { ...doc.settings, staffingNeeds: needs?.length ? needs : undefined };
+      return commit(state, { ...doc, settings }, "Changed busy times");
+    }
+    case "PLACE_SHIFTS": {
+      const main = doc.students.find((s) => s.id === action.studentId);
+      if (!main) return state;
+      const people = [main, ...doc.students.filter((s) => (action.alsoStudentIds ?? []).includes(s.id) && s.id !== main.id)];
+      let working = doc;
+      // Moving a shift: take the old one off first, so it does not count against the student's own limits.
+      if (action.remove) {
+        const removed = fillRange(doc, main, action.remove.day, action.remove.from, action.remove.to, false);
+        working = { ...doc, assignments: removed.assignments };
+      }
+      let added = 0;
+      const notes: string[] = [];
+      for (const student of people) {
+        for (const range of action.ranges) {
+          const outcome = fillRange(working, student, range.day, range.from, range.to, true);
+          working = { ...working, assignments: outcome.assignments };
+          added += outcome.changed;
+          notes.push(`${student.name}: ${outcome.message}`);
+        }
+      }
+      // "These times need N people": recorded for every stretch, even if no one could be placed, since it is the manager's rule.
+      let needChanged = false;
+      if (action.needPeople !== undefined) {
+        let needs = working.settings.staffingNeeds;
+        for (const range of action.ranges) {
+          needs = withStaffingNeed({ ...working.settings, staffingNeeds: needs }, range.day, range.from, range.to + working.settings.slotMinutes, action.needPeople);
+        }
+        working = { ...working, settings: { ...working.settings, staffingNeeds: needs?.length ? needs : undefined } };
+        needChanged = true;
+      }
+      // If nothing could be placed and no rule was changed, change nothing at all (a move must never lose the original shift).
+      if (added === 0 && !needChanged) return { ...state, toast: toast(notes.join(" ") || "Nothing was added.") };
+      const verb = action.remove ? "Moved" : "Added";
+      const needNote = needChanged ? ` Those times now need ${(action.needPeople ?? 1) + ((action.needPeople ?? 1) === 1 ? " person" : " people")}.` : "";
+      return commit(state, working, `${verb} shifts for ${people.map((s) => s.name).join(" and ")}`, { toast: toast(`${notes.join(" ")}${needNote}`) });
     }
     case "SET_SETTINGS": {
       const settings = { ...doc.settings, ...action.settings };
@@ -458,6 +595,7 @@ export function reducer(state: State, action: Action): State {
       const next: Doc = {
         ...doc,
         students: demo.students,
+        formerStudents: [],
         assignments: onBreak ? [] : demo.assignments,
         otherTermAssignments: onBreak ? demo.assignments : [],
       };
@@ -468,7 +606,7 @@ export function reducer(state: State, action: Action): State {
       });
     }
     case "CLEAR_ALL": {
-      const next: Doc = { ...doc, students: [], assignments: [], otherTermAssignments: [] };
+      const next: Doc = { ...doc, students: [], formerStudents: [], assignments: [], otherTermAssignments: [] };
       return commit(state, next, "Cleared everything", {
         selectedStudentId: null,
         lastAutofill: null,
@@ -479,6 +617,7 @@ export function reducer(state: State, action: Action): State {
       const next: Doc = {
         settings: action.state.settings,
         students: action.state.students,
+        formerStudents: action.state.formerStudents ?? [],
         assignments: normalizeAssignments(action.state.assignments),
         otherTermAssignments: normalizeAssignments(action.state.otherTermAssignments ?? []),
         semester: action.state.semester ?? null,
@@ -546,6 +685,7 @@ export function useShiftFitStore() {
       version: 1,
       settings: state.doc.settings,
       students: state.doc.students,
+      ...(state.doc.formerStudents.length ? { formerStudents: state.doc.formerStudents } : {}),
       assignments: state.doc.assignments,
       otherTermAssignments: state.doc.otherTermAssignments,
       selectedStudentId: state.selectedStudentId,
@@ -595,10 +735,18 @@ export function useShiftFitStore() {
         }),
       updateStudent: (id: string, input: NewStudentInput) => dispatch({ type: "UPDATE_STUDENT", id, input }),
       removeStudent: (id: string) => dispatch({ type: "REMOVE_STUDENT", id }),
+      setGraduating: (id: string, graduating: boolean) => dispatch({ type: "SET_GRADUATING", id, graduating }),
+      studentLeft: (id: string, reason: LeftReason, date: string) => dispatch({ type: "STUDENT_LEFT", id, reason, date }),
+      restoreStudent: (id: string) => dispatch({ type: "RESTORE_STUDENT", id }),
+      forgetStudent: (id: string) => dispatch({ type: "FORGET_STUDENT", id }),
       selectStudent: (id: string | null) => dispatch({ type: "SELECT_STUDENT", id }),
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
+      copyDay: (from: Day, to: Day[]) => dispatch({ type: "COPY_DAY", from, to }),
+      setStaffingNeed: (days: Day[], from: number, to: number, people: number) => dispatch({ type: "SET_STAFFING_NEED", days, from, to, people }),
+      placeShifts: (studentId: string, ranges: ShiftRange[], options: { remove?: ShiftRange; alsoStudentIds?: string[]; needPeople?: number } = {}) =>
+        dispatch({ type: "PLACE_SHIFTS", studentId, ranges, ...options }),
       importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
       confirmOverride: () => dispatch({ type: "CONFIRM_OVERRIDE" }),
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
@@ -620,6 +768,7 @@ export function useShiftFitStore() {
   return {
     settings: state.doc.settings,
     students: state.doc.students,
+    formerStudents: state.doc.formerStudents,
     assignments: state.doc.assignments,
     otherTermAssignments: state.doc.otherTermAssignments,
     semester: state.doc.semester,
