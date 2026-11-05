@@ -145,8 +145,8 @@ export function RosterRow({
       </details>
 
       <div className="mt-1 flex items-center justify-end gap-0.5">
-        <span className="mr-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-muted">
-          <GripVertical className="h-4 w-4" aria-hidden /> Drag me
+        <span className="mr-auto hidden items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-sm font-medium text-muted wide:flex">
+          <GripVertical className="h-4 w-4" aria-hidden /> <span className="hidden xwide:inline">Drag me</span>
         </span>
         <button type="button" onClick={onEdit} aria-label={`Edit ${student.name}`} title="Edit" className="rounded-md p-2 text-muted hover:bg-line/40 hover:text-ink">
           <Pencil className="h-4 w-4" aria-hidden />

@@ -18,6 +18,9 @@ import { useLayoutQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
+/** More people than this in one box are shown as a count ("9 working") instead of a name tag each, so a busy box never stretches the whole column. */
+const MAX_NAMES_SHOWN = 3;
+
 /** How long the first time in the pop-up is when a student card is dropped: the shortest allowed shift. */
 const DEFAULT_DROP_MINUTES = MIN_SHIFT_MINUTES;
 
@@ -59,6 +62,10 @@ type CellModel = {
   blockedStart: boolean;
   /** True on the first box of a closed stretch (the Tuesday devotional): only that box shows the word. */
   closedStart: boolean;
+  /** True when too many people work here to show a name tag each (see MAX_NAMES_SHOWN). */
+  crowded: boolean;
+  /** True on the first box of a stretch with the same crowd size: only that box prints the count. */
+  crowdedStart: boolean;
   /** Students who were ALSO working in the box just above: they show as a thin bar, not their initials again. */
   continuing: Set<string>;
 };
@@ -177,7 +184,7 @@ export function ScheduleGrid({
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
           else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, required: closed ? 0 : required, requiredStart: false, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
+        out.set(`${day}|${start}`, { staffIds, need, required: closed ? 0 : required, requiredStart: false, crowded: staffIds.length > MAX_NAMES_SHOWN, crowdedStart: false, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
       }
     }
     // Calmer to read: a shift is drawn as one block (initials once, then a thin bar), and a gap says "Need N" once.
@@ -188,6 +195,7 @@ export function ScheduleGrid({
         here.gapStart = here.need > 0 && above?.need !== here.need;
         here.closedStart = here.closed && !above?.closed;
         here.requiredStart = here.required > 1 && above?.required !== here.required;
+        here.crowdedStart = here.crowded && !(above?.crowded && above.staffIds.length === here.staffIds.length);
         here.blockedStart = here.blockedWhy !== "" && above?.blockedWhy !== here.blockedWhy;
         for (const id of here.staffIds) if (above?.staffIds.includes(id)) here.continuing.add(id);
       });
@@ -493,7 +501,16 @@ export function ScheduleGrid({
                             {cell.blockedWhy}
                           </span>
                         )}
-                        {cell.staffIds.map((id) => {
+                        {cell.crowded &&
+                          (cell.crowdedStart ? (
+                            <span className="relative inline-flex h-8 items-center gap-1 rounded-md bg-accent px-2 text-sm font-bold text-accent-ink" aria-hidden>
+                              {cell.staffIds.length} working
+                              {cell.staffIds.some((id) => problemSlots.has(`${id}|${day}|${slot}`)) && <AlertTriangle className="h-4 w-4 shrink-0" />}
+                            </span>
+                          ) : (
+                            <span className="relative h-full w-2 shrink-0 rounded-full bg-accent/70" aria-hidden />
+                          ))}
+                        {!cell.crowded && cell.staffIds.map((id) => {
                           const s = studentById.get(id);
                           if (!s) return null;
                           const broken = problemSlots.has(`${id}|${day}|${slot}`);

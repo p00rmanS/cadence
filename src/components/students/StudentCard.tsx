@@ -95,8 +95,8 @@ export function StudentCard({
       <div className="mt-1 flex items-center justify-end gap-0.5">
         {/* A grab handle that is not a button: Firefox will not start a drag from a button, so this is the
             spot that always works. (The rest of the card can be dragged too in other browsers.) */}
-        <span className="mr-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-muted">
-          <GripVertical className="h-4 w-4" aria-hidden /> Drag me
+        <span className="mr-auto hidden items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-sm font-medium text-muted wide:flex">
+          <GripVertical className="h-4 w-4" aria-hidden /> <span className="hidden xwide:inline">Drag me</span>
         </span>
         <button
           type="button"

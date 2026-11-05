@@ -37,6 +37,9 @@ type Props = {
   onCancel: () => void;
 };
 
+/** With more other students than this, the "also working" list gets a search box. */
+const SEARCH_AFTER = 8;
+
 /** The numbers of people a manager can ask for at a time. */
 const PEOPLE_CHOICES = [1, 2, 3, 4, 5, 6];
 
@@ -50,6 +53,7 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
   const [day, setDay] = useState<Day>(startDay);
   const [rows, setRows] = useState<TimeRow[]>(startRows);
   const [alsoIds, setAlsoIds] = useState<string[]>([]);
+  const [alsoQuery, setAlsoQuery] = useState("");
   const [people, setPeople] = useState(currentNeed);
 
   const opening = slots[0];
@@ -159,9 +163,23 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
 
         {mode === "add" && others.length > 0 && (
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-base font-semibold">Also working these times with {studentName}</legend>
-            <div className="flex flex-wrap gap-2">
-              {others.map((other) => {
+            <legend className="text-base font-semibold">
+              Also working these times with {studentName}
+              {alsoIds.length > 0 && <span className="ml-2 text-sm font-normal text-muted">({alsoIds.length} picked)</span>}
+            </legend>
+            {/* With 40 or 50 students the list is long, so it can be searched and scrolls inside its own box. */}
+            {others.length > SEARCH_AFTER && (
+              <input
+                type="search"
+                value={alsoQuery}
+                onChange={(e) => setAlsoQuery(e.target.value)}
+                placeholder="Find a student…"
+                aria-label="Find a student to add"
+                className="rounded-lg border border-line bg-bg px-3 py-2 text-base"
+              />
+            )}
+            <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto pr-1">
+              {others.filter((other) => !alsoQuery.trim() || alsoIds.includes(other.id) || other.name.toLowerCase().includes(alsoQuery.trim().toLowerCase())).map((other) => {
                 const on = alsoIds.includes(other.id);
                 return (
                   <label

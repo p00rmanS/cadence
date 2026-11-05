@@ -92,20 +92,22 @@ export function SchedulePanel(props: {
             <button
               type="button"
               onClick={() => setTool("copy")}
-              title="Copy one day's shifts onto other days"
+              aria-label="Copy a day"
+              title="Copy a day: copy one day's shifts onto other days"
               className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 sm:inline-flex"
             >
-              <Copy className="h-4 w-4" aria-hidden /> Copy a day
+              <Copy className="h-4 w-4" aria-hidden /> <span className="wide:hidden xwide:inline">Copy a day</span>
             </button>
           )}
           {view === "grid" && props.onSetStaffing && (
             <button
               type="button"
               onClick={() => setTool("busy")}
-              title="Say which hours need more people"
+              aria-label="Busy times"
+              title="Busy times: say which hours need more people"
               className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 sm:inline-flex"
             >
-              <UsersRound className="h-4 w-4" aria-hidden /> Busy times
+              <UsersRound className="h-4 w-4" aria-hidden /> <span className="wide:hidden xwide:inline">Busy times</span>
             </button>
           )}
           {props.onToggleDetails && (
