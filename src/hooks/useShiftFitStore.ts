@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import { canAssign, isAssigned, softViolations } from "../features/scheduling/availability";
+import { canAssign, isAssigned, shiftRuns, softViolations } from "../features/scheduling/availability";
 import { breakLimit } from "../features/scheduling/term";
 import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
@@ -8,7 +8,7 @@ import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
 import { endSentence, formatMinutes } from "../features/scheduling/time";
-import { DAY_LABEL } from "../features/scheduling/types";
+import { DAY_LABEL, DAY_LONG } from "../features/scheduling/types";
 import { STORAGE_KEY, storage } from "../features/persistence/storage";
 import { createId } from "../lib/id";
 import type {
@@ -118,6 +118,8 @@ export type Action =
   | { type: "CANCEL_OVERRIDE" }
   | { type: "SET_RANGE"; day: Day; from: number; to: number; assign: boolean }
   | { type: "FILL_GAP"; studentId: string; day: Day; from: number; to: number }
+  | { type: "COPY_DAY"; from: Day; to: Day[] }
+  | { type: "SET_STAFFING_NEED"; days: Day[]; from: number; to: number; people: number }
   | { type: "PLACE_SHIFTS"; studentId: string; alsoStudentIds?: string[]; ranges: ShiftRange[]; remove?: ShiftRange; needPeople?: number }
   | { type: "IMPORT_SHIFTS"; entries: { studentId: string; day: Day; start: number; end: number }[] }
   | { type: "SET_SETTINGS"; settings: Partial<ScheduleSettings> }
@@ -439,6 +441,42 @@ export function reducer(state: State, action: Action): State {
       if (!outcome.changed) return { ...state, toast: toast(outcome.message) };
       return commit(state, { ...doc, assignments: outcome.assignments }, `Filled a gap with ${student.name}`, { toast: toast(outcome.message) });
     }
+    case "COPY_DAY": {
+      const step = doc.settings.slotMinutes;
+      const sourceIds = new Set(doc.assignments.filter((a) => a.day === action.from).map((a) => a.studentId));
+      const targets = action.to.filter((day) => day !== action.from);
+      if (!sourceIds.size) return { ...state, toast: toast(`${DAY_LONG[action.from]} has no shifts to copy.`) };
+      if (!targets.length) return { ...state, toast: toast("Pick at least one other day to copy to.") };
+      let working = doc;
+      let added = 0;
+      let skipped = 0;
+      for (const target of targets) {
+        for (const student of doc.students.filter((s) => sourceIds.has(s.id))) {
+          // Each of the student's shifts on the source day is placed as one piece, so a rule that blocks part of it still lets the rest in.
+          for (const run of shiftRuns(student.id, action.from, doc.assignments, doc.settings)) {
+            const outcome = fillRange(working, student, target, run.start, run.end - step, true);
+            working = { ...working, assignments: outcome.assignments };
+            added += outcome.changed;
+            skipped += outcome.skipped;
+          }
+        }
+      }
+      const where = targets.map((d) => DAY_LONG[d]).join(", ");
+      if (added === 0) return { ...state, toast: toast(`Nothing could be copied to ${where}: every shift would break a rule (a class, the weekly hours or the days a student works).`) };
+      const skippedNote = skipped > 0 ? ` ${plural(skipped, "half hour")} could not be copied because they break a rule (a class, hours or days).` : "";
+      return commit(state, working, `Copied ${DAY_LONG[action.from]} to ${where}`, {
+        lastAutofill: null,
+        toast: toast(`Copied ${DAY_LONG[action.from]} to ${where}: ${plural(added, "half hour")} added.${skippedNote}`),
+      });
+    }
+    case "SET_STAFFING_NEED": {
+      let needs = doc.settings.staffingNeeds;
+      for (const day of action.days) {
+        needs = withStaffingNeed({ ...doc.settings, staffingNeeds: needs }, day, action.from, action.to, action.people);
+      }
+      const settings = { ...doc.settings, staffingNeeds: needs?.length ? needs : undefined };
+      return commit(state, { ...doc, settings }, "Changed busy times");
+    }
     case "PLACE_SHIFTS": {
       const main = doc.students.find((s) => s.id === action.studentId);
       if (!main) return state;
@@ -705,6 +743,8 @@ export function useShiftFitStore() {
       toggleSlot: (day: Day, start: number) => dispatch({ type: "TOGGLE_SLOT", day, start }),
       setRange: (day: Day, from: number, to: number, assign: boolean) => dispatch({ type: "SET_RANGE", day, from, to, assign }),
       fillGap: (studentId: string, day: Day, from: number, to: number) => dispatch({ type: "FILL_GAP", studentId, day, from, to }),
+      copyDay: (from: Day, to: Day[]) => dispatch({ type: "COPY_DAY", from, to }),
+      setStaffingNeed: (days: Day[], from: number, to: number, people: number) => dispatch({ type: "SET_STAFFING_NEED", days, from, to, people }),
       placeShifts: (studentId: string, ranges: ShiftRange[], options: { remove?: ShiftRange; alsoStudentIds?: string[]; needPeople?: number } = {}) =>
         dispatch({ type: "PLACE_SHIFTS", studentId, ranges, ...options }),
       importShifts: (entries: { studentId: string; day: Day; start: number; end: number }[]) => dispatch({ type: "IMPORT_SHIFTS", entries }),
