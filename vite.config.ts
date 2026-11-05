@@ -1,10 +1,13 @@
 /// <reference types="vitest/config" />
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-// The ".ts" ending is required here: Vite loads this settings file with Node's own module rules, which need it.
+// The ".ts" endings are required here: Vite loads this settings file with Node's own module rules, which need them.
 import { addCspToHtml } from "./src/lib/contentSecurityPolicy.ts";
+import { buildServiceWorker } from "./src/pwa/serviceWorker.ts";
 
 /**
  * Settings for Vite, the tool that runs the dev server (`npm run dev`) and builds the website
@@ -20,6 +23,38 @@ function contentSecurityPolicyTag(): Plugin {
     name: "shiftfit-content-security-policy",
     apply: "build",
     transformIndexHtml: (html) => addCspToHtml(html, process.env.VITE_AUTOMATION_API_URL),
+  };
+}
+
+/** Every file inside `folder` (and its sub-folders), as paths relative to it with "/" between parts. */
+function listFiles(folder: string, root = folder): string[] {
+  return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(folder, entry.name);
+    return entry.isDirectory() ? listFiles(path, root) : [relative(root, path).split(sep).join("/")];
+  });
+}
+
+/**
+ * After a build, writes the offline helper `sw.js` into the output folder with the exact list of
+ * built files (see `src/pwa/serviceWorker.ts`). Its version code is a fingerprint of every file's
+ * content, so any change to the site gives it a new version and phones pick up the update.
+ */
+function offlineHelper(): Plugin {
+  let outDir = "dist";
+  return {
+    name: "shiftfit-offline-helper",
+    apply: "build",
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    closeBundle() {
+      const files = listFiles(outDir)
+        .filter((file) => file !== "sw.js" && !file.endsWith(".map"))
+        .sort();
+      const hash = createHash("sha256");
+      for (const file of files) hash.update(file).update(readFileSync(join(outDir, file)));
+      writeFileSync(join(outDir, "sw.js"), buildServiceWorker(files, hash.digest("hex").slice(0, 12)));
+    },
   };
 }
 
@@ -76,7 +111,7 @@ export default defineConfig(({ isSsrBuild }) => ({
   // `npm run build:server` packs the server code for Vercel (an "SSR" build, see src/server/vercel.ts).
   // That package must not contain the website's files, so those steps are skipped for it.
   publicDir: isSsrBuild ? false : "public",
-  plugins: isSsrBuild ? [] : [react(), contentSecurityPolicyTag(), screenshotReaderFiles()],
+  plugins: isSsrBuild ? [] : [react(), contentSecurityPolicyTag(), screenshotReaderFiles(), offlineHelper()],
   server: {
     // Respects an assigned PORT (e.g. from .claude/launch.json's autoPort) so this dev server
     // never fights another one for a fixed port; falls back to Vite's usual 5173 otherwise.
