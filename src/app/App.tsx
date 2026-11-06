@@ -256,8 +256,8 @@ export function App({
           // The student list is wider when the roster look is on (it shows free times and filters).
           rosterWide
             ? detailsOpen
-              ? "wide:grid-cols-[minmax(340px,400px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)_minmax(270px,330px)]"
-              : "wide:grid-cols-[minmax(340px,400px)_minmax(0,1fr)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)]"
+              ? "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)_minmax(270px,330px)]"
+              : "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)] xwide:grid-cols-[minmax(380px,450px)_minmax(0,1fr)]"
             : detailsOpen
               ? "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)_minmax(250px,285px)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,330px)]"
               : "wide:grid-cols-[minmax(220px,250px)_minmax(0,1fr)] xwide:grid-cols-[minmax(250px,300px)_minmax(0,1fr)]",
@@ -267,7 +267,10 @@ export function App({
           <StudentRail
             students={students}
             formerStudents={store.formerStudents}
-            wide={rosterWide}
+            // The roster look needs room: it fits the extra-wide layout and the one-column phone/tablet layout,
+            // but not the in-between laptop layout where the student list is a narrow column.
+            wide={rosterWide && (isXWide || !isDesktop)}
+            canToggleWide={isXWide || !isDesktop}
             onToggleWide={toggleRosterWide}
             onLeaving={(id) => setDialog({ kind: "leaving", id })}
             onRestore={store.restoreStudent}

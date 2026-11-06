@@ -36,6 +36,7 @@ export function StudentRail({
   issues,
   selectedStudentId,
   wide,
+  canToggleWide,
   onToggleWide,
   onSelect,
   onEdit,
@@ -55,6 +56,8 @@ export function StudentRail({
   selectedStudentId: string | null;
   /** True when the roster look (wide, with free times and filters) is on. */
   wide: boolean;
+  /** False on screens where the student list is too narrow for the roster look, so its button is not offered. */
+  canToggleWide: boolean;
   onToggleWide: () => void;
   onSelect: (id: string) => void;
   onEdit: (id: string) => void;
@@ -84,23 +87,25 @@ export function StudentRail({
 
   return (
     <section aria-labelledby="students-heading" className="flex h-full min-h-0 flex-col gap-3 bg-panel p-3 sm:p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="students-heading" className="whitespace-nowrap font-display text-lg font-semibold">
           Students
           {students.length > 0 && <span className="ml-1.5 text-base font-normal text-muted">({students.length})</span>}
         </h2>
         <div className="flex items-center gap-1.5">
-          <Button
-            variant="secondary"
-            className="hidden px-2 wide:inline-flex"
-            aria-pressed={wide}
-            aria-label={wide ? "Back to the small student list" : "Open the roster: who is free, who needs hours"}
-            title={wide ? "Back to the small list" : "Roster: who is free, who needs hours"}
-            onClick={onToggleWide}
-          >
-            {wide ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
-            <span className="text-sm">{wide ? "Smaller" : "Roster"}</span>
-          </Button>
+          {canToggleWide && (
+            <Button
+              variant="secondary"
+              className="px-2"
+              aria-pressed={wide}
+              aria-label={wide ? "Back to the small student list" : "Open the roster: who is free, who needs hours"}
+              title={wide ? "Back to the small list" : "Roster: who is free, who needs hours"}
+              onClick={onToggleWide}
+            >
+              {wide ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
+              <span className="text-sm">{wide ? "Smaller" : "Roster"}</span>
+            </Button>
+          )}
           <Button variant="primary" className="shrink-0 whitespace-nowrap px-2.5" onClick={onAddNew}>
             <Plus className="h-4 w-4" aria-hidden /> Add student
           </Button>
