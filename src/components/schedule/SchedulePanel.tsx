@@ -1,16 +1,20 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { CalendarRange, Copy, LayoutGrid, PanelRight, Users, UsersRound } from "lucide-react";
+import { CalendarRange, Copy, LayoutGrid, PanelRight, Printer, Users, UsersRound } from "lucide-react";
 import { ScheduleGrid } from "./ScheduleGrid";
 import { ScheduleList } from "./ScheduleList";
 import { BusyTimesDialog } from "./BusyTimesDialog";
 import { CopyDayDialog } from "./CopyDayDialog";
+import { PrintSchedule } from "./PrintSchedule";
 import { daySlots } from "../../features/scheduling/availability";
 import { openDays } from "../../features/scheduling/days";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
 type View = "grid" | "student" | "day";
+
+/** How long to wait, after pressing Print, before opening the browser's print window (so the clean page has been drawn). */
+const PRINT_DELAY_MS = 60;
 
 const VIEWS: { id: View; label: string; icon: typeof LayoutGrid; hint: string }[] = [
   { id: "grid", label: "Grid", icon: LayoutGrid, hint: "Build and edit the schedule" },
@@ -49,6 +53,24 @@ export function SchedulePanel(props: {
   const days = openDays(props.settings);
   const firstDayWithShifts = days.find((d) => props.assignments.some((a) => a.day === d)) ?? days[0];
   const refs = useRef<Record<View, HTMLButtonElement | null>>({ grid: null, student: null, day: null });
+  // True from pressing "Print schedule" until the print window closes: the clean printed page exists only then.
+  const [printing, setPrinting] = useState(false);
+
+  // Shows the clean page, opens the browser's print window, and removes the page again when printing is over or cancelled.
+  useEffect(() => {
+    if (!printing) return;
+    // This class hides every other printable area (the By student / By day lists) so only the clean page prints.
+    document.documentElement.classList.add("printing-schedule");
+    const finish = () => setPrinting(false);
+    window.addEventListener("afterprint", finish);
+    // A moment later, so the page is on screen before the print window takes its picture of it.
+    const timer = window.setTimeout(() => window.print(), PRINT_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", finish);
+      document.documentElement.classList.remove("printing-schedule");
+    };
+  }, [printing]);
 
   // Left/right arrow keys move between the view tabs (Grid, By student, By day).
   function onKey(e: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -110,6 +132,16 @@ export function SchedulePanel(props: {
               <UsersRound className="h-4 w-4" aria-hidden /> <span className="wide:hidden xwide:inline">Busy times</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setPrinting(true)}
+            disabled={!props.students.length || !props.assignments.length}
+            aria-label="Print schedule"
+            title={props.assignments.length ? "Print a clean page of the whole week with every name" : "Add some shifts first"}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-line/40 disabled:opacity-50"
+          >
+            <Printer className="h-4 w-4" aria-hidden /> <span className="hidden wide:hidden sm:inline xwide:inline">Print</span>
+          </button>
           {props.onToggleDetails && (
             // Only on wide screens: on a phone the "Health" tab at the bottom does this job.
             <button
@@ -140,6 +172,7 @@ export function SchedulePanel(props: {
           <ScheduleList mode={view} students={props.students} assignments={props.assignments} settings={props.settings} onNotify={props.onNotify} />
         )}
       </div>
+      {printing && <PrintSchedule students={props.students} assignments={props.assignments} settings={props.settings} />}
       {tool === "copy" && props.onCopyDay && (
         <CopyDayDialog
           days={days}

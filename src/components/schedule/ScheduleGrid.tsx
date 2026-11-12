@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { AlertTriangle } from "lucide-react";
 import { HelpTip } from "../help/HelpTip";
+import { Segmented } from "../ui/Segmented";
+import { WhoIsWorkingCard } from "./WhoIsWorkingCard";
+import type { WorkingPerson } from "./WhoIsWorkingCard";
 import { assignedHours, canAssign, daySlots, isAssigned, staffAt } from "../../features/scheduling/availability";
 import { describeGap } from "../../features/scheduling/issues";
 import { isDevotional, isOnBreak, studentLimit } from "../../features/scheduling/term";
 import { formatMinutes, initials } from "../../features/scheduling/selectors";
-import { endSentence } from "../../features/scheduling/time";
+import { endSentence, formatRange } from "../../features/scheduling/time";
 import { MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
 import { droppedShift, droppedStudentId, isStudentDrag, startShiftDrag } from "../../lib/studentDrag";
 import { PlaceShiftDialog } from "./PlaceShiftDialog";
@@ -18,8 +21,29 @@ import { useLayoutQuery } from "../../hooks/useMediaQuery";
 import { clsx } from "../../lib/clsx";
 import type { Day, ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../../features/scheduling/types";
 
-/** More people than this in one box are shown as a count ("9 working") instead of a name tag each, so a busy box never stretches the whole column. */
-const MAX_NAMES_SHOWN = 3;
+/** More people than this in one box are shown as a count ("9 working") instead of a tag each, so a busy box never stretches the whole column. */
+const MAX_NAMES_SHOWN = 8;
+
+/** With MORE people than this in a box, each person is a small colored initials tag (two rows of them fit) instead of a name. */
+const FULL_NAMES_UP_TO = 3;
+
+/** Where the manager's choice of 30-minute or 1-hour boxes is remembered in this browser. */
+const BLOCK_SIZE_KEY = "shiftfit:block-size";
+
+/** How long the mouse rests on a box before the "who is working" card shows, so sweeping across the grid doesn't flash cards. */
+const HOVER_DELAY_MS = 220;
+
+/** The two box sizes offered: half-hour boxes (the default) or one-hour boxes. */
+type BlockSize = 30 | 60;
+
+/** Reads the remembered box size; falls back to 30 minutes if the browser won't say. */
+function readBlockSize(): BlockSize {
+  try {
+    return window.localStorage.getItem(BLOCK_SIZE_KEY) === "60" ? 60 : 30;
+  } catch {
+    return 30;
+  }
+}
 
 /** How long the first time in the pop-up is when a student card is dropped: the shortest allowed shift. */
 const DEFAULT_DROP_MINUTES = MIN_SHIFT_MINUTES;
@@ -128,6 +152,11 @@ export function ScheduleGrid({
 
   const [active, setActive] = useState({ row: 0, col: 0 });
   const [info, setInfo] = useState<{ day: Day; start: number } | null>(null);
+  // Half-hour boxes (the default) or one-hour boxes; remembered in this browser.
+  const [blockSize, setBlockSize] = useState<BlockSize>(readBlockSize);
+  // The "who is working" card: which box it is about and where that box is on the screen (null = no card).
+  const [hover, setHover] = useState<{ day: Day; start: number; anchor: { left: number; right: number; top: number } } | null>(null);
+  const hoverTimer = useRef<number | undefined>(undefined);
   const anchor = useRef<Anchor | null>(null);
   // Mouse drag-to-fill: where the press started and how it should act (add or clear), plus a live preview.
   const dragStart = useRef<{ day: Day; start: number; assign: boolean } | null>(null);
@@ -142,6 +171,35 @@ export function ScheduleGrid({
   onRangeRef.current = onRange;
   const cells = useRef(new Map<string, HTMLButtonElement>());
 
+  // Chooses 30-minute or 1-hour boxes and remembers the choice.
+  function chooseBlockSize(size: BlockSize) {
+    setBlockSize(size);
+    setActive({ row: 0, col: active.col });
+    try {
+      window.localStorage.setItem(BLOCK_SIZE_KEY, String(size));
+    } catch {
+      /* the choice just isn't remembered */
+    }
+  }
+
+  // Shows the "who is working" card for a box after a short rest (delay 0 = right away, for keyboard focus).
+  function showHover(day: Day, start: number, element: HTMLElement, delay: number) {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => {
+      const box = element.getBoundingClientRect();
+      setHover({ day, start, anchor: { left: box.left, right: box.right, top: box.top } });
+    }, delay);
+  }
+
+  // Hides the card and cancels one that is about to show.
+  function hideHover() {
+    window.clearTimeout(hoverTimer.current);
+    setHover(null);
+  }
+
+  // A pending card must not appear after the grid is gone.
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
   const studentById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
   // Slots holding a rule-breaking shift, so the cell can show a warning icon (not just a color).
@@ -155,43 +213,84 @@ export function ScheduleGrid({
     return set;
   }, [issues, settings.slotMinutes]);
 
-  // Everything a cell needs, worked out once per data change (not on every hover).
+  // How many half hours make one row of boxes: 1 for the 30-minute view, 2 for the 1-hour view.
+  const perRow = blockSize === 60 ? Math.max(1, Math.round(60 / settings.slotMinutes)) : 1;
+  // The rows, each a list of the half-hour starts it covers (the first one names the row).
+  const rows = useMemo(() => {
+    const out: number[][] = [];
+    for (let i = 0; i < slots.length; i += perRow) out.push(slots.slice(i, i + perRow));
+    return out;
+  }, [slots, perRow]);
+  // Look up a row by its first half hour, and find the last half hour of a row.
+  const rowOf = useMemo(() => new Map(rows.map((r) => [r[0], r])), [rows]);
+  const lastOfRow = (first: number) => {
+    const r = rowOf.get(first);
+    return r ? r[r.length - 1] : first;
+  };
+  const lastOfRowRef = useRef(lastOfRow);
+  lastOfRowRef.current = lastOfRow;
+
+  // Everything a box needs, worked out once per data change (not on every hover). A 1-hour box is made
+  // from its two half hours: everyone who works either half is listed, and it needs as many people as its busiest half.
   const model = useMemo(() => {
     const out = new Map<string, CellModel>();
     for (const day of days) {
-      for (const start of slots) {
-        const staffIds = staffAt(day, start, assignments);
+      for (const rowSlots of rows) {
+        const start = rowSlots[0];
+        const end = rowSlots[rowSlots.length - 1] + settings.slotMinutes;
+        const staffIds: string[] = [];
+        let required = 0;
+        let need = 0;
+        let needSlot = start;
+        let closedAll = true;
+        let mineAll = Boolean(selectedStudent);
+        let blockedAll = Boolean(selectedStudent);
+        let firstViolation: ReturnType<typeof canAssign> = null;
+        let blockedCode = "";
+        for (const slot of rowSlots) {
+          const here = staffAt(day, slot, assignments);
+          for (const id of here) if (!staffIds.includes(id)) staffIds.push(id);
+          const slotClosed = isDevotional(day, slot, settings);
+          if (!slotClosed) closedAll = false;
+          const slotRequired = slotClosed ? 0 : requiredStaff(settings, day, slot);
+          const slotNeed = slotClosed ? 0 : slotRequired - here.length;
+          required = Math.max(required, slotRequired);
+          if (slotNeed > need) {
+            need = slotNeed;
+            needSlot = slot;
+          }
+          const slotMine = selectedStudent ? isAssigned(selectedStudent.id, day, slot, assignments) : false;
+          if (!slotMine) mineAll = false;
+          const violation = selectedStudent && !slotMine ? canAssign(selectedStudent, day, slot, assignments, settings) : null;
+          if (violation && !firstViolation) firstViolation = violation;
+          const slotBlocked = Boolean(
+            violation && (violation.code === "class_conflict" || violation.code === "unavailable" || violation.code === "after_cutoff" || violation.code === "break_conflict" || violation.code === "devotional"),
+          );
+          if (!slotBlocked) blockedAll = false;
+          else if (!blockedCode && violation) blockedCode = violation.code;
+        }
+        const closed = closedAll;
+        const mine = mineAll;
+        const hardBlocked = blockedAll;
         const names = staffIds.map((id) => studentById.get(id)?.name ?? "Unknown");
-        const closed = isDevotional(day, start, settings);
-        const required = requiredStaff(settings, day, start);
-        const need = closed ? 0 : required - staffIds.length;
-        const mine = selectedStudent ? isAssigned(selectedStudent.id, day, start, assignments) : false;
-        const violation = selectedStudent && !mine ? canAssign(selectedStudent, day, start, assignments, settings) : null;
-        const hardBlocked = Boolean(
-          violation && (violation.code === "class_conflict" ||
-            violation.code === "unavailable" ||
-            violation.code === "after_cutoff" ||
-            violation.code === "break_conflict" ||
-          violation.code === "devotional"),
-        );
 
-        let label = `${DAY_LONG[day]} ${formatMinutes(start)} to ${formatMinutes(start + settings.slotMinutes)}.`;
+        let label = `${DAY_LONG[day]} ${formatMinutes(start)} to ${formatMinutes(end)}.`;
         label += names.length ? ` ${endSentence(`Working: ${names.join(", ")}`)}` : " Nobody is working.";
         if (closed) label += " Tuesday devotional. Nobody works now.";
-        else label += need > 0 ? ` Needs ${need} more. ${describeGap(students, assignments, settings, day, start)}` : " Enough people.";
+        else label += need > 0 ? ` Needs ${need} more. ${describeGap(students, assignments, settings, day, needSlot)}` : " Enough people.";
         if (!closed && required > 1) label += ` This time needs ${required} people.`;
         if (selectedStudent) {
           if (mine) label += ` ${selectedStudent.name} is working here. Press to remove.`;
-          else label += violation ? ` ${selectedStudent.name} ${violation.message}.` : ` Press to add ${selectedStudent.name}.`;
+          else label += firstViolation ? ` ${selectedStudent.name} ${firstViolation.message}.` : ` Press to add ${selectedStudent.name}.`;
         }
-        out.set(`${day}|${start}`, { staffIds, need, required: closed ? 0 : required, requiredStart: false, crowded: staffIds.length > MAX_NAMES_SHOWN, crowdedStart: false, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked && violation ? (BLOCKED_WORDS[violation.code] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
+        out.set(`${day}|${start}`, { staffIds, need, required: closed ? 0 : required, requiredStart: false, crowded: staffIds.length > MAX_NAMES_SHOWN, crowdedStart: false, closed, mine, hardBlocked, label, gapStart: false, closedStart: false, blockedWhy: hardBlocked ? (BLOCKED_WORDS[blockedCode] ?? "Cannot work") : "", blockedStart: false, continuing: new Set() });
       }
     }
     // Calmer to read: a shift is drawn as one block (initials once, then a thin bar), and a gap says "Need N" once.
     for (const day of days) {
-      slots.forEach((start, i) => {
-        const here = out.get(`${day}|${start}`)!;
-        const above = i > 0 ? out.get(`${day}|${slots[i - 1]}`) : undefined;
+      rows.forEach((rowSlots, i) => {
+        const here = out.get(`${day}|${rowSlots[0]}`)!;
+        const above = i > 0 ? out.get(`${day}|${rows[i - 1][0]}`) : undefined;
         here.gapStart = here.need > 0 && above?.need !== here.need;
         here.closedStart = here.closed && !above?.closed;
         here.requiredStart = here.required > 1 && above?.required !== here.required;
@@ -201,9 +300,9 @@ export function ScheduleGrid({
       });
     }
     return out;
-  }, [slots, assignments, students, studentById, settings, selectedStudent]);
+  }, [rows, days, assignments, students, studentById, settings, selectedStudent]);
 
-  const row = Math.min(active.row, Math.max(0, slots.length - 1));
+  const row = Math.min(active.row, Math.max(0, rows.length - 1));
   const col = Math.min(active.col, Math.max(0, visibleDays.length - 1));
 
   useEffect(() => {
@@ -212,7 +311,7 @@ export function ScheduleGrid({
 
   // Moves keyboard focus to a box, keeping the row and column inside the grid's edges.
   function focusCell(r: number, c: number) {
-    const rr = Math.max(0, Math.min(slots.length - 1, r));
+    const rr = Math.max(0, Math.min(rows.length - 1, r));
     const cc = Math.max(0, Math.min(visibleDays.length - 1, c));
     setActive({ row: rr, col: cc });
     cells.current.get(`${cc}-${rr}`)?.focus();
@@ -268,7 +367,10 @@ export function ScheduleGrid({
       setTimeout(() => {
         suppressClick.current = false;
       }, 0);
-      onRangeRef.current(from.day, from.start, last.start, from.assign);
+      // In the 1-hour view a box is two half hours, so the end of the stretch is that box's LAST half hour.
+      const lastOf = lastOfRowRef.current;
+      if (last.start >= from.start) onRangeRef.current(from.day, from.start, lastOf(last.start), from.assign);
+      else onRangeRef.current(from.day, lastOf(from.start), last.start, from.assign);
     }
     function cancel() {
       dragStart.current = null;
@@ -304,11 +406,17 @@ export function ScheduleGrid({
   }
 
   // True if this box is inside the stretch a dropped student card would fill (so it can be outlined).
-  const inDrop = (day: Day, slot: number) => dropRange !== null && dropRange.day === day && slot >= dropRange.from && slot <= dropRange.to;
+  const inDrop = (day: Day, rowSlots: number[]) =>
+    dropRange !== null && dropRange.day === day && rowSlots[rowSlots.length - 1] >= dropRange.from && rowSlots[0] <= dropRange.to;
 
   // True if this box is inside the range currently being dragged (so it can be highlighted).
   const inDrag = (day: Day, slot: number) =>
     drag !== null && drag.day === day && slot >= Math.min(drag.from, drag.to) && slot <= Math.max(drag.from, drag.to);
+
+  // The two ends of the stretch from one box to another, stretched over whole rows (so a 1-hour box covers both half hours).
+  function rangeBetween(a: number, b: number): [number, number] {
+    return a <= b ? [a, lastOfRow(b)] : [lastOfRow(a), b];
+  }
 
   // A box was clicked or pressed with Enter/Space. With Shift held, fill from the last box to this one.
   function activate(day: Day, start: number, shift: boolean) {
@@ -318,17 +426,45 @@ export function ScheduleGrid({
     }
     const cell = model.get(`${day}|${start}`);
     if (shift && anchor.current && anchor.current.day === day && anchor.current.start !== start) {
-      onRange(day, anchor.current.start, start, anchor.current.assign);
+      const [from, to] = rangeBetween(anchor.current.start, start);
+      onRange(day, from, to, anchor.current.assign);
       return;
     }
     const mine = cell?.mine ?? false;
-    const allowed = mine || canAssign(selectedStudent, day, start, assignments, settings) === null;
-    onToggle(day, start);
+    const rowSlots = rowOf.get(start) ?? [start];
+    // A box can be used if the student already works it, or if at least one of its half hours is free for them.
+    const allowed =
+      mine || rowSlots.some((slot) => !isAssigned(selectedStudent.id, day, slot, assignments) && canAssign(selectedStudent, day, slot, assignments, settings) === null);
+    // A 1-hour box adds or clears both of its half hours at once; a half-hour box toggles just itself.
+    if (rowSlots.length > 1) onRange(day, rowSlots[0], rowSlots[rowSlots.length - 1], !mine);
+    else onToggle(day, start);
     // Remember what this click meant (add or clear) so Shift+click can extend it — only if it actually worked.
     anchor.current = allowed ? { day, start, assign: !mine } : null;
   }
 
   const selectedHours = selectedStudent ? assignedHours(selectedStudent.id, assignments, settings) : 0;
+
+  // For the pop-up: the student being placed, and their hours this week without the shift being moved (if one is).
+  const placingStudent = placing ? studentById.get(placing.studentId) : undefined;
+  const placingBaseHours = placing
+    ? assignedHours(placing.studentId, assignments, settings) - (placing.moving ? (placing.moving.to - placing.moving.from + settings.slotMinutes) / 60 : 0)
+    : 0;
+
+  // The "who is working" card for the box the mouse (or keyboard) is on: everyone there, with picture, shift and weekly hours.
+  const hoverCell = hover ? model.get(`${hover.day}|${hover.start}`) : undefined;
+  const hoverPeople: WorkingPerson[] =
+    hover && hoverCell
+      ? hoverCell.staffIds
+          .flatMap((id) => {
+            const s = studentById.get(id);
+            if (!s) return [];
+            // In the 1-hour view the person may work only one half of the box; start from the half they work.
+            const mySlot = (rowOf.get(hover.start) ?? [hover.start]).find((slot) => isAssigned(id, hover.day, slot, assignments)) ?? hover.start;
+            const shift = shiftAround(id, hover.day, mySlot);
+            return [{ id, name: s.name, color: s.color, avatar: s.avatar, shift: formatRange(shift.from, shift.to + settings.slotMinutes), hours: assignedHours(id, assignments, settings), limit: studentLimit(s, settings) }];
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [];
   const infoCell = info ? model.get(`${info.day}|${info.start}`) : null;
 
   return (
@@ -337,8 +473,8 @@ export function ScheduleGrid({
         <h2 id="grid-heading" className="font-display text-xl font-semibold">
           {isOnBreak(settings) ? "Break schedule" : "Semester schedule"}
           <HelpTip label="Weekly schedule">
-            Each box is 30 minutes. Pick a student on the left, then click a box to give them that half hour. Click again to take
-            it away. To fill a stretch, drag down a column or hold Shift and click. A blue box means the picked student works
+            Each box is 30 minutes, or one hour if you choose "1 hour" under Box size. Pick a student on the left, then click a box to give
+            them that time. Click again to take it away. Point at a box to see who works it, with their pictures and hours. To fill a stretch, drag down a column or hold Shift and click. A blue box means the picked student works
             that box, and a ⚠ means a rule is broken there. Shifts must be at least 2 hours. The semester and break schedules
             are kept separately: the Semester / Break switch at the top chooses which one you see and change.
           </HelpTip>
@@ -358,6 +494,7 @@ export function ScheduleGrid({
       </div>
 
       {/* Only the three things a manager looks for; the rest is explained behind the "?" above. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
       <ul className="flex flex-wrap gap-x-6 gap-y-1 text-base" aria-label="What the boxes mean">
         <li className="flex items-center gap-2">
           <span className="h-5 w-5 rounded bg-panel ring-1 ring-inset ring-line" aria-hidden /> Enough people
@@ -369,6 +506,21 @@ export function ScheduleGrid({
           <span className="h-5 w-5 rounded bg-line/50" aria-hidden /> Picked student can&apos;t work
         </li>
       </ul>
+      {wide && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-muted">Box size</span>
+          <Segmented<BlockSize>
+            label="Box size"
+            value={blockSize}
+            onChange={chooseBlockSize}
+            options={[
+              { value: 30, label: "30 min" },
+              { value: 60, label: "1 hour" },
+            ]}
+          />
+        </div>
+      )}
+      </div>
 
       {!wide && (
         <div role="group" aria-label="Choose a day" className="flex gap-1">
@@ -389,7 +541,7 @@ export function ScheduleGrid({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto soft-shadow rounded-xl border border-line bg-panel">
+      <div className="min-h-0 flex-1 overflow-auto soft-shadow rounded-xl border border-line bg-panel" onScroll={hideHover}>
         <table role="grid" aria-label="Weekly schedule. Use the arrow keys to move between boxes." className="w-full min-w-[280px] select-none border-separate border-spacing-0">
           <thead>
             <tr>
@@ -405,13 +557,18 @@ export function ScheduleGrid({
             </tr>
           </thead>
           <tbody
-            onMouseLeave={() => setInfo(null)}
+            onMouseLeave={() => {
+              setInfo(null);
+              hideHover();
+            }}
             onDragLeave={(e) => {
               // Leaving the table altogether (not just moving between two boxes) clears the outline.
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropRange(null);
             }}
           >
-            {slots.map((slot, r) => (
+            {rows.map((rowSlots, r) => {
+              const slot = rowSlots[0];
+              return (
               <tr key={slot}>
                 <th
                   scope="row"
@@ -425,6 +582,8 @@ export function ScheduleGrid({
                 {visibleDays.map((day, c) => {
                   const cell = model.get(`${day}|${slot}`)!;
                   const isActive = r === row && c === col;
+                  // Four to eight people: a small colored initials tag each, in up to two rows. Fewer: names.
+                  const compact = !cell.crowded && cell.staffIds.length > FULL_NAMES_UP_TO;
                   return (
                     <td
                       key={day}
@@ -441,13 +600,19 @@ export function ScheduleGrid({
                         aria-label={cell.label}
                         aria-pressed={selectedStudent ? cell.mine : undefined}
                         aria-disabled={cell.hardBlocked ? true : undefined}
-                        onFocus={() => {
+                        onFocus={(e) => {
                           setActive({ row: r, col: c });
                           setInfo({ day, start: slot });
+                          if (wide && !drag) showHover(day, slot, e.currentTarget, 0);
                         }}
-                        onMouseEnter={() => setInfo({ day, start: slot })}
+                        onBlur={hideHover}
+                        onMouseEnter={(e) => {
+                          setInfo({ day, start: slot });
+                          if (wide && !dragStart.current) showHover(day, slot, e.currentTarget, HOVER_DELAY_MS);
+                        }}
                         onDragOver={(e) => {
                           if (!onPlaceShifts || !isStudentDrag(e)) return;
+                          hideHover();
                           e.preventDefault(); // this is what tells the browser "yes, dropping here is allowed"
                           e.dataTransfer.dropEffect = "copy";
                           if (dropRange?.day !== day || dropRange.from !== slot) setDropRange(dropRangeAt(day, slot));
@@ -470,6 +635,7 @@ export function ScheduleGrid({
                           });
                         }}
                         onPointerDown={(e) => {
+                          hideHover();
                           // Picking up a shift to move it is not the click-and-drag "fill" gesture.
                           if ((e.target as HTMLElement).closest("[draggable=true]")) return;
                           beginDrag(e, day, slot);
@@ -481,9 +647,10 @@ export function ScheduleGrid({
                           activate(day, slot, e.shiftKey);
                         }}
                         className={clsx(
-                          "relative flex h-11 w-full min-w-[72px] items-center gap-1 overflow-hidden rounded-md px-1 text-left transition duration-100 ease-out",
+                          "relative flex w-full min-w-[72px] items-center gap-1 overflow-hidden rounded-md px-1 text-left transition duration-100 ease-out",
+                          perRow > 1 ? "h-16" : "h-11",
                           cell.mine ? "bg-accent/25" : cell.closed || cell.blockedWhy ? "bg-line/40" : cell.need > 0 ? "border-l-4 border-gap bg-gap-bg" : "bg-transparent",
-                          inDrop(day, slot) && "outline outline-2 -outline-offset-2 outline-accent",
+                          inDrop(day, rowSlots) && "outline outline-2 -outline-offset-2 outline-accent",
                           inDrag(day, slot) &&
                             (drag?.assign
                               ? "bg-accent/25 outline outline-2 -outline-offset-2 outline-accent"
@@ -510,7 +677,29 @@ export function ScheduleGrid({
                           ) : (
                             <span className="relative h-full w-2 shrink-0 rounded-full bg-accent/70" aria-hidden />
                           ))}
-                        {!cell.crowded && cell.staffIds.map((id) => {
+                        {compact && (
+                          <span className="relative flex min-w-0 flex-wrap content-center items-center gap-[3px]" aria-hidden>
+                            {cell.staffIds.map((id) => {
+                              const s = studentById.get(id);
+                              if (!s) return null;
+                              const broken = problemSlots.has(`${id}|${day}|${slot}`);
+                              return (
+                                <span
+                                  key={id}
+                                  draggable={Boolean(onPlaceShifts)}
+                                  title={onPlaceShifts ? `Drag ${s.name}'s shift to another time or day` : s.name}
+                                  onDragStart={onPlaceShifts ? (e: DragEvent<HTMLSpanElement>) => startShiftDrag(e, id, shiftAround(id, day, slot)) : undefined}
+                                  className="inline-flex h-[18px] min-w-[26px] cursor-grab items-center justify-center gap-0.5 rounded px-1 text-[10px] font-bold leading-none text-white"
+                                  style={{ backgroundColor: s.color }}
+                                >
+                                  {initials(s.name)}
+                                  {broken && <AlertTriangle className="h-3 w-3 shrink-0" />}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        )}
+                        {!cell.crowded && !compact && cell.staffIds.map((id) => {
                           const s = studentById.get(id);
                           if (!s) return null;
                           const broken = problemSlots.has(`${id}|${day}|${slot}`);
@@ -553,7 +742,8 @@ export function ScheduleGrid({
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -567,6 +757,15 @@ export function ScheduleGrid({
             : "Point at a box to see who is working."}
       </p>
 
+      {hover && hoverCell && hoverPeople.length > 0 && !placing && !drag && (
+        <WhoIsWorkingCard
+          title={`${DAY_LONG[hover.day]}, ${formatRange(hover.start, lastOfRow(hover.start) + settings.slotMinutes)}`}
+          summary={`${hoverPeople.length} working · ${hoverCell.need > 0 ? `Needs ${hoverCell.need} more` : "Enough people"}`}
+          people={hoverPeople}
+          anchor={hover.anchor}
+        />
+      )}
+
       {placing && onPlaceShifts && (
         <PlaceShiftDialog
           studentName={studentById.get(placing.studentId)?.name ?? "this student"}
@@ -577,7 +776,11 @@ export function ScheduleGrid({
           slots={slots}
           slotMinutes={settings.slotMinutes}
           onCancel={() => setPlacing(null)}
-          others={students.filter((s) => s.id !== placing.studentId).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
+          others={students
+            .filter((s) => s.id !== placing.studentId)
+            .map((s) => ({ id: s.id, name: s.name, color: s.color, hours: assignedHours(s.id, assignments, settings), limit: studentLimit(s, settings) }))}
+          baseHours={placingBaseHours}
+          hourLimit={placingStudent ? studentLimit(placingStudent, settings) : settings.weeklyTargetHours}
           currentNeed={requiredStaff(settings, placing.day, placing.rows[0].from)}
           onConfirm={(day, rows, extra) => {
             // The dialog's end time is when they stop; the store wants the last half hour they work.

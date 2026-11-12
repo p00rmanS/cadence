@@ -6,7 +6,7 @@ import { buildDemoData } from "../features/scheduling/demo-data";
 import { STORAGE_KEY } from "../features/persistence/storage";
 
 /**
- * With 40 or 50 students many people can work the same half hour. A box with too many name tags would
+ * With 40 or 50 students many people can work the same half hour. A box with more than eight tags would
  * stretch its whole column and push the week off the screen, so a busy box shows a count ("5 working")
  * instead, while a screen reader still hears every name.
  */
@@ -33,14 +33,14 @@ function renderWithCrowd(count: number) {
 
 describe("a box with many people working", () => {
   it("shows a count once instead of a name tag for everyone, and still names everyone for screen readers", () => {
-    renderWithCrowd(5);
+    renderWithCrowd(9);
     const first = screen.getByRole("button", { name: /^Monday 7:00am to 7:30am/ });
-    expect(first.textContent).toMatch(/5 working/);
+    expect(first.textContent).toMatch(/9 working/);
     // the box below it has the same crowd, so it only draws a thin bar and does not repeat the count
     expect(screen.getByRole("button", { name: /^Monday 7:30am to 8:00am/ }).textContent).not.toMatch(/working/);
     // everyone is still named in the spoken description
     const spoken = first.getAttribute("aria-label") ?? "";
-    for (const name of buildDemoData().students.slice(0, 5).map((s) => s.name)) expect(spoken).toContain(name);
+    for (const name of buildDemoData().students.slice(0, 9).map((s) => s.name)) expect(spoken).toContain(name);
   });
 
   it("still shows each name when only a few people work the box", () => {

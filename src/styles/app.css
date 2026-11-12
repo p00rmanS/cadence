@@ -170,6 +170,18 @@ html[data-motion="reduced"] *::after {
   .no-print {
     display: none !important;
   }
+  /* While the clean "Print schedule" page is printing, no other printable area (the By student / By day lists) joins it. */
+  .printing-schedule .print-area:not(.print-schedule-area) {
+    display: none !important;
+  }
+  /* The clean schedule page is printed sideways (landscape), which suits seven-day tables with many names. */
+  .print-schedule-area {
+    page: schedule;
+  }
+  @page schedule {
+    size: landscape;
+    margin: 0.4in;
+  }
 }
 
 /* LogoLoader (src/components/ui/LogoLoader.tsx): the three bars brighten one after another,

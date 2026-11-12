@@ -53,7 +53,14 @@ export const MAX_DAYS_PER_WEEK = 6;
 /** Most breaks one student can have in a day. Three covers lunch plus two short rests on a long day. */
 export const MAX_BREAKS = 3;
 
-export const MIN_STAFF_OPTIONS = [1, 2];
+/** The "People needed at once" choices in the top bar: one person up to seven (a busy hour with a full crew). */
+export const MIN_STAFF_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
+
+/** The most people a single time can ask for (matches the limit the saved-data check allows). */
+export const MAX_PEOPLE_AT_ONCE = 10;
+
+/** The numbers shown when a manager says how many people one time needs: 1 up to MAX_PEOPLE_AT_ONCE. */
+export const PEOPLE_CHOICES = Array.from({ length: MAX_PEOPLE_AT_ONCE }, (_, i) => i + 1);
 
 /** The clock time a "required opening shift" must start at. Independent of the visible open-hours view. */
 export const OPENING_SHIFT_START: Minutes = 7 * 60;

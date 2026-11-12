@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Download, FileSpreadsheet, RotateCcw, Save, Send, Trash2, Upload, X } from "lucide-react";
+import { Download, ExternalLink, FileSpreadsheet, MonitorSmartphone, RotateCcw, Save, Send, Trash2, Upload, Users, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { LogoLoader } from "../ui/LogoLoader";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -10,6 +10,8 @@ import { CopyButton } from "../share/CopyField";
 import { buildShiftsCode, shiftsLink } from "../../features/sharing/links";
 import { MAX_BACKUP_BYTES, exportBackup, parseBackup } from "../../features/persistence/storage";
 import { shiftsToCsv } from "../../features/scheduling/blocks";
+import { scheduleToText } from "../../features/scheduling/summary";
+import { installApp, isInstalledApp, useInstallOffer } from "../../lib/pwa";
 import { isIsoDate, isValidTimeZone } from "../../features/scheduling/time";
 import { downloadTextFile, todayStamp } from "../../lib/download";
 import { buildPublishRequest, scheduleForServer, summarizePublish } from "../../services/automation/contracts";
@@ -100,6 +102,8 @@ export function SaveShareDialog(props: Props) {
   const [lastPublish, setLastPublish] = useState<{ version: string; summary: PublishSummary } | null>(null);
   const [removeMessage, setRemoveMessage] = useState<string | null>(null);
   const signedIn = useManagerSession();
+  // True while the browser is offering to install Syncro as an app (Chrome and Edge make the offer).
+  const canInstall = useInstallOffer();
   // With a real server, nothing can be sent until a manager has signed in on this tab.
   const needsSignIn = client.kind === "server" && !signedIn;
   const oldEvents = lastPublish?.summary.staleShiftIds ?? [];
@@ -240,6 +244,51 @@ export function SaveShareDialog(props: Props) {
                 <Upload className="h-4 w-4" aria-hidden /> Load a backup file
               </Button>
             </div>
+          </Section>
+
+          <Section
+            icon={<Users className="h-4 w-4" aria-hidden />}
+            title="Share to Microsoft Teams"
+            help="Copy the whole week as plain text, open Teams, and paste it into a chat or channel. For a picture-perfect version, press Print schedule, choose Save as PDF, and attach that file in Teams."
+          >
+            <div className="flex flex-wrap gap-2">
+              <CopyButton
+                text={() => scheduleToText(students, assignments, settings, "day")}
+                label="Copy schedule for Teams"
+                copiedLabel="Copied. Now paste it in Teams"
+                ariaLabel="Copy the schedule as text to paste into Microsoft Teams"
+                disabled={!hasShifts}
+              />
+              <a
+                href="https://teams.microsoft.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2 text-sm font-medium hover:bg-line/30"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden /> Open Teams
+              </a>
+            </div>
+            {!hasShifts && <p className="mt-2 text-xs text-muted">Add some shifts first.</p>}
+          </Section>
+
+          <Section
+            icon={<MonitorSmartphone className="h-4 w-4" aria-hidden />}
+            title="Use Syncro as an app"
+            help="Put Syncro on your computer, phone or tablet like a normal app, with its own icon and window. It opens even without internet, and your schedule stays on that device."
+          >
+            {isInstalledApp() ? (
+              <p className="text-sm">You are already using Syncro as an app.</p>
+            ) : canInstall ? (
+              <Button variant="primary" onClick={() => void installApp()}>
+                <Download className="h-4 w-4" aria-hidden /> Install Syncro
+              </Button>
+            ) : (
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                <li>Chrome or Edge on a computer: press the install icon at the right end of the address bar, or open the menu and choose Install Syncro.</li>
+                <li>iPhone or iPad: open this page in Safari, press Share, then Add to Home Screen.</li>
+                <li>Android: open the browser menu and choose Install app (or Add to Home screen).</li>
+              </ul>
+            )}
           </Section>
 
           <Section icon={<FileSpreadsheet className="h-4 w-4" aria-hidden />} title="Spreadsheet" help="A simple table of who works when, one row per shift. Opens in Excel or Google Sheets.">

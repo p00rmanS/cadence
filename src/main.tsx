@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Root } from "./app/Root";
+import { listenForInstallOffer, registerOfflineHelper } from "./lib/pwa";
 
 /**
  * The real entry point: the one line that tells the browser "render the
@@ -39,3 +40,7 @@ function hideSplash(): void {
 }
 
 hideSplash();
+
+// Lets Syncro be installed as an app and opened with no internet (see src/lib/pwa.ts).
+listenForInstallOffer();
+registerOfflineHelper();
