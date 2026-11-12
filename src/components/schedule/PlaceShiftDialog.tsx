@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
-import { MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
+import { MIN_SHIFT_MINUTES, PEOPLE_CHOICES } from "../../features/scheduling/constants";
 import { formatMinutes } from "../../features/scheduling/selectors";
 import { DAY_LONG } from "../../features/scheduling/types";
 import type { Day } from "../../features/scheduling/types";
@@ -28,8 +28,11 @@ type Props = {
   /** Every half-hour the office is open (the first one is opening time). */
   slots: number[];
   slotMinutes: number;
-  /** The other students, so a pair (or more) can be put on the same times at once. */
-  others: { id: string; name: string; color: string }[];
+  /** The other students, so a pair (or more) can be put on the same times at once, with the hours each has so far. */
+  others: { id: string; name: string; color: string; hours: number; limit: number }[];
+  /** Hours this student already has this week, NOT counting the shift being moved (if one is), and the most they should have. */
+  baseHours: number;
+  hourLimit: number;
   /** How many people these times need right now (shown as the starting answer). */
   currentNeed: number;
   /** `needPeople` is only sent when the manager changed the answer. */
@@ -40,8 +43,6 @@ type Props = {
 /** With more other students than this, the "also working" list gets a search box. */
 const SEARCH_AFTER = 8;
 
-/** The numbers of people a manager can ask for at a time. */
-const PEOPLE_CHOICES = [1, 2, 3, 4, 5, 6];
 
 /** How long a new second row lasts when "Add another time" is pressed (the shortest normal shift). */
 const NEW_ROW_MINUTES = MIN_SHIFT_MINUTES;
@@ -49,7 +50,7 @@ const NEW_ROW_MINUTES = MIN_SHIFT_MINUTES;
 const NEW_ROW_GAP_MINUTES = 60;
 
 /** The dialog: a day picker, one or more From/To rows, an "Add another time" button and the confirm button. */
-export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows: startRows, slots, slotMinutes, others, currentNeed, onConfirm, onCancel }: Props) {
+export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows: startRows, slots, slotMinutes, others, baseHours, hourLimit, currentNeed, onConfirm, onCancel }: Props) {
   const [day, setDay] = useState<Day>(startDay);
   const [rows, setRows] = useState<TimeRow[]>(startRows);
   const [alsoIds, setAlsoIds] = useState<string[]>([]);
@@ -76,6 +77,10 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
   const problems = rows.map((row) => (row.to <= row.from ? "The end must be after the start." : ""));
   const shortShift = rows.some((row) => row.to > row.from && row.to - row.from < MIN_SHIFT_MINUTES);
   const canConfirm = problems.every((p) => p === "");
+  // The hours these times add, and what the week would then total, so the manager sees the hours before saying yes.
+  const addedHours = rows.reduce((sum, row) => sum + Math.max(0, row.to - row.from) / 60, 0);
+  const totalHours = baseHours + addedHours;
+  const overLimit = totalHours > hourLimit;
   const selectClass = "rounded-lg border border-line bg-panel px-2 py-2 text-base font-semibold";
 
   return (
@@ -95,6 +100,10 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
       }
     >
       <div className="flex flex-col gap-4">
+        <p className={`rounded-lg px-3 py-2 text-base ${overLimit ? "bg-gap-bg" : "bg-bg"}`} aria-live="polite">
+          {studentName} has <strong>{baseHours}</strong> of {hourLimit} hours this week. These times add <strong>{addedHours}</strong>, making{" "}
+          <strong>{totalHours}</strong> of {hourLimit}.{overLimit && <span className="font-semibold"> That is over their weekly limit.</span>}
+        </p>
         <label className="flex flex-wrap items-center gap-2 text-base">
           <span className="font-semibold">Day</span>
           <select value={day} onChange={(e) => setDay(e.target.value as Day)} className={selectClass}>
@@ -193,6 +202,9 @@ export function PlaceShiftDialog({ studentName, mode, day: startDay, days, rows:
                     />
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: other.color }} aria-hidden />
                     {other.name}
+                    <span className="text-sm font-normal text-muted">
+                      {other.hours}/{other.limit} hrs
+                    </span>
                   </label>
                 );
               })}

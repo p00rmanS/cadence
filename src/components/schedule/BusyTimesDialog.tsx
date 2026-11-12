@@ -3,6 +3,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { formatMinutes } from "../../features/scheduling/selectors";
+import { MAX_PEOPLE_AT_ONCE, PEOPLE_CHOICES } from "../../features/scheduling/constants";
 import { DAY_LABEL, DAY_LONG } from "../../features/scheduling/types";
 import type { Day, ScheduleSettings } from "../../features/scheduling/types";
 
@@ -13,9 +14,6 @@ import type { Day, ScheduleSettings } from "../../features/scheduling/types";
  * pink, so the manager can see what is short before filling it. The same list can also be set while
  * placing a student; this window is for when no one is being placed.
  */
-
-/** The numbers of people a manager can ask for. */
-const PEOPLE_CHOICES = [1, 2, 3, 4, 5, 6];
 
 export function BusyTimesDialog({
   settings,
@@ -36,7 +34,7 @@ export function BusyTimesDialog({
   const [picked, setPicked] = useState<Day[]>(days.filter((d) => d !== "sat"));
   const [from, setFrom] = useState(slots.find((s) => s >= 11 * 60) ?? slots[0]);
   const [to, setTo] = useState(Math.min(from + 120, slots[slots.length - 1] + step));
-  const [people, setPeople] = useState(Math.min(settings.minStaffPerSlot + 1, 6));
+  const [people, setPeople] = useState(Math.min(settings.minStaffPerSlot + 1, MAX_PEOPLE_AT_ONCE));
 
   // The same hours on several days are shown as one line ("Mon, Tue, Wed 11:00am to 1:00pm"), since a manager thinks of them as one rule.
   const groups: { days: Day[]; from: number; to: number; people: number }[] = [];
