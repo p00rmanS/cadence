@@ -28,6 +28,9 @@ const FILTERS: { value: RosterFilter; label: string }[] = [
   { value: "graduating", label: "Graduating" },
 ];
 
+/** From this many students on, the small list switches to tight cards so the whole team fits without endless scrolling. */
+const COMPACT_LIST_FROM = 9;
+
 export function StudentRail({
   students,
   formerStudents,
@@ -112,7 +115,7 @@ export function StudentRail({
         </div>
       </div>
       <p className="text-sm text-muted">
-        Drag a name onto a time, or click a name and then the times.{" "}
+        Drag a name onto a time, or click a name and then the times. Click a name to edit or remove it.{" "}
         <button type="button" onClick={onAddMany} className="font-medium text-accent underline underline-offset-2">
           Add several at once
         </button>
@@ -187,6 +190,7 @@ export function StudentRail({
               limitHours={studentLimit(entry.student, settings)}
               selected={entry.student.id === selectedStudentId}
               issueCount={issueCountOf(entry.student.id)}
+              compact={students.length >= COMPACT_LIST_FROM}
               onSelect={() => onSelect(entry.student.id)}
               onEdit={() => onEdit(entry.student.id)}
               onLeaving={() => onLeaving(entry.student.id)}

@@ -11,7 +11,9 @@ import type { StudentSummary } from "../../features/scheduling/selectors";
  * attention (over hours, missing opening shift, an unfixed problem). Preference, days-per-week,
  * cutoff and breaks are real settings, but they're settings, not status — they live in the Edit
  * form (`StudentFormSheet`), not repeated as a line of text on every card, so a roster of 20
- * doesn't read as a wall of text. Purely display — every number here is pre-computed by
+ * doesn't read as a wall of text. With a long roster (see `compact`) each card shrinks to a name and one
+ * short line, and the Edit / Leaving / Remove icons show only on the picked student, so 20 or more students fit
+ * on one screen without a wall of buttons. Purely display — every number here is pre-computed by
  * `summarizeStudent` in `../../features/scheduling/selectors.ts`.
  */
 export function StudentCard({
@@ -20,6 +22,7 @@ export function StudentCard({
   limitHours,
   selected,
   issueCount,
+  compact = false,
   onSelect,
   onEdit,
   onLeaving,
@@ -31,6 +34,8 @@ export function StudentCard({
   limitHours: number;
   selected: boolean;
   issueCount: number;
+  /** True for a long roster: a tighter card whose housekeeping icons show only while this student is picked. */
+  compact?: boolean;
   onSelect: () => void;
   onEdit: () => void;
   /** Opens the window for a student who is leaving or graduating. */
@@ -39,11 +44,13 @@ export function StudentCard({
 }) {
   const { student, hours, pctOfTarget, atTarget, needsOpeningShift, openingShiftSatisfied } = summary;
   const over = hours > limitHours;
+  // The tight card has room for only a few words, so it drops the word "hours" from the amounts.
+  const amount = (value: number) => (compact ? String(value) : hoursLabel(value));
   const status = over
-    ? { text: `Over by ${hoursLabel(hours - limitHours)}`, icon: AlertTriangle, cls: "text-warn" }
+    ? { text: `Over by ${amount(hours - limitHours)}`, icon: AlertTriangle, cls: "text-warn" }
     : atTarget
       ? { text: "At their hours", icon: CheckCircle2, cls: "text-ok" }
-      : { text: `Needs ${hoursLabel(targetHours - hours)} more`, icon: Clock, cls: "text-warn" };
+      : { text: `Needs ${amount(targetHours - hours)} more`, icon: Clock, cls: "text-warn" };
   const StatusIcon = status.icon;
 
   return (
@@ -52,7 +59,12 @@ export function StudentCard({
       draggable
       onDragStart={(e) => startStudentDrag(e, student.id)}
       title="Drag onto a time in the schedule, or click to pick"
-      className={clsx("mb-2 cursor-grab rounded-xl border border-line border-l-4 bg-panel p-3 transition duration-150 hover:-translate-y-px hover:shadow-md active:cursor-grabbing", selected && "ring-2 ring-accent")}
+      data-compact={compact ? "true" : undefined}
+      className={clsx(
+        "cursor-grab rounded-xl border border-line border-l-4 bg-panel transition duration-150 hover:-translate-y-px hover:shadow-md active:cursor-grabbing",
+        compact ? "mb-1.5 p-2" : "mb-2 p-3",
+        selected && "ring-2 ring-accent",
+      )}
       style={{ borderLeftColor: student.color }}
     >
       {/* One real button owns "pick this student"; Edit and Remove are siblings, never nested inside it. */}
@@ -67,15 +79,15 @@ export function StudentCard({
           )}
           {selected && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">Selected</span>}
         </div>
-        <p className="mt-1.5 text-sm">
+        <p className={clsx(compact ? "mt-1 whitespace-nowrap text-xs" : "mt-1.5 text-sm")}>
           <span className="font-semibold">{hours}</span>
-          <span className="text-muted"> of {hoursLabel(targetHours)} · </span>
+          <span className="text-muted"> of {compact ? targetHours : hoursLabel(targetHours)} · </span>
           <span className={clsx("inline-flex items-center gap-1 font-medium", status.cls)}>
             <StatusIcon className="h-3.5 w-3.5" aria-hidden />
             {status.text}
           </span>
         </p>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-line" aria-hidden>
+        <div className={clsx("overflow-hidden rounded-full bg-line", compact ? "mt-1 h-1" : "mt-1.5 h-2")} aria-hidden>
           <div className={clsx("h-full transition-[width] duration-500 ease-out", over ? "bg-warn" : atTarget ? "bg-ok" : "bg-accent")} style={{ width: `${pctOfTarget}%` }} />
         </div>
         {needsOpeningShift && (
@@ -92,7 +104,8 @@ export function StudentCard({
       </button>
       {/* Icon-only, same quiet treatment as the header's secondary buttons — the name/state that
           matters is above, in the button that picks this student; these two are housekeeping. */}
-      <div className="mt-1 flex items-center justify-end gap-0.5">
+      {/* In a long list the icons stay out of the way until this student is picked (the class is plain, so a screen reader and the keyboard still reach them). */}
+      <div className={clsx("mt-1 flex items-center justify-end gap-0.5", compact && !selected && "hidden")}>
         {/* A grab handle that is not a button: Firefox will not start a drag from a button, so this is the
             spot that always works. (The rest of the card can be dragged too in other browsers.) */}
         <span className="mr-auto hidden items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-sm font-medium text-muted wide:flex">
