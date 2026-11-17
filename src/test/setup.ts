@@ -1,4 +1,8 @@
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
+
+// Tests that exercise the app's behavior use the older 20-student roster (see fixtures/legacy-demo-data.ts).
+// The real 25-student sample is tested directly in sample-roster.test.ts, which asks for the real file.
+vi.mock("../features/scheduling/demo-data", async () => await import("./fixtures/legacy-demo-data"));
 
 /**
  * jsdom has no layout and no matchMedia. Tests behave like a wide desktop window unless a

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validatePersistedState } from "../features/scheduling/validation";
-import { DEFAULT_SETTINGS } from "../features/scheduling/constants";
+import { DEFAULT_SETTINGS, MAX_ASSIGNMENTS } from "../features/scheduling/constants";
 import { makeStudent, slot } from "./testkit";
 import type { PersistedStateV1 } from "../features/scheduling/types";
 
@@ -100,7 +100,7 @@ describe("validatePersistedState", () => {
   });
 
   it("caps the size of a backup", () => {
-    const many = Array.from({ length: 5001 }, (_, i) => slot("s1", "mon", (i % 40) * 30));
+    const many = Array.from({ length: MAX_ASSIGNMENTS + 1 }, (_, i) => slot("s1", "mon", (i % 40) * 30));
     fails(state({ assignments: many }));
   });
 

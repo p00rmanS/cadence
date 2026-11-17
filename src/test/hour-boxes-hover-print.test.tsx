@@ -9,7 +9,7 @@ import { STORAGE_KEY } from "../features/persistence/storage";
 /**
  * Features asked for in the meeting with the manager: one-hour boxes next to half-hour boxes, a small
  * "who is working" card on hover (with pictures and hours), a clean printed schedule, hours shown while
- * placing someone, room for seven or more people in one hour, and a 20-student sample.
+ * placing someone, room for seven or more people in one hour, (the sample roster itself is tested in sample-roster.test.ts).
  */
 
 beforeEach(() => {
@@ -52,12 +52,6 @@ function makeDataTransfer() {
     dropEffect: "",
   };
 }
-
-describe("the sample roster", () => {
-  it("has twenty made-up students", () => {
-    expect(buildDemoData().students).toHaveLength(20);
-  });
-});
 
 describe("how many people a time can need", () => {
   it("offers up to seven in the top bar and up to ten when placing or in Busy times", () => {

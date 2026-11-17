@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { canAssign, isAssigned, shiftRuns, softViolations } from "../features/scheduling/availability";
 import { breakLimit } from "../features/scheduling/term";
 import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
-import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
+import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_ASSIGNMENTS, MAX_STUDENTS, NO_CUTOFF, SLOW_AUTOFILL_STUDENTS, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
@@ -213,6 +213,11 @@ export function initialState(): State {
  * `label`, e.g. "Auto-fill"). Any "redo" steps are cleared, since the history has now branched.
  */
 function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {}): State {
+  // A schedule bigger than the saved-data limit would save fine but be refused when reloaded, wiping it.
+  // So any change that would pass the limit is declined here, whichever action asked for it.
+  if (doc.assignments.length > MAX_ASSIGNMENTS || doc.otherTermAssignments.length > MAX_ASSIGNMENTS) {
+    return { ...state, toast: toast(`That would make more than ${MAX_ASSIGNMENTS.toLocaleString("en-US")} shift boxes, more than Syncro can save, so nothing was changed.`) };
+  }
   return {
     ...state,
     doc,
@@ -676,6 +681,9 @@ export function useShiftFitStore() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  // True while a big auto-fill is about to run, so the page can say "Building the schedule" before it freezes.
+  const [autoFilling, setAutoFilling] = useState(false);
+  const autoFillingRef = useRef(false);
 
   // Auto-save: any time the schedule data changes, write it to localStorage.
   // If the browser refuses to save (storage full/blocked), flag it so the UI
@@ -752,7 +760,26 @@ export function useShiftFitStore() {
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
       setSettings: (settings: Partial<ScheduleSettings>) => dispatch({ type: "SET_SETTINGS", settings }),
       setSemester: (semester: SemesterConfig | null) => dispatch({ type: "SET_SEMESTER", semester }),
-      runAutoFill: (replace = false) => dispatch({ type: "AUTOFILL", replace }),
+      runAutoFill: (replace = false) => {
+        // Small rosters fill instantly, so just do it.
+        if (stateRef.current.doc.students.length < SLOW_AUTOFILL_STUDENTS) {
+          dispatch({ type: "AUTOFILL", replace });
+          return;
+        }
+        // A big roster freezes the page for a few seconds. Show the message first, wait for the browser
+        // to actually draw it, then run the fill. A second press while one is running is ignored.
+        if (autoFillingRef.current) return;
+        autoFillingRef.current = true;
+        setAutoFilling(true);
+        window.setTimeout(() => {
+          try {
+            dispatch({ type: "AUTOFILL", replace });
+          } finally {
+            autoFillingRef.current = false;
+            setAutoFilling(false);
+          }
+        }, 60);
+      },
       clearShifts: () => dispatch({ type: "CLEAR_SHIFTS" }),
       resetDemo: () => dispatch({ type: "RESET_DEMO" }),
       clearAll: () => dispatch({ type: "CLEAR_ALL" }),
@@ -776,6 +803,7 @@ export function useShiftFitStore() {
     toast: state.toast,
     pendingOverride: state.pendingOverride,
     lastAutofill: state.lastAutofill,
+    autoFilling,
     saveFailed: state.saveFailed,
     otherTabChanged: state.otherTabChanged,
     canUndo: state.past.length > 0,

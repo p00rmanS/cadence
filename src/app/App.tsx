@@ -225,6 +225,12 @@ export function App({
         onThemeChange={setTheme}
       />
       <NextStepBanner guidance={guidance} onAction={() => guidance.action && onGuidanceAction(guidance.action.kind)} />
+      {store.autoFilling && (
+        <div role="status" className="flex items-center gap-3 border-b border-accent/40 bg-accent/10 px-4 py-2 text-sm sm:px-6">
+          <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden />
+          <p className="min-w-0 flex-1">Building the schedule for {students.length} students. This can take a few seconds. Please wait.</p>
+        </div>
+      )}
       {store.saveFailed && (
         <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-bg px-4 py-2 text-sm sm:px-6">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warn" aria-hidden />
