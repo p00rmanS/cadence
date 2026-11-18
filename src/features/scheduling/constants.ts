@@ -99,7 +99,17 @@ export const AVATAR_SIZE = 128;
 export const MAX_AVATAR_CHARS = 16_000;
 
 export const MAX_STUDENTS = 200;
-export const MAX_ASSIGNMENTS = 5000;
+
+/** Half-hour boxes in a full 40-hour break-term week (40 hours x 2 boxes an hour). */
+const MAX_BOXES_PER_STUDENT = 80;
+
+/**
+ * Most shifts (half-hour boxes) one saved schedule can hold. It must be big enough for EVERY allowed
+ * student to be filled to the break-term limit (200 x 80 = 16,000). It used to be 5,000, which let
+ * auto-fill make a schedule (from 132 students, or 63 on break) that the loader then refused to read
+ * back, so a refresh wiped it. `commit` in the store also refuses any change that would go past it.
+ */
+export const MAX_ASSIGNMENTS = MAX_STUDENTS * MAX_BOXES_PER_STUDENT;
 
 /** Every color keeps >= 4.5:1 contrast with white chip text (enforced in src/test/contrast.test.ts). */
 export const STUDENT_COLORS = [
@@ -112,3 +122,10 @@ export const STUDENT_COLORS = [
   "#5563D0",
   "#5E6E24",
 ];
+
+/**
+ * From this many students up, "Fill schedule for me" can take a noticeable moment (about half a second at
+ * 50 students, 2-3 seconds at 140), during which the page cannot respond. The app shows a "Building the
+ * schedule" message first. Below it the fill is instant, so there is no message and no delay.
+ */
+export const SLOW_AUTOFILL_STUDENTS = 40;

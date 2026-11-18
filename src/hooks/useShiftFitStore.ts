@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { canAssign, isAssigned, shiftRuns, softViolations } from "../features/scheduling/availability";
 import { breakLimit } from "../features/scheduling/term";
 import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
-import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_STUDENTS, NO_CUTOFF, STUDENT_COLORS } from "../features/scheduling/constants";
+import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_ASSIGNMENTS, MAX_STUDENTS, NO_CUTOFF, SLOW_AUTOFILL_STUDENTS, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
+import { buildRandomStudents } from "../features/scheduling/random-roster";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
 import { endSentence, formatMinutes } from "../features/scheduling/time";
@@ -127,6 +128,7 @@ export type Action =
   | { type: "AUTOFILL"; replace: boolean }
   | { type: "CLEAR_SHIFTS" }
   | { type: "RESET_DEMO" }
+  | { type: "LOAD_RANDOM_STUDENTS"; students: Student[] }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_STATE"; state: PersistedStateV1; notes: string[] }
   | { type: "UNDO" }
@@ -213,6 +215,11 @@ export function initialState(): State {
  * `label`, e.g. "Auto-fill"). Any "redo" steps are cleared, since the history has now branched.
  */
 function commit(state: State, doc: Doc, label: string, extra: Partial<State> = {}): State {
+  // A schedule bigger than the saved-data limit would save fine but be refused when reloaded, wiping it.
+  // So any change that would pass the limit is declined here, whichever action asked for it.
+  if (doc.assignments.length > MAX_ASSIGNMENTS || doc.otherTermAssignments.length > MAX_ASSIGNMENTS) {
+    return { ...state, toast: toast(`That would make more than ${MAX_ASSIGNMENTS.toLocaleString("en-US")} shift boxes, more than Syncro can save, so nothing was changed.`) };
+  }
   return {
     ...state,
     doc,
@@ -605,6 +612,17 @@ export function reducer(state: State, action: Action): State {
         toast: toast("Sample data restored."),
       });
     }
+    case "LOAD_RANDOM_STUDENTS": {
+      // For testing: swap in made-up students with no shifts (in both the semester and break schedules),
+      // so Auto-fill can be tried on a roster of any size. The students are made BEFORE dispatching, not here,
+      // because a reducer must give the same answer every time it runs and random numbers would not.
+      const next: Doc = { ...doc, students: action.students, formerStudents: [], assignments: [], otherTermAssignments: [] };
+      return commit(state, next, "Loaded random students", {
+        selectedStudentId: fixSelection(next, null),
+        lastAutofill: null,
+        toast: toast(`Loaded ${plural(action.students.length, "random student")} with no shifts yet. Press Fill schedule for me to try them. You can press Undo to go back.`),
+      });
+    }
     case "CLEAR_ALL": {
       const next: Doc = { ...doc, students: [], formerStudents: [], assignments: [], otherTermAssignments: [] };
       return commit(state, next, "Cleared everything", {
@@ -676,6 +694,9 @@ export function useShiftFitStore() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  // True while a big auto-fill is about to run, so the page can say "Building the schedule" before it freezes.
+  const [autoFilling, setAutoFilling] = useState(false);
+  const autoFillingRef = useRef(false);
 
   // Auto-save: any time the schedule data changes, write it to localStorage.
   // If the browser refuses to save (storage full/blocked), flag it so the UI
@@ -752,9 +773,29 @@ export function useShiftFitStore() {
       cancelOverride: () => dispatch({ type: "CANCEL_OVERRIDE" }),
       setSettings: (settings: Partial<ScheduleSettings>) => dispatch({ type: "SET_SETTINGS", settings }),
       setSemester: (semester: SemesterConfig | null) => dispatch({ type: "SET_SEMESTER", semester }),
-      runAutoFill: (replace = false) => dispatch({ type: "AUTOFILL", replace }),
+      runAutoFill: (replace = false) => {
+        // Small rosters fill instantly, so just do it.
+        if (stateRef.current.doc.students.length < SLOW_AUTOFILL_STUDENTS) {
+          dispatch({ type: "AUTOFILL", replace });
+          return;
+        }
+        // A big roster freezes the page for a few seconds. Show the message first, wait for the browser
+        // to actually draw it, then run the fill. A second press while one is running is ignored.
+        if (autoFillingRef.current) return;
+        autoFillingRef.current = true;
+        setAutoFilling(true);
+        window.setTimeout(() => {
+          try {
+            dispatch({ type: "AUTOFILL", replace });
+          } finally {
+            autoFillingRef.current = false;
+            setAutoFilling(false);
+          }
+        }, 60);
+      },
       clearShifts: () => dispatch({ type: "CLEAR_SHIFTS" }),
       resetDemo: () => dispatch({ type: "RESET_DEMO" }),
+      loadRandomStudents: (count: number) => dispatch({ type: "LOAD_RANDOM_STUDENTS", students: buildRandomStudents(count) }),
       clearAll: () => dispatch({ type: "CLEAR_ALL" }),
       loadState: (s: PersistedStateV1, notes: string[] = []) => dispatch({ type: "LOAD_STATE", state: s, notes }),
       undo: () => dispatch({ type: "UNDO" }),
@@ -776,6 +817,7 @@ export function useShiftFitStore() {
     toast: state.toast,
     pendingOverride: state.pendingOverride,
     lastAutofill: state.lastAutofill,
+    autoFilling,
     saveFailed: state.saveFailed,
     otherTabChanged: state.otherTabChanged,
     canUndo: state.past.length > 0,
