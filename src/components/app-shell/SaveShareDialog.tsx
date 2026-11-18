@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Download, ExternalLink, FileSpreadsheet, MonitorSmartphone, RotateCcw, Save, Send, Trash2, Upload, Users, X } from "lucide-react";
+import { Download, ExternalLink, FileSpreadsheet, MonitorSmartphone, RotateCcw, Save, Send, Shuffle, Trash2, Upload, Users, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { LogoLoader } from "../ui/LogoLoader";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -8,6 +8,7 @@ import { Modal } from "../ui/Modal";
 import { buildStudentIcs, icsFileName, isSemesterConfigured } from "../../features/calendar/ics";
 import { CopyButton } from "../share/CopyField";
 import { buildShiftsCode, shiftsLink } from "../../features/sharing/links";
+import { MAX_RANDOM_STUDENTS, MIN_RANDOM_STUDENTS } from "../../features/scheduling/random-roster";
 import { MAX_BACKUP_BYTES, exportBackup, parseBackup } from "../../features/persistence/storage";
 import { shiftsToCsv } from "../../features/scheduling/blocks";
 import { scheduleToText } from "../../features/scheduling/summary";
@@ -48,6 +49,8 @@ type Props = {
   onImport: (state: PersistedStateV1, notes: string[]) => void;
   onSetSemester: (s: SemesterConfig | null) => void;
   onResetDemo: () => void;
+  /** Replaces the students with this many random made-up ones (no shifts), for testing. */
+  onLoadRandomStudents: (count: number) => void;
   onClearAll: () => void;
   onClose: () => void;
 };
@@ -82,11 +85,13 @@ const zoneList: string[] = (() => {
 
 /** Save & share: backups, spreadsheet, semester dates, per-student calendar files, and sending to Google Calendar. */
 export function SaveShareDialog(props: Props) {
-  const { settings, students, formerStudents, assignments, otherTermAssignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onClearAll, onClose } = props;
+  const { settings, students, formerStudents, assignments, otherTermAssignments, semester, selectedStudentId, blockingIssues, onImport, onSetSemester, onResetDemo, onLoadRandomStudents, onClearAll, onClose } = props;
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ state: PersistedStateV1; notes: string[] } | null>(null);
-  const [confirm, setConfirm] = useState<"reset" | "clear" | "publish" | "remove-old" | null>(null);
+  const [confirm, setConfirm] = useState<"reset" | "clear" | "publish" | "remove-old" | "random" | null>(null);
+  // How many random students the "Try random students" button will make (the number picker's value).
+  const [randomCount, setRandomCount] = useState(MAX_RANDOM_STUDENTS);
 
   const [startDate, setStartDate] = useState(semester?.startDate ?? "");
   const [endDate, setEndDate] = useState(semester?.endDate ?? "");
@@ -508,6 +513,29 @@ export function SaveShareDialog(props: Props) {
             </div>
           </Section>
 
+          <Section icon={<Shuffle className="h-4 w-4" aria-hidden />} title="Try random students" help="Makes up students with random class times and no shifts, so you can press Fill schedule for me and see how it handles a team of that size. Nothing here is a real person. You can undo it.">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm">
+                <span className="block text-muted">How many students (1 to {MAX_RANDOM_STUDENTS})</span>
+                <input
+                  type="number"
+                  className="mt-1 w-24 rounded-lg border border-line bg-surface px-2 py-1.5"
+                  min={MIN_RANDOM_STUDENTS}
+                  max={MAX_RANDOM_STUDENTS}
+                  value={randomCount}
+                  onChange={(e) => {
+                    const typed = Math.round(Number(e.target.value));
+                    // Keep the number inside 1-25 so the button can never be given a size it can't make.
+                    setRandomCount(Number.isFinite(typed) ? Math.max(MIN_RANDOM_STUDENTS, Math.min(MAX_RANDOM_STUDENTS, typed)) : MAX_RANDOM_STUDENTS);
+                  }}
+                />
+              </label>
+              <Button variant="secondary" onClick={() => setConfirm("random")}>
+                <Shuffle className="h-4 w-4" aria-hidden /> Make {randomCount} random {randomCount === 1 ? "student" : "students"}
+              </Button>
+            </div>
+          </Section>
+
           <Section icon={<RotateCcw className="h-4 w-4" aria-hidden />} title="Start over" help="Both of these can be undone with the Undo button.">
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setConfirm("reset")}>
@@ -541,6 +569,11 @@ export function SaveShareDialog(props: Props) {
       {confirm === "reset" && (
         <ConfirmDialog title="Restore the sample students?" confirmLabel="Yes, restore" onCancel={() => setConfirm(null)} onConfirm={() => { onResetDemo(); setConfirm(null); onClose(); }}>
           <p>This replaces your students and shifts with the made-up sample ones. You can press Undo afterwards.</p>
+        </ConfirmDialog>
+      )}
+      {confirm === "random" && (
+        <ConfirmDialog title={`Make ${randomCount} random ${randomCount === 1 ? "student" : "students"}?`} confirmLabel="Yes, make them" onCancel={() => setConfirm(null)} onConfirm={() => { onLoadRandomStudents(randomCount); setConfirm(null); onClose(); }}>
+          <p>This replaces your students and shifts with made-up ones that have random class times and no shifts yet. Then press “Fill schedule for me”. You can press Undo afterwards.</p>
         </ConfirmDialog>
       )}
       {confirm === "clear" && (

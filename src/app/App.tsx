@@ -447,6 +447,7 @@ export function App({
           onImport={store.loadState}
           onSetSemester={store.setSemester}
           onResetDemo={store.resetDemo}
+          onLoadRandomStudents={store.loadRandomStudents}
           onClearAll={store.clearAll}
           onClose={() => setDialog(null)}
         />

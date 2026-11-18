@@ -5,6 +5,7 @@ import { withStaffingNeed } from "../features/scheduling/staffing";
 import { scheduleVersion } from "../features/scheduling/blocks";
 import { DEFAULT_BREAK_MINUTES, DEFAULT_BREAK_START, DEFAULT_SETTINGS, MAX_ASSIGNMENTS, MAX_STUDENTS, NO_CUTOFF, SLOW_AUTOFILL_STUDENTS, STUDENT_COLORS } from "../features/scheduling/constants";
 import { buildDemoData } from "../features/scheduling/demo-data";
+import { buildRandomStudents } from "../features/scheduling/random-roster";
 import { buildBusy } from "../features/scheduling/parser";
 import { autoFill, normalizeAssignments } from "../features/scheduling/scheduler";
 import { endSentence, formatMinutes } from "../features/scheduling/time";
@@ -127,6 +128,7 @@ export type Action =
   | { type: "AUTOFILL"; replace: boolean }
   | { type: "CLEAR_SHIFTS" }
   | { type: "RESET_DEMO" }
+  | { type: "LOAD_RANDOM_STUDENTS"; students: Student[] }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_STATE"; state: PersistedStateV1; notes: string[] }
   | { type: "UNDO" }
@@ -610,6 +612,17 @@ export function reducer(state: State, action: Action): State {
         toast: toast("Sample data restored."),
       });
     }
+    case "LOAD_RANDOM_STUDENTS": {
+      // For testing: swap in made-up students with no shifts (in both the semester and break schedules),
+      // so Auto-fill can be tried on a roster of any size. The students are made BEFORE dispatching, not here,
+      // because a reducer must give the same answer every time it runs and random numbers would not.
+      const next: Doc = { ...doc, students: action.students, formerStudents: [], assignments: [], otherTermAssignments: [] };
+      return commit(state, next, "Loaded random students", {
+        selectedStudentId: fixSelection(next, null),
+        lastAutofill: null,
+        toast: toast(`Loaded ${plural(action.students.length, "random student")} with no shifts yet. Press Fill schedule for me to try them. You can press Undo to go back.`),
+      });
+    }
     case "CLEAR_ALL": {
       const next: Doc = { ...doc, students: [], formerStudents: [], assignments: [], otherTermAssignments: [] };
       return commit(state, next, "Cleared everything", {
@@ -782,6 +795,7 @@ export function useShiftFitStore() {
       },
       clearShifts: () => dispatch({ type: "CLEAR_SHIFTS" }),
       resetDemo: () => dispatch({ type: "RESET_DEMO" }),
+      loadRandomStudents: (count: number) => dispatch({ type: "LOAD_RANDOM_STUDENTS", students: buildRandomStudents(count) }),
       clearAll: () => dispatch({ type: "CLEAR_ALL" }),
       loadState: (s: PersistedStateV1, notes: string[] = []) => dispatch({ type: "LOAD_STATE", state: s, notes }),
       undo: () => dispatch({ type: "UNDO" }),
