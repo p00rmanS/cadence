@@ -519,7 +519,7 @@ export function SaveShareDialog(props: Props) {
                 <span className="block text-muted">How many students (1 to {MAX_RANDOM_STUDENTS})</span>
                 <input
                   type="number"
-                  className="mt-1 w-24 rounded-lg border border-line bg-surface px-2 py-1.5"
+                  className="mt-1 w-24 rounded-lg border border-line bg-bg px-2 py-1.5"
                   min={MIN_RANDOM_STUDENTS}
                   max={MAX_RANDOM_STUDENTS}
                   value={randomCount}
