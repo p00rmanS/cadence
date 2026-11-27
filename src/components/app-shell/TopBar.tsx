@@ -6,7 +6,9 @@ import { Button } from "../ui/Button";
 import { SyncroLogo } from "../ui/SyncroLogo";
 import { HelpTip } from "../help/HelpTip";
 import { ThemeControl } from "./ThemeControl";
+import { MoreMenu } from "./MoreMenu";
 import type { ThemeChoice } from "../../hooks/useTheme";
+import type { TextSize } from "../../hooks/useDisplayPrefs";
 import type { ScheduleSettings } from "../../features/scheduling/types";
 import { breakLimit } from "../../features/scheduling/term";
 import { MIN_STAFF_OPTIONS, OFFICE_HOURS_OPTIONS } from "../../features/scheduling/constants";
@@ -19,7 +21,7 @@ function hoursKey(openTime: number, closeTime: number): string {
 
 /**
  * The header bar shown on every screen. Deliberately built around ONE clear
- * primary action ("Fill schedule for me" — solid accent color, the only
+ * primary action ("Fill week" — solid accent color, the only
  * button with visible label text at full size) with everything else quieter:
  * Undo/Redo and Rules/Help are icon-only ghost buttons (a tooltip and
  * `aria-label` still name them for a mouse or screen-reader user), and the
@@ -51,9 +53,12 @@ type Props = {
   onOpenShare: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
+  /** The text size and a way to change it, for the phone-only "More" menu. */
+  textSize: TextSize;
+  onTextSizeChange: (size: TextSize) => void;
 };
 
-/** The bar across the top: the main "Fill schedule for me" button, undo/redo, help, and the collapsible settings. */
+/** The bar across the top: the main "Fill week" button, undo/redo, help, and the collapsible settings. */
 export function TopBar({
   settings,
   onSettingsChange,
@@ -75,13 +80,18 @@ export function TopBar({
   onOpenShare,
   theme,
   onThemeChange,
+  textSize,
+  onTextSizeChange,
 }: Props) {
   const [showOptions, setShowOptions] = useState(false);
 
   return (
     <header className="soft-shadow relative z-10 border-b border-line bg-panel">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6">
-        <div className="flex items-center gap-2">
+        {/* The `order-*` classes only matter on a phone, where the header is arranged as three tidy rows:
+            1) logo + Undo/Redo + More, 2) the big Fill button, 3) Semester/Break + Plan options.
+            From `sm` up, `sm:order-*` puts everything back in the original single-row order. */}
+        <div className="order-1 flex items-center gap-2">
           <SyncroLogo className="h-9 w-9 shrink-0" />
           <div>
             <h1 className="font-display text-lg font-semibold leading-none">Syncro</h1>
@@ -89,10 +99,22 @@ export function TopBar({
         </div>
 
         {/* The main action lives in the header so it is always in view, whatever the window size. It is the only button here with a solid accent fill — everything else is deliberately quieter. */}
-        <Button variant="primary" onClick={onAutoFill} disabled={!hasStudents} title={hasStudents ? "Places shifts for everyone, following every rule" : "Add a student first"}>
-          <Wand2 className="h-4 w-4" aria-hidden /> Fill schedule for me
+        <Button variant="primary" className="order-4 w-full sm:order-2 sm:w-auto" onClick={onAutoFill} disabled={!hasStudents} title={hasStudents ? "Places shifts for everyone, following every rule" : "Add a student first"}>
+          <Wand2 className="h-4 w-4" aria-hidden /> Fill week
         </Button>
-        <div className="flex items-center gap-1">
+        {/* Phone only: Save & share, Settings, Help, colors and text size all live behind this one button. */}
+        <div className="order-3 sm:hidden">
+          <MoreMenu
+            onOpenShare={onOpenShare}
+            onOpenSettings={onOpenSettings}
+            onOpenHelp={onOpenHelp}
+            theme={theme}
+            onThemeChange={onThemeChange}
+            textSize={textSize}
+            onTextSizeChange={onTextSizeChange}
+          />
+        </div>
+        <div className="order-5 flex items-center gap-1 sm:order-3">
           <Segmented
             label="Semester or break"
             value={settings.term ?? "semester"}
@@ -108,29 +130,33 @@ export function TopBar({
             <b>Break:</b> 11am–12pm on Tuesday is open, and students may work up to {breakLimit(settings)} hours a week.
           </HelpTip>
         </div>
-        <Button variant="ghost" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
-          <SlidersHorizontal className="h-4 w-4" aria-hidden /> Plan options
+        <Button variant="ghost" className="order-6 sm:order-4" aria-label="Plan options" aria-expanded={showOptions} aria-controls="plan-options" onClick={() => setShowOptions((v) => !v)}>
+          <SlidersHorizontal className="h-4 w-4" aria-hidden /> <span className="sm:hidden">Options</span>
+          <span className="hidden sm:inline">Plan options</span>
           <ChevronDown className={clsx("h-4 w-4 transition-transform", showOptions && "rotate-180")} aria-hidden />
         </Button>
 
-        <div className="ml-auto flex flex-wrap items-center gap-1">
+        <div className="order-2 ml-auto flex flex-wrap items-center gap-1 sm:order-5">
           <Button variant="ghost" onClick={onUndo} disabled={!canUndo} aria-label="Undo" title={undoLabel ? `Undo: ${undoLabel}` : "Nothing to undo yet"}>
             <Undo2 className="h-4 w-4" aria-hidden />
           </Button>
           <Button variant="ghost" onClick={onRedo} disabled={!canRedo} aria-label="Redo" title={redoLabel ? `Redo: ${redoLabel}` : "Nothing to redo"}>
             <Redo2 className="h-4 w-4" aria-hidden />
           </Button>
-          <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
-          <Button variant="secondary" onClick={onOpenShare}>
-            <CalendarDays className="h-4 w-4" aria-hidden /> Save &amp; share
-          </Button>
-          <Button variant="ghost" onClick={onOpenSettings} aria-label="Settings" title="Settings (text size, colors, rules)">
-            <Settings className="h-4 w-4" aria-hidden />
-          </Button>
-          <Button variant="ghost" onClick={onOpenHelp} aria-label="Help" title="Help">
-            <HelpCircle className="h-4 w-4" aria-hidden />
-          </Button>
-          <ThemeControl theme={theme} onChange={onThemeChange} />
+          {/* On a phone these live in the "More" button instead, which saves two rows of screen. */}
+          <div className="hidden items-center gap-1 sm:flex">
+            <span className="mx-1 h-5 w-px bg-line" aria-hidden />
+            <Button variant="secondary" onClick={onOpenShare}>
+              <CalendarDays className="h-4 w-4" aria-hidden /> Save &amp; share
+            </Button>
+            <Button variant="ghost" onClick={onOpenSettings} aria-label="Settings" title="Settings (text size, colors, rules)">
+              <Settings className="h-4 w-4" aria-hidden />
+            </Button>
+            <Button variant="ghost" onClick={onOpenHelp} aria-label="Help" title="Help">
+              <HelpCircle className="h-4 w-4" aria-hidden />
+            </Button>
+            <ThemeControl theme={theme} onChange={onThemeChange} />
+          </div>
         </div>
       </div>
 
@@ -164,7 +190,7 @@ export function TopBar({
             Days open
             <HelpTip label="Days open">
               Whether the office is open on Saturday. Saturday shows on the grid, counts toward coverage and gets shifts from
-              &ldquo;Fill schedule for me&rdquo; only when it is open.
+              &ldquo;Fill week&rdquo; only when it is open.
             </HelpTip>
           </span>
           <Segmented

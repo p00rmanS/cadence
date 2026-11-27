@@ -2,7 +2,7 @@ import type { BusyBlock, ConstraintViolation, Day, Minutes, ScheduleSettings, Sh
 import { DAY_LABEL } from "./types";
 import { openDays } from "./days";
 import { DEVOTIONAL, MIN_OPENING_SHIFT_MINUTES, OPENING_SHIFT_START } from "./constants";
-import { isDevotional, studentLimit } from "./term";
+import { isDevotional, studentLimit, walkingMinutes } from "./term";
 import { formatMinutes, formatRange, hoursLabel } from "./time";
 
 /**
@@ -13,7 +13,7 @@ import { formatMinutes, formatRange, hoursLabel } from "./time";
  * box at a time: are they busy then, would it push them over their weekly
  * hours, have they already worked their max days, etc. It is the single
  * source of truth for the scheduling rules — the grid (when you click a box),
- * "Fill schedule for me" (`scheduler.ts`), and the health checker
+ * "Fill week" (`scheduler.ts`), and the health checker
  * (`issues.ts`) all call into these same functions, so a rule only ever has
  * to be written once. Start with `canAssign` — it's the main entry point.
  */
@@ -28,6 +28,20 @@ export function daySlots(settings: ScheduleSettings): Minutes[] {
 /** The class or blocked time that overlaps this slot, if any. */
 export function busyBlockAt(student: Student, day: Day, slotStart: Minutes, slotMinutes: number): BusyBlock | undefined {
   return student.busy.find((b) => b.day === day && b.start < slotStart + slotMinutes && b.end > slotStart);
+}
+
+/**
+ * The class that starts or ends too close to this slot for the student to walk, or undefined. "Too close"
+ * means the gap between the slot and the class is shorter than the walking time set in Rules. A class that
+ * overlaps the slot itself is NOT reported here (that is a plain class conflict, found first). Only classes
+ * count, not other blocked times, and with the standard walking time of 0 this never finds anything.
+ */
+export function classTooCloseTo(student: Student, day: Day, slotStart: Minutes, settings: ScheduleSettings): BusyBlock | undefined {
+  const walk = walkingMinutes(settings);
+  if (walk <= 0) return undefined;
+  const slotEnd = slotStart + settings.slotMinutes;
+  // Closer than `walk` minutes before the class starts (the slot ends too late), or after it ends (the slot starts too early).
+  return student.busy.find((b) => b.source === "class" && b.day === day && b.start < slotEnd + walk && b.end + walk > slotStart);
 }
 
 /** True if the student has a class or blocked time anywhere inside this half-hour slot. */
@@ -127,6 +141,10 @@ export function blockedBySlot(
     return busy.source === "class"
       ? { code: "class_conflict", message: `has class on ${DAY_LABEL[day]} at this time` }
       : { code: "unavailable", message: `is unavailable on ${DAY_LABEL[day]} at this time` };
+  }
+  // Not in class, but too close to one to walk there or back (only when a walking time is set in Rules).
+  if (classTooCloseTo(student, day, slotStart, settings)) {
+    return { code: "walking_time", message: `needs ${walkingMinutes(settings)} minutes to walk to or from class on ${DAY_LABEL[day]} at this time` };
   }
   // Days the student does not want to work, and times before they can start, are "unavailable" like any other blocked time.
   if (student.workDays && student.workDays.length > 0 && !student.workDays.includes(day)) {

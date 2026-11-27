@@ -42,7 +42,7 @@ type Props = {
 };
 
 /** The text-size picker: four big "Aa" buttons, each drawn at its own size so people can see what they are choosing. */
-function TextSizePicker({ value, onChange }: { value: TextSize; onChange: (size: TextSize) => void }) {
+export function TextSizePicker({ value, onChange }: { value: TextSize; onChange: (size: TextSize) => void }) {
   // The sample letters are drawn in fixed pixel sizes (not rem) so each button previews its own size, whatever size is active now.
   const SAMPLE_PX: Record<TextSize, number> = { small: 15, medium: 17, large: 20, xlarge: 24 };
   return (

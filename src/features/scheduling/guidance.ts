@@ -47,7 +47,7 @@ export function nextStep(input: GuidanceInput): Guidance {
       tone: "todo",
       title: "Next: let Syncro fill the week",
       body: "Press the button and it will place shifts for everyone around classes and breaks. You can change anything after.",
-      action: { label: "Fill schedule for me", kind: "auto-fill" },
+      action: { label: "Fill week", kind: "auto-fill" },
     };
   }
   if (input.blockingIssues > 0) {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Info, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Plus, Printer, Send, Wand2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { HelpTip } from "../help/HelpTip";
 import { assignedHours, studentsMissingOpeningShift } from "../../features/scheduling/availability";
 import { buildCoverageSlots, buildGapRanges, summarizeCoverage, uncoveredStaffHours } from "../../features/scheduling/coverage";
@@ -20,7 +21,7 @@ import type { ScheduleIssue, ScheduleSettings, ShiftBlock, Student } from "../..
  * attention" problem/warning list, the list of understaffed times with
  * one-click "Quick fix" buttons (each is a real candidate from
  * `suggestFillers`, not a guess — see `../../features/scheduling/issues.ts`),
- * and a collapsible log of what the last "Fill schedule for me" run did. Only the
+ * and a collapsible log of what the last "Fill week" run did. Only the
  * status, the problems and the first few empty times show by default; the
  * percentages sit behind "More numbers" so the panel stays short and calm.
  * Everything here is read-only except the Quick fix buttons and "Pick to fix
@@ -46,7 +47,48 @@ function Meter({ label, help, percent, detail }: { label: string; help: string; 
   );
 }
 
-/** The "Schedule health" panel: how many hours still need someone, which times, and any rule problems. */
+/**
+ * One big button in the "What you can do next" card: an icon, a title, and one plain line saying what pressing
+ * it does. It is a button with words on it (not only an icon) so a first-time visitor never has to guess.
+ * `primary` makes it the one filled, most-important choice on the page.
+ */
+function NextStepButton({
+  icon: Icon,
+  title,
+  detail,
+  onClick,
+  primary = false,
+}: {
+  icon: LucideIcon;
+  title: string;
+  detail: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
+        primary ? "soft-shadow border-accent bg-accent text-accent-ink hover:opacity-90" : "border-line bg-panel hover:bg-line/30",
+      )}
+    >
+      <Icon className="h-5 w-5 shrink-0" aria-hidden />
+      <span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className={clsx("block text-xs", primary ? "opacity-90" : "text-muted")}>{detail}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The "Review your schedule" panel (the side column on a wide screen, the "Review" tab on a phone): what still
+ * needs someone, any rule problems, and, at the top, a short "What you can do next" list of real buttons. Before
+ * the buttons existed, a finished schedule showed only a green box and numbers, which looked like a page that
+ * does nothing. The three action props are optional so the panel can still be shown without them.
+ */
 export function InsightsPanel({
   students,
   assignments,
@@ -55,6 +97,9 @@ export function InsightsPanel({
   lastAutofill,
   onSelectStudent,
   onFillGap,
+  onFillAll,
+  onPrint,
+  onShare,
 }: {
   students: Student[];
   assignments: ShiftBlock[];
@@ -63,6 +108,12 @@ export function InsightsPanel({
   lastAutofill: LastAutofill | null;
   onSelectStudent: (id: string) => void;
   onFillGap: (studentId: string, day: Day, from: number, to: number) => void;
+  /** Fill every empty time for me (same as the "Fill week" button at the top). */
+  onFillAll?: () => void;
+  /** Print the clean one-page schedule. */
+  onPrint?: () => void;
+  /** Open Save & share (student links, calendar files, backup). */
+  onShare?: () => void;
 }) {
   const coverage = buildCoverageSlots(assignments, settings);
   const gaps = buildGapRanges(coverage);
@@ -92,9 +143,12 @@ export function InsightsPanel({
 
   return (
     <section aria-labelledby="insights-heading" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto bg-panel p-3 sm:p-4">
-      <h2 id="insights-heading" className="font-display text-lg font-semibold">
-        Schedule health
-      </h2>
+      <div>
+        <h2 id="insights-heading" className="font-display text-lg font-semibold">
+          Review your schedule
+        </h2>
+        <p className="text-sm text-muted">Checks the week and tells you what to do next.</p>
+      </div>
 
       <div
         role="status"
@@ -123,6 +177,28 @@ export function InsightsPanel({
           </p>
         </div>
       </div>
+
+      {students.length > 0 && (onFillAll || onPrint || onShare) && (
+        <section aria-labelledby="next-steps-heading" className="flex flex-col gap-2">
+          <h3 id="next-steps-heading" className="text-sm font-semibold">
+            What you can do next
+          </h3>
+          {/* While times are still empty, filling them is the one most-important choice; once covered, printing is. */}
+          {onFillAll && emptyHalfHours > 0 && (
+            <NextStepButton primary icon={Wand2} title="Fill the empty times" detail="Syncro adds shifts around classes and breaks." onClick={onFillAll} />
+          )}
+          {onPrint && assignments.length > 0 && (
+            <NextStepButton
+              primary={emptyHalfHours === 0}
+              icon={Printer}
+              title="Print the schedule"
+              detail="One clean page with every name, hour by hour."
+              onClick={onPrint}
+            />
+          )}
+          {onShare && <NextStepButton icon={Send} title="Send shifts or save a backup" detail="Student links, calendar files and a backup copy." onClick={onShare} />}
+        </section>
+      )}
 
       <details className="rounded-xl border border-line p-3">
         <summary className="cursor-pointer text-sm font-semibold">More numbers</summary>
@@ -266,7 +342,7 @@ export function InsightsPanel({
 
       {lastAutofill && (lastAutofill.explanations.length > 0 || lastAutofill.unmet.length > 0 || lastAutofill.openingShiftUnmet.length > 0) && (
         <details className="rounded-xl border border-line p-3">
-          <summary className="cursor-pointer text-sm font-semibold">What did “Fill schedule for me” do?</summary>
+          <summary className="cursor-pointer text-sm font-semibold">What did “Fill week” do?</summary>
           <div className="mt-2 space-y-2 text-sm">
             {[...lastAutofill.openingShiftUnmet, ...lastAutofill.unmet].map((u, i) => (
               <p key={`u${i}`} className="rounded-lg bg-warn-bg p-2 text-xs">

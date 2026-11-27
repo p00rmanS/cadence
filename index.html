@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#11161F" />
+    <meta name="theme-color" content="#F6F3EE" />
+    <!-- Sets the light/dark look before anything is drawn (see public/theme-init.js). Must stay a separate file: inline scripts are blocked. -->
+    <script src="%BASE_URL%theme-init.js"></script>
     <title>Syncro — Shift Coverage Planner</title>
     <meta
       name="description"
@@ -32,8 +34,10 @@
         color: #1b2430;
         transition: opacity 0.45s ease, visibility 0.45s;
       }
+      /* Dark only when the person chose dark, or chose "auto" and their device is dark. Otherwise it stays light, like the app. */
+      :root[data-theme="dark"] #splash { background: #11161f; color: #e8ecf2; }
       @media (prefers-color-scheme: dark) {
-        #splash { background: #11161f; color: #e8ecf2; }
+        :root:not([data-theme]) #splash { background: #11161f; color: #e8ecf2; }
       }
       #splash.splash-done { opacity: 0; visibility: hidden; }
       /* The Syncro logo pops in, then keeps a slow, gentle pulse while the app loads. */

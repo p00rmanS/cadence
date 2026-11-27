@@ -284,7 +284,7 @@ async function publish(request: Request, options: GatewayOptions): Promise<Respo
   const evaluation = evaluateSchedule(students, assignments, settings);
   if (!evaluation.ok) {
     const count = evaluation.blockingIssues.length;
-    return fail(422, "breaks_rules", `This schedule breaks ${count} ${count === 1 ? "rule" : "rules"}. Fix them in Schedule health, then send it again.`);
+    return fail(422, "breaks_rules", `This schedule breaks ${count} ${count === 1 ? "rule" : "rules"}. Fix them in the Review panel, then send it again.`);
   }
   // The manager approved one exact version. If the schedule is different now, they must look again.
   if (typeof input.approvedVersion !== "string" || input.approvedVersion !== evaluation.scheduleVersion) {

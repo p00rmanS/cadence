@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../ui/Button";
-import { BREAK_WEEKLY_HOURS, MIN_SHIFT_MINUTES } from "../../features/scheduling/constants";
-import { breakLimit, minShiftMinutes } from "../../features/scheduling/term";
+import { BREAK_WEEKLY_HOURS, DEFAULT_WALKING_MINUTES, MIN_SHIFT_MINUTES, WALKING_CHOICES } from "../../features/scheduling/constants";
+import { breakLimit, minShiftMinutes, walkingMinutes } from "../../features/scheduling/term";
 import type { ScheduleSettings } from "../../features/scheduling/types";
 
 /** The shortest-shift choices offered, in hours (half an hour up to four). */
@@ -19,7 +19,7 @@ function hoursProblem(text: string): string | null {
 /**
  * The "Schedule rules" form inside the Settings window (`SettingsDialog.tsx`). Lets the manager change
  * the office-wide rules that are meant to be edited occasionally, not per student: the weekly hour cap,
- * the weekly cap during a break, and the shortest shift. (Office hours and the days the office is open
+ * the weekly cap during a break, the shortest shift, and the walking time kept between a class and a shift. (Office hours and the days the office is open
  * are picked under "Plan options" in the header.) Each is validated live as the manager types/picks, and
  * the Save button is disabled until all are valid — see `hoursError` / `breakError` below. Saving (or Cancel) closes the whole Settings window.
  */
@@ -35,6 +35,7 @@ export function RulesForm({
   const [hours, setHours] = useState(String(settings.weeklyTargetHours));
   const [breakHours, setBreakHours] = useState(String(breakLimit(settings)));
   const [minShiftHours, setMinShiftHours] = useState(minShiftMinutes(settings) / 60);
+  const [walking, setWalking] = useState(walkingMinutes(settings));
 
   const parsed = Number(hours);
   const hoursError = hoursProblem(hours);
@@ -96,7 +97,7 @@ export function RulesForm({
           Shortest shift allowed
         </label>
         <p className="text-xs text-muted">
-          Shorter shifts are flagged as a problem, and &ldquo;Fill schedule for me&rdquo; never makes one. Changing this never deletes a shift.
+          Shorter shifts are flagged as a problem, and &ldquo;Fill week&rdquo; never makes one. Changing this never deletes a shift.
         </p>
         <select
           id="rule-min-shift"
@@ -107,6 +108,28 @@ export function RulesForm({
           {MIN_SHIFT_CHOICES.map((h) => (
             <option key={h} value={h}>
               {h === 1 ? "1 hour" : `${h} hours`}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label htmlFor="rule-walking" className="block text-sm font-medium">
+          Walking time between class and a shift
+        </label>
+        <p className="text-xs text-muted">
+          Keeps a gap so no one has to be in two places at once. A shift will not start or end this close to a class. &ldquo;None&rdquo; allows a shift to
+          start the minute a class ends. Changing this never deletes a shift, but a shift already too close is flagged.
+        </p>
+        <select
+          id="rule-walking"
+          value={walking}
+          onChange={(e) => setWalking(Number(e.target.value))}
+          className="mt-1 rounded-lg border border-line bg-bg p-2 text-sm"
+        >
+          {WALKING_CHOICES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes === 0 ? "None" : `${minutes} minutes`}
             </option>
           ))}
         </select>
@@ -129,6 +152,7 @@ export function RulesForm({
               weeklyTargetHours: parsed,
               breakWeeklyHours: Number(breakHours) === BREAK_WEEKLY_HOURS ? undefined : Number(breakHours),
               minShiftHours: minShiftHours * 60 === MIN_SHIFT_MINUTES ? undefined : minShiftHours,
+              walkingMinutes: walking === DEFAULT_WALKING_MINUTES ? undefined : walking,
             });
             onClose();
           }}

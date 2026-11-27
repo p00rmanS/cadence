@@ -22,7 +22,7 @@ import type {
 
 /**
  * ============================================================================
- *  "FILL SCHEDULE FOR ME" — THE AUTO-FILL PLANNER
+ *  "FILL WEEK" — THE AUTO-FILL PLANNER
  * ============================================================================
  * This is the most complex file in the app: the code behind the "Fill
  * schedule for me" button. In plain terms, it tries lots of possible shifts,

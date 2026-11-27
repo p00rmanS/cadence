@@ -171,6 +171,8 @@ export type ScheduleSettings = {
   breakWeeklyHours?: number;
   /** Shortest shift allowed, in hours. Missing means MIN_SHIFT_MINUTES (2 hours). */
   minShiftHours?: number;
+  /** Minutes a student needs to walk between a class and a shift. Missing means DEFAULT_WALKING_MINUTES (0: no gap needed). */
+  walkingMinutes?: number;
 };
 
 /** Explicit dates + timezone are required for recurring calendar export; nothing is guessed. */
@@ -207,11 +209,12 @@ export type GapRange = {
 /**
  * Why a specific assignment attempt was rejected (used when the manager clicks a grid box,
  * or auto-fill tries a placement). Each code maps to one plain-language message in `availability.ts`.
- * "Hard" rules (class_conflict, unavailable, after_cutoff, break_conflict, devotional, already_assigned) can
+ * "Hard" rules (class_conflict, walking_time, unavailable, after_cutoff, break_conflict, devotional, already_assigned) can
  * never be overridden. "Soft" rules (over_weekly_target, over_max_days) can be, with a confirmation.
  */
 export type ConstraintViolationCode =
   | "class_conflict"
+  | "walking_time"
   | "unavailable"
   | "after_cutoff"
   | "break_conflict"
@@ -228,6 +231,7 @@ export type ConstraintViolation = {
 /** A problem found in an existing schedule (as opposed to a rejected attempted assignment). */
 export type ScheduleIssueCode =
   | "class_conflict"
+  | "walking_time"
   | "unavailable"
   | "after_cutoff"
   | "break_conflict"
@@ -280,7 +284,7 @@ export type AutoFillExplanation = {
   reason: string;
 };
 
-/** Everything "Fill schedule for me" produces in one run: the shifts it added, who it couldn't fully place, and why (see `scheduler.ts`). */
+/** Everything "Fill week" produces in one run: the shifts it added, who it couldn't fully place, and why (see `scheduler.ts`). */
 export type AutoFillResult = {
   assignments: ShiftBlock[];
   /** Students who could not reach the weekly target hours. */

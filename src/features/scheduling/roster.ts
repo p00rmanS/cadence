@@ -1,5 +1,6 @@
 import { MAX_STUDENTS } from "./constants";
 import { buildBusy, parseMeetingLine } from "./parser";
+import { cleanTableCells } from "../import/paste-clean";
 
 /**
  * ============================================================================
@@ -34,11 +35,13 @@ export type RosterParse = {
 const MAX_NAME = 80;
 
 /** Splits one line into a name and its class-time text, or explains why it can't. */
-function splitLine(raw: string): { name: string; classText: string } | { error: string } {
-  // A spreadsheet paste separates cells with tabs: the first cell is the name, the rest are classes.
+function splitLine(raw: string): { name: string; classText: string; leftOut?: string[] } | { error: string } {
+  // A spreadsheet paste separates cells with tabs: the first cell is the name, the rest are classes. Rows copied from a
+  // school page also carry course names, rooms and teachers in other cells; those are left out, but LISTED (never hidden).
   if (raw.includes("\t")) {
     const [first, ...rest] = raw.split("\t");
-    return { name: first.trim(), classText: rest.map((c) => c.trim()).filter(Boolean).join("; ") };
+    const cells = cleanTableCells(rest);
+    return { name: first.trim(), classText: cells.classText, leftOut: cells.leftOut };
   }
   const example = "Put the name first, then a colon, then the class times. Example: Noa K.: MWF 9:00-9:50";
   // Otherwise "Name: classes". A colon inside a time (9:00) always has a digit on BOTH sides, so the
@@ -83,6 +86,7 @@ export function parseRoster(text: string, existingCount = 0): RosterParse {
     const { classes } = buildBusy(split.classText, "");
     errors.push(...classes.errors);
     warnings.push(...classes.warnings);
+    if (split.leftOut?.length) warnings.push(`Left out (not class times): ${split.leftOut.map((cell) => `"${cell}"`).join(", ")}.`);
     if (!split.classText) warnings.push("No class times listed, so nothing will keep them out of any hour.");
 
     rows.push({
