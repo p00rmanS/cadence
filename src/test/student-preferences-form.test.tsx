@@ -47,7 +47,7 @@ describe("work preferences in the student form", () => {
 
     // the student's card shows their own hours, and auto-fill uses only their days
     expect(screen.getAllByText(/of 8 hours/).length).toBeGreaterThan(0);
-    await user.click(screen.getAllByRole("button", { name: /fill schedule for me/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /fill week/i })[0]);
     await user.click(screen.getByRole("tab", { name: "By student" }));
     const list = screen.getByRole("tabpanel");
     // The list holds the whole sample roster; Noa was added last, so her section is everything from her name on.

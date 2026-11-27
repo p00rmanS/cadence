@@ -292,7 +292,7 @@ export function reducer(state: State, action: Action): State {
       const student = toStudent(action.id, action.input, nextColor(doc.students));
       return commit(state, { ...doc, students: [...doc.students, student] }, `Added ${student.name}`, {
         selectedStudentId: student.id,
-        toast: toast(`Added ${student.name}. Click the schedule to give them shifts, or press Auto-fill.`),
+        toast: toast(`Added ${student.name} — click the schedule to give them shifts, or press Fill week.`),
       });
     }
     case "ADD_STUDENTS": {
@@ -305,7 +305,7 @@ export function reducer(state: State, action: Action): State {
       return commit(state, { ...doc, students }, `Added ${plural(entries.length, "student")}`, {
         selectedStudentId: state.selectedStudentId ?? students[doc.students.length].id,
         toast: toast(
-          `Added ${plural(entries.length, "student")}${cut ? ` (${cut} more didn't fit under the limit of ${MAX_STUDENTS})` : ""}. Press Fill schedule for me to place their shifts.`,
+          `Added ${plural(entries.length, "student")}${cut ? ` (${cut} more didn't fit under the limit of ${MAX_STUDENTS})` : ""}. Press Fill week to place their shifts.`,
         ),
       });
     }
@@ -620,7 +620,7 @@ export function reducer(state: State, action: Action): State {
       return commit(state, next, "Loaded random students", {
         selectedStudentId: fixSelection(next, null),
         lastAutofill: null,
-        toast: toast(`Loaded ${plural(action.students.length, "random student")} with no shifts yet. Press Fill schedule for me to try them. You can press Undo to go back.`),
+        toast: toast(`Loaded ${plural(action.students.length, "random student")} with no shifts yet. Press Fill week to try them. You can press Undo to go back.`),
       });
     }
     case "CLEAR_ALL": {

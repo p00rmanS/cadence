@@ -3,7 +3,7 @@
 Work schedules that fit around classes. Made for student-worker managers at BYU–Hawaii (CRDEV 301),
 and designed so a first-year student can use it without instructions.
 
-Add a student, paste when they have class, press **Fill schedule for me**, then click the pink
+Add a student, paste when they have class, press **Fill week**, then click the pink
 boxes that still need someone. Syncro never puts anyone in a spot where they have class, and it
 tells you in plain words why something can't be done.
 
@@ -20,7 +20,7 @@ truth, so gaps and conflicts slip through.
 - A welcome screen and a live "what to do next" banner walk a first-time user through the app.
 - Class times are checked **as you type** (`MWF 9:00-9:50`, `Tuesday/Thursday 8:00 AM - 9:15 AM`,
   Workday rows). Anything unclear is flagged, never silently guessed.
-- **Fill schedule for me** places shifts around classes, breaks, cutoffs and weekly hours, in long
+- **Fill week** places shifts around classes, breaks, cutoffs and weekly hours, in long
   unbroken shifts. Every shift it adds comes with a plain-language reason. It is not AI: the same
   input always gives the same schedule.
 - Works **Monday to Saturday** (or Monday to Friday: *Days open* under **Settings**), with four

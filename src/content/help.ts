@@ -37,7 +37,7 @@ export const FAQ: FaqItem[] = [
     question: "What's the fastest way to make a schedule?",
     answer: [
       "1. Press Add student on the left and type a name. Paste or type the student's class times.",
-      "2. Press Fill schedule for me. Syncro places shifts for everyone.",
+      "2. Press Fill week. Syncro places shifts for everyone.",
       "3. Look for pink boxes in the grid. Those hours still need someone. Click a pink box to assign a student who is free.",
     ],
     keywords: ["start", "begin", "tutorial", "how to"],
@@ -146,7 +146,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "fill-for-me",
     topic: "The schedule",
-    question: "What does “Fill schedule for me” do?",
+    question: "What does “Fill week” do?",
     answer: [
       "It adds shifts for you, following every rule. It keeps the shifts you placed yourself and only adds new ones. It prefers longer, unbroken shifts instead of lots of tiny ones.",
       "“Rebuild automatic shifts” throws away only the shifts Syncro added before and makes them again. Shifts you placed by hand are never removed.",
@@ -159,7 +159,7 @@ export const FAQ: FaqItem[] = [
     topic: "The schedule",
     question: "What are the “Quick fix” buttons?",
     answer: [
-      "Under each time that needs someone, Schedule health shows a “Quick fix” row: buttons with the names of students who can really work then. Press one to give that student the whole stretch.",
+      "Under each time that needs someone, the Review panel (the “Review” tab on a phone) shows a “Quick fix” row: buttons with the names of students who can really work then. Press one to give that student the whole stretch.",
       "If a student can only take part of it, the button says how much, for example “1 of 2 hours”. Press Undo if you change your mind.",
     ],
     keywords: ["fill", "gap", "suggest", "add", "pink", "empty", "who is free"],
@@ -181,7 +181,7 @@ export const FAQ: FaqItem[] = [
     answer: [
       "Yes. Open the Add student (or Edit) form and look under Work preferences. Pick “Days they want to work”, or leave every day unpicked if any day is fine.",
       "Type “Hours they want each week”. Choose “They can’t start before” if they can only begin later in the day.",
-      "A day that isn’t picked counts like any other time the student can’t work. “Fill schedule for me” and the quick fixes never use it.",
+      "A day that isn’t picked counts like any other time the student can’t work. “Fill week” and the quick fixes never use it.",
       "A student’s hours can be lower than the office limit, but never higher. If you type more, the office limit applies.",
     ],
     keywords: ["day", "days", "hours", "week", "prefer", "only", "specific", "start", "early", "limit", "student"],
@@ -201,7 +201,7 @@ export const FAQ: FaqItem[] = [
     topic: "Rules",
     question: "Can someone work more than their weekly hours?",
     answer: [
-      "Class conflicts, late cutoffs and breaks can never be broken. But if a student is at their weekly hour limit or day limit, Syncro asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in Schedule health so it isn't forgotten.",
+      "Class conflicts, late cutoffs and breaks can never be broken. But if a student is at their weekly hour limit or day limit, Syncro asks “Assign anyway?”. If you say yes, the shift is added and a warning stays visible in the Review panel so it isn't forgotten.",
       "The default weekly limit is 19 hours. You can change it in Settings, on the Schedule rules tab. Check your own employer's policy: Syncro doesn't know it.",
     ],
     keywords: ["override", "19", "limit", "hours", "overtime"],

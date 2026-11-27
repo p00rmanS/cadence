@@ -472,7 +472,7 @@ export function SaveShareDialog(props: Props) {
             )}
             {blockingIssues > 0 ? (
               <p role="alert" className="rounded-lg bg-gap-bg p-3 text-sm">
-                Fix the {blockingIssues} {blockingIssues === 1 ? "problem" : "problems"} shown in Schedule health first. A schedule that breaks a rule can&apos;t be sent.
+                Fix the {blockingIssues} {blockingIssues === 1 ? "problem" : "problems"} listed under Review your schedule first. A schedule that breaks a rule can&apos;t be sent.
               </p>
             ) : !calendarReady ? (
               <p className="rounded-lg bg-bg p-3 text-sm text-muted">
@@ -513,7 +513,7 @@ export function SaveShareDialog(props: Props) {
             </div>
           </Section>
 
-          <Section icon={<Shuffle className="h-4 w-4" aria-hidden />} title="Try random students" help="Makes up students with random class times and no shifts, so you can press Fill schedule for me and see how it handles a team of that size. Nothing here is a real person. You can undo it.">
+          <Section icon={<Shuffle className="h-4 w-4" aria-hidden />} title="Try random students" help="Makes up students with random class times and no shifts, so you can press Fill week and see how it handles a team of that size. Nothing here is a real person. You can undo it.">
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-sm">
                 <span className="block text-muted">How many students (1 to {MAX_RANDOM_STUDENTS})</span>
@@ -573,7 +573,7 @@ export function SaveShareDialog(props: Props) {
       )}
       {confirm === "random" && (
         <ConfirmDialog title={`Make ${randomCount} random ${randomCount === 1 ? "student" : "students"}?`} confirmLabel="Yes, make them" onCancel={() => setConfirm(null)} onConfirm={() => { onLoadRandomStudents(randomCount); setConfirm(null); onClose(); }}>
-          <p>This replaces your students and shifts with made-up ones that have random class times and no shifts yet. Then press “Fill schedule for me”. You can press Undo afterwards.</p>
+          <p>This replaces your students and shifts with made-up ones that have random class times and no shifts yet. Then press “Fill week”. You can press Undo afterwards.</p>
         </ConfirmDialog>
       )}
       {confirm === "clear" && (

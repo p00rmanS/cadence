@@ -36,9 +36,9 @@ async function openShare(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("dialog", { name: /save & share/i });
 }
 
-/** Presses the main "Fill schedule for me" button. */
+/** Presses the main "Fill week" button. */
 async function fillSchedule(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /fill schedule for me/i }));
+  await user.click(screen.getByRole("button", { name: /fill week/i }));
 }
 
 beforeEach(() => {
@@ -97,7 +97,7 @@ describe("guidance banner", () => {
     await user.click(screen.getByRole("button", { name: /yes, clear everything/i }));
     expect(banner().textContent).toMatch(/Start here: add your first student/);
     expect(screen.getByRole("button", { name: /add your first student/i })).toBeTruthy();
-    expect((screen.getByRole("button", { name: /fill schedule for me/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /fill week/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -106,7 +106,7 @@ describe("filling and undoing", () => {
     const { user } = boot();
     await fillSchedule(user);
     expect(toast().textContent).toMatch(/Added \d+ hours of shifts\./);
-    expect(screen.getByText("What did “Fill schedule for me” do?")).toBeTruthy();
+    expect(screen.getByText("What did “Fill week” do?")).toBeTruthy();
     expect(screen.getAllByText(/At their hours/).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /^undo/i }));
@@ -451,13 +451,13 @@ describe("conflicts show up when class times change after shifts exist", () => {
 describe("help", () => {
   it("opens with ? and closes with Escape, returning focus", async () => {
     const { user } = boot();
-    screen.getByRole("button", { name: /fill schedule for me/i }).focus();
+    screen.getByRole("button", { name: /fill week/i }).focus();
     await user.keyboard("?");
     const dialog = screen.getByRole("dialog", { name: "Help" });
     expect(dialog).toBeTruthy();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /fill schedule for me/i }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /fill week/i }));
   });
 
   it("does not steal '?' while you are typing", async () => {
@@ -838,7 +838,7 @@ describe("adding several students at once", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: /^Noa K\./ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^Kai P\./ })).toBeTruthy();
-    expect(toast().textContent).toMatch(/Added 2 students\. Press Fill schedule for me/);
+    expect(toast().textContent).toMatch(/Added 2 students\. Press Fill week/);
 
     await user.click(screen.getByRole("button", { name: /^undo/i }));
     expect(screen.queryByRole("button", { name: /^Noa K\./ })).toBeNull();
@@ -1074,7 +1074,7 @@ describe("phone layout", () => {
     expect(within(screen.getByRole("grid")).getAllByRole("columnheader")).toHaveLength(2); // time + one day
     await user.click(within(days).getByRole("button", { name: "Wed" }));
     expect(within(screen.getByRole("grid")).getAllByRole("button")[0].getAttribute("aria-label")).toMatch(/^Wednesday/);
-    expect(screen.getByRole("button", { name: /Health/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Review/ })).toBeTruthy();
   });
 
   it("picking a student jumps to the schedule", async () => {

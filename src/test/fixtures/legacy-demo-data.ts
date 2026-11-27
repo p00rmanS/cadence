@@ -77,7 +77,7 @@ export function buildDemoData(): { students: Student[]; assignments: ShiftBlock[
   const sione = makeStudent("s7", "Sione F.", "any", 5, "MWF 9:00-9:50\nSat 8:00-9:50", { breaks: [{ start: 15 * 60, minutes: 15 }] });
 
   // Thirteen more made-up students (20 in all), so the sample shows a real-sized office. Different class times and
-  // preferences mean "Fill schedule for me" has to make real choices.
+  // preferences mean "Fill week" has to make real choices.
   const more = [
     makeStudent("s8", "Malia K.", "afternoon", 4, "MWF 9:00-9:50\nTTh 11:00-12:15"),
     makeStudent("s9", "Noa B.", "morning", 5, "TTh 9:00-10:15\nMWF 1:00pm-1:50pm"),

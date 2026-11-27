@@ -78,6 +78,19 @@ export const NO_CUTOFF: Minutes = 24 * 60;
 /** Shortest shift allowed. Auto-fill never makes a shorter one; a shorter hand-made shift is flagged as a problem. */
 export const MIN_SHIFT_MINUTES = 120;
 
+/**
+ * Walking time between a class and a shift, in minutes. The standard is 0: a shift may end the minute a class
+ * starts (or start the minute one ends), exactly as before this setting existed. A manager can raise it in
+ * Rules so nobody is scheduled to be in two places at once.
+ */
+export const DEFAULT_WALKING_MINUTES = 0;
+
+/** The walking times offered in Rules, in minutes. (5-minute steps up to 30, which is also the most the checker accepts.) */
+export const WALKING_CHOICES = [0, 5, 10, 15, 20, 30];
+
+/** The most walking time a saved schedule may ask for. A longer gap would swallow whole half-hour boxes around every class. */
+export const MAX_WALKING_MINUTES = 30;
+
 /** Auto-fill never creates a single contiguous block longer than this. */
 export const MAX_SHIFT_MINUTES = 240;
 
@@ -124,7 +137,7 @@ export const STUDENT_COLORS = [
 ];
 
 /**
- * From this many students up, "Fill schedule for me" can take a noticeable moment (about half a second at
+ * From this many students up, "Fill week" can take a noticeable moment (about half a second at
  * 50 students, 2-3 seconds at 140), during which the page cannot respond. The app shows a "Building the
  * schedule" message first. Below it the fill is instant, so there is no message and no delay.
  */

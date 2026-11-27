@@ -97,6 +97,7 @@ type CellModel = {
 /** The short, plain words printed in a box where the picked student can't work (instead of a pattern to decode). */
 const BLOCKED_WORDS: Record<string, string> = {
   class_conflict: "Class",
+  walking_time: "Walk",
   unavailable: "Day off",
   after_cutoff: "Too late",
   break_conflict: "Break",
@@ -264,7 +265,7 @@ export function ScheduleGrid({
           const violation = selectedStudent && !slotMine ? canAssign(selectedStudent, day, slot, assignments, settings) : null;
           if (violation && !firstViolation) firstViolation = violation;
           const slotBlocked = Boolean(
-            violation && (violation.code === "class_conflict" || violation.code === "unavailable" || violation.code === "after_cutoff" || violation.code === "break_conflict" || violation.code === "devotional"),
+            violation && (violation.code === "class_conflict" || violation.code === "walking_time" || violation.code === "unavailable" || violation.code === "after_cutoff" || violation.code === "break_conflict" || violation.code === "devotional"),
           );
           if (!slotBlocked) blockedAll = false;
           else if (!blockedCode && violation) blockedCode = violation.code;

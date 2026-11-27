@@ -78,6 +78,8 @@ export function StudentFormSheet({
   settings,
   existingNames,
   onSave,
+  onSaveAnother,
+  onAddSeveral,
   onClose,
 }: {
   student: Student | null;
@@ -93,6 +95,14 @@ export function StudentFormSheet({
   settings: ScheduleSettings;
   existingNames: string[];
   onSave: (input: NewStudentInput) => void;
+  /**
+   * When given (only for a brand-new student), an "Add and add another" button appears: it saves this student,
+   * keeps the window open, and clears the form for the next one. Adding twenty students no longer means
+   * opening the form twenty times.
+   */
+  onSaveAnother?: (input: NewStudentInput) => void;
+  /** When given (only for a brand-new student), a link offers the "Add several at once" window instead. */
+  onAddSeveral?: () => void;
   onClose: () => void;
 }) {
   // Where the form's starting values come from: the student being edited, or the prefill for a new one.
@@ -115,6 +125,13 @@ export function StudentFormSheet({
   const photoInput = useRef<HTMLInputElement>(null);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [triedSave, setTriedSave] = useState(false);
+  // The less-used choices (other blocked times, work preferences, breaks, opening shift) sit in a fold-out so a
+  // new student needs only a name and class times. It starts open when editing, because then the person came to change one.
+  const [moreOpen, setMoreOpen] = useState(Boolean(student ?? prefill));
+  // Names added so far through "Add and add another", shown as a confirmation above the form.
+  const [addedNames, setAddedNames] = useState<string[]>([]);
+  // Goes up each time the form is cleared for the next student, so the class-times box starts completely fresh too.
+  const [clearCount, setClearCount] = useState(0);
 
   // Times are checked live as you type, so there is never a stale "review" list.
   const { classes: parse, blocked: blockedParse } = useMemo(() => buildBusy(classText, blockedText), [classText, blockedText]);
@@ -159,12 +176,9 @@ export function StudentFormSheet({
     }
   }
 
-  // Save button: show any problems first; only save when the name and class times are fine.
-  function handleSubmit() {
-    setTriedSave(true);
-    if (nameError || classError) return;
-    if (weeklyHoursProblem(weeklyHoursText)) return;
-    onSave({
+  // Everything typed so far, in the shape the app saves.
+  function currentInput(): NewStudentInput {
+    return {
       name: trimmed,
       avatar,
       preference,
@@ -177,7 +191,48 @@ export function StudentFormSheet({
       workDays,
       weeklyHours: weeklyHoursText.trim() === "" ? undefined : Number(weeklyHoursText),
       earliestStart,
-    });
+    };
+  }
+
+  // True when the form is fine to save. Shows any problems first (and opens the fold-out if a problem is hidden in it).
+  function readyToSave(): boolean {
+    setTriedSave(true);
+    if (nameError || classError) return false;
+    if (weeklyHoursProblem(weeklyHoursText)) {
+      setMoreOpen(true);
+      return false;
+    }
+    return true;
+  }
+
+  // Save button: only saves when the name and class times are fine.
+  function handleSubmit() {
+    if (readyToSave()) onSave(currentInput());
+  }
+
+  // "Add and add another": saves this student, then empties every field so the next one starts from the usual defaults.
+  function handleSubmitAnother() {
+    if (!onSaveAnother || !readyToSave()) return;
+    onSaveAnother(currentInput());
+    setAddedNames((names) => [...names, trimmed]);
+    setName("");
+    setPreference("any");
+    setDaysPerWeek(5);
+    setLatestEnd(NO_CUTOFF);
+    setBreaks([{ start: DEFAULT_BREAK_START, minutes: DEFAULT_BREAK_MINUTES }]);
+    setNeedsOpeningShift(false);
+    setWorkDays([]);
+    setWeeklyHoursText("");
+    setEarliestStart(0);
+    setClassText("");
+    setBlockedText("");
+    setAvatar(null);
+    setPhotoError(null);
+    setAiNote(null);
+    setTriedSave(false);
+    setClearCount((count) => count + 1);
+    // Ready to type the next name straight away.
+    window.setTimeout(() => document.getElementById("student-name")?.focus(), 0);
   }
 
   const latestOptions = withCurrent(LATEST_OPTIONS, latestEnd, (v) => formatMinutes(v));
@@ -197,6 +252,11 @@ export function StudentFormSheet({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
+          {onSaveAnother && !student && !prefill && (
+            <Button variant="secondary" onClick={handleSubmitAnother}>
+              Add and add another
+            </Button>
+          )}
           <Button variant="primary" onClick={handleSubmit}>
             {saveLabel ?? (student ? "Save changes" : "Add student")}
           </Button>
@@ -210,6 +270,19 @@ export function StudentFormSheet({
           handleSubmit();
         }}
       >
+        {addedNames.length > 0 && (
+          <p role="status" className="rounded-lg bg-ok-bg p-2 text-sm">
+            Added {addedNames[addedNames.length - 1]} · {addedNames.length} added so far. Type the next student below, or press Cancel when you are done.
+          </p>
+        )}
+        {onAddSeveral && !student && !prefill && (
+          <p className="text-sm text-muted">
+            Adding a whole list?{" "}
+            <button type="button" onClick={onAddSeveral} className="font-medium text-accent underline">
+              Add several at once
+            </button>
+          </p>
+        )}
         <div>
           <label htmlFor="student-name" className="block text-sm font-medium">
             Student&apos;s name
@@ -278,161 +351,178 @@ export function StudentFormSheet({
           </div>
         )}
 
-        <ImportPanel classText={classText} onClassTextChange={setClassText} onExtracted={handleExtracted} />
+        <ImportPanel key={clearCount} classText={classText} onClassTextChange={setClassText} onExtracted={handleExtracted} />
         {aiNote && <p className="rounded-lg bg-warn-bg p-2 text-xs text-ink">{aiNote}</p>}
         <MeetingReview parse={parse} />
-
-        <div className="space-y-2">
-          <div className="flex items-center gap-1">
-            <label htmlFor="blocked-text" className="text-sm font-medium">
-              Any other times they can&apos;t work? <span className="font-normal text-muted">(optional)</span>
-            </label>
-            <HelpTip label="Other times they can't work">
-              Use this for another job, appointments, practice or anything else that is not a class. Write it the same way as
-              class times, like <b>W 2:00pm-4:00pm</b>. Syncro keeps them out of these times too.
-            </HelpTip>
-          </div>
-          <textarea
-            id="blocked-text"
-            value={blockedText}
-            onChange={(e) => setBlockedText(e.target.value)}
-            placeholder={"W 2:00pm-4:00pm\nF 12:00-1:00"}
-            rows={2}
-            maxLength={5000}
-            className="w-full rounded-lg border border-line bg-bg p-2 font-mono text-sm"
-          />
-          <MeetingReview parse={blockedParse} title="Times they can't work" />
-        </div>
 
         {triedSave && classError && (
           <p role="alert" className="text-sm text-gap">
             {classError}
           </p>
         )}
+        <details
+          open={moreOpen}
+          onToggle={(e) => setMoreOpen(e.currentTarget.open)}
+          className="rounded-xl border border-line p-3"
+        >
+          <summary className="cursor-pointer text-sm font-semibold">
+            More options
+            <span className="font-normal text-muted">
+              {" "}
+              · usual defaults: {breaks.length === 0 ? "no break" : breaks.length === 1 ? `${formatMinutes(breaks[0].start)} break` : `${breaks.length} breaks`},{" "}
+              {workDays.length ? `${workDays.length} chosen ${workDays.length === 1 ? "day" : "days"}` : "any day"},{" "}
+              {weeklyHoursText.trim() ? `${weeklyHoursText.trim()} hours` : `up to ${officeLimit} hours`}
+            </span>
+          </summary>
+          <div className="mt-4 space-y-5">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <label htmlFor="blocked-text" className="text-sm font-medium">
+                  Any other times they can&apos;t work? <span className="font-normal text-muted">(optional)</span>
+                </label>
+                <HelpTip label="Other times they can't work">
+                  Use this for another job, appointments, practice or anything else that is not a class. Write it the same way as
+                  class times, like <b>W 2:00pm-4:00pm</b>. Syncro keeps them out of these times too.
+                </HelpTip>
+              </div>
+              <textarea
+                id="blocked-text"
+                value={blockedText}
+                onChange={(e) => setBlockedText(e.target.value)}
+                placeholder={"W 2:00pm-4:00pm\nF 12:00-1:00"}
+                rows={2}
+                maxLength={5000}
+                className="w-full rounded-lg border border-line bg-bg p-2 font-mono text-sm"
+              />
+              <MeetingReview parse={blockedParse} title="Times they can't work" />
+            </div>
 
-        <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <legend className="mb-1 text-sm font-semibold">Work preferences</legend>
-          <div>
-            <label htmlFor="pref" className="block text-sm font-medium">
-              When do they like to work?
-            </label>
-            <select id="pref" value={preference} onChange={(e) => setPreference(e.target.value as NewStudentInput["preference"])} className={inputCls}>
-              <option value="any">No preference</option>
-              <option value="morning">Mornings</option>
-              <option value="afternoon">Afternoons</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="days" className="block text-sm font-medium">
-              Days they can work each week
-            </label>
-            <select id="days" value={daysPerWeek} onChange={(e) => setDaysPerWeek(Number(e.target.value))} className={inputCls}>
-              {Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1).map((d) => (
-                <option key={d} value={d}>
-                  {d} {d === 1 ? "day" : "days"}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <label htmlFor="latest" className="text-sm font-medium">
-                They must leave by
-              </label>
-              <HelpTip label="Must leave by">
-                The latest time they can work. Syncro won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
-              </HelpTip>
-            </div>
-            <select id="latest" value={latestEnd} onChange={(e) => setLatestEnd(Number(e.target.value))} className={inputCls}>
-              {latestOptions.map((o) => (
-                <option key={o.value} value={o.value ?? ""}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <label htmlFor="earliest" className="text-sm font-medium">
-                They can&apos;t start before
-              </label>
-              <HelpTip label="Can't start before">
-                The earliest time they can begin work (for example, they have an early class or a long commute). Syncro won&apos;t schedule them earlier.
-              </HelpTip>
-            </div>
-            <select id="earliest" value={earliestStart} onChange={(e) => setEarliestStart(Number(e.target.value))} className={inputCls}>
-              {earliestOptions.map((o) => (
-                <option key={o.value} value={o.value ?? ""}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <label htmlFor="weekly-hours" className="text-sm font-medium">
-                Hours they want each week
-              </label>
-              <HelpTip label="Hours per week">
-                How many hours this student wants to work in a week. Leave it empty to use the office limit ({officeLimit} hours right now). A number
-                higher than the office limit is held to the office limit.
-              </HelpTip>
-            </div>
-            <input
-              id="weekly-hours"
-              inputMode="decimal"
-              value={weeklyHoursText}
-              onChange={(e) => setWeeklyHoursText(e.target.value)}
-              placeholder={`Office limit: ${officeLimit}`}
-              aria-describedby="weekly-hours-err"
-              aria-invalid={Boolean(hoursError)}
-              className={inputCls}
-            />
-            {hoursError && (
-              <p id="weekly-hours-err" role="alert" className="mt-1 text-xs text-gap">
-                {hoursError}
-              </p>
-            )}
-          </div>
-          <div className="sm:col-span-2">
-            <div className="flex items-center gap-1">
-              <span id="work-days-label" className="text-sm font-medium">
-                Days they want to work
+
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <legend className="mb-1 text-sm font-semibold">Work preferences</legend>
+              <div>
+                <label htmlFor="pref" className="block text-sm font-medium">
+                  When do they like to work?
+                </label>
+                <select id="pref" value={preference} onChange={(e) => setPreference(e.target.value as NewStudentInput["preference"])} className={inputCls}>
+                  <option value="any">No preference</option>
+                  <option value="morning">Mornings</option>
+                  <option value="afternoon">Afternoons</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="days" className="block text-sm font-medium">
+                  Days they can work each week
+                </label>
+                <select id="days" value={daysPerWeek} onChange={(e) => setDaysPerWeek(Number(e.target.value))} className={inputCls}>
+                  {Array.from({ length: MAX_DAYS_PER_WEEK }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>
+                      {d} {d === 1 ? "day" : "days"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <label htmlFor="latest" className="text-sm font-medium">
+                    They must leave by
+                  </label>
+                  <HelpTip label="Must leave by">
+                    The latest time they can work. Syncro won&apos;t schedule them past it (for example, if they have an evening job or a bus to catch).
+                  </HelpTip>
+                </div>
+                <select id="latest" value={latestEnd} onChange={(e) => setLatestEnd(Number(e.target.value))} className={inputCls}>
+                  {latestOptions.map((o) => (
+                    <option key={o.value} value={o.value ?? ""}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <label htmlFor="earliest" className="text-sm font-medium">
+                    They can&apos;t start before
+                  </label>
+                  <HelpTip label="Can't start before">
+                    The earliest time they can begin work (for example, they have an early class or a long commute). Syncro won&apos;t schedule them earlier.
+                  </HelpTip>
+                </div>
+                <select id="earliest" value={earliestStart} onChange={(e) => setEarliestStart(Number(e.target.value))} className={inputCls}>
+                  {earliestOptions.map((o) => (
+                    <option key={o.value} value={o.value ?? ""}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <label htmlFor="weekly-hours" className="text-sm font-medium">
+                    Hours they want each week
+                  </label>
+                  <HelpTip label="Hours per week">
+                    How many hours this student wants to work in a week. Leave it empty to use the office limit ({officeLimit} hours right now). A number
+                    higher than the office limit is held to the office limit.
+                  </HelpTip>
+                </div>
+                <input
+                  id="weekly-hours"
+                  inputMode="decimal"
+                  value={weeklyHoursText}
+                  onChange={(e) => setWeeklyHoursText(e.target.value)}
+                  placeholder={`Office limit: ${officeLimit}`}
+                  aria-describedby="weekly-hours-err"
+                  aria-invalid={Boolean(hoursError)}
+                  className={inputCls}
+                />
+                {hoursError && (
+                  <p id="weekly-hours-err" role="alert" className="mt-1 text-xs text-gap">
+                    {hoursError}
+                  </p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <div className="flex items-center gap-1">
+                  <span id="work-days-label" className="text-sm font-medium">
+                    Days they want to work
+                  </span>
+                  <HelpTip label="Days they want to work">
+                    Pick the days this student would like to work. Leave every day unpicked if any day is fine. Days that are not picked are treated like
+                    days they can&apos;t work, so Syncro won&apos;t put them there.
+                  </HelpTip>
+                </div>
+                <div role="group" aria-labelledby="work-days-label" className="mt-1 flex flex-wrap gap-2">
+                  {officeDays.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      aria-pressed={workDays.includes(day)}
+                      onClick={() => toggleDay(day)}
+                      className={clsx(
+                        "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                        workDays.includes(day) ? "border-accent bg-accent text-accent-ink" : "border-line bg-panel text-ink hover:bg-line/30",
+                      )}
+                    >
+                      {DAY_LONG[day]}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted">{workDays.length === 0 ? "Any day is fine." : "Only the picked days."}</p>
+              </div>
+            </fieldset>
+
+            <BreakEditor breaks={breaks} onChange={setBreaks} />
+
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1" checked={needsOpeningShift} onChange={(e) => setNeedsOpeningShift(e.target.checked)} />
+              <span>
+                <span className="font-medium">Needs an opening shift</span>
+                <span className="block text-xs text-muted">One day a week they must start at 7:00am and work at least an hour in a row.</span>
               </span>
-              <HelpTip label="Days they want to work">
-                Pick the days this student would like to work. Leave every day unpicked if any day is fine. Days that are not picked are treated like
-                days they can&apos;t work, so Syncro won&apos;t put them there.
-              </HelpTip>
-            </div>
-            <div role="group" aria-labelledby="work-days-label" className="mt-1 flex flex-wrap gap-2">
-              {officeDays.map((day) => (
-                <button
-                  key={day}
-                  type="button"
-                  aria-pressed={workDays.includes(day)}
-                  onClick={() => toggleDay(day)}
-                  className={clsx(
-                    "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
-                    workDays.includes(day) ? "border-accent bg-accent text-accent-ink" : "border-line bg-panel text-ink hover:bg-line/30",
-                  )}
-                >
-                  {DAY_LONG[day]}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-muted">{workDays.length === 0 ? "Any day is fine." : "Only the picked days."}</p>
+            </label>
           </div>
-        </fieldset>
-
-        <BreakEditor breaks={breaks} onChange={setBreaks} />
-
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-1" checked={needsOpeningShift} onChange={(e) => setNeedsOpeningShift(e.target.checked)} />
-          <span>
-            <span className="font-medium">Needs an opening shift</span>
-            <span className="block text-xs text-muted">One day a week they must start at 7:00am and work at least an hour in a row.</span>
-          </span>
-        </label>
+        </details>
       </form>
     </Modal>
   );

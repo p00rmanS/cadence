@@ -61,7 +61,7 @@ export function ScheduleList({
         <h2 className="mb-2 hidden font-display text-xl font-bold print:block">Work schedule</h2>
         {empty ? (
           <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
-            {!students.length ? "Add a student first." : "There are no shifts yet. Press “Fill schedule for me”, or click the grid to add some."}
+            {!students.length ? "Add a student first." : "There are no shifts yet. Press “Fill week”, or click the grid to add some."}
           </p>
         ) : mode === "student" ? (
           <ul className="grid gap-3 xwide:grid-cols-2 print:block print:columns-2">

@@ -26,8 +26,9 @@ import type { ConstraintViolationCode, Day, Minutes, ScheduleIssue, ScheduleSett
  * why not" text used throughout the app.
  */
 
-const SLOT_LEVEL_TEXT: Record<"class_conflict" | "unavailable" | "after_cutoff" | "break_conflict" | "devotional", string> = {
+const SLOT_LEVEL_TEXT: Record<"class_conflict" | "walking_time" | "unavailable" | "after_cutoff" | "break_conflict" | "devotional", string> = {
   class_conflict: "has a class then",
+  walking_time: "has too little time to walk to or from class then",
   unavailable: "is marked unavailable then",
   after_cutoff: "is scheduled past their cutoff time",
   break_conflict: "is scheduled during their break",
@@ -159,6 +160,8 @@ export function explainSlot(
       const text =
         slot.code === "class_conflict"
           ? "in class"
+          : slot.code === "walking_time"
+            ? "walking to or from class"
           : slot.code === "unavailable"
             ? "not available"
             : slot.code === "after_cutoff"

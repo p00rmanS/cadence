@@ -47,6 +47,8 @@ export function SchedulePanel(props: {
   /** The side column with the schedule's health (shown or hidden), and how to flip it. Both optional. */
   detailsOpen?: boolean;
   onToggleDetails?: () => void;
+  /** Goes up by one when something outside this panel (the Review panel's "Print the schedule") asks for a print. */
+  printRequest?: number;
 }) {
   const [view, setView] = useState<View>("grid");
   const [tool, setTool] = useState<"copy" | "busy" | null>(null);
@@ -55,6 +57,15 @@ export function SchedulePanel(props: {
   const refs = useRef<Record<View, HTMLButtonElement | null>>({ grid: null, student: null, day: null });
   // True from pressing "Print schedule" until the print window closes: the clean printed page exists only then.
   const [printing, setPrinting] = useState(false);
+
+  // A print asked for from elsewhere: only when there is something to print, same rule as this panel's own Print button.
+  const { printRequest } = props;
+  const somethingToPrint = props.students.length > 0 && props.assignments.length > 0;
+  useEffect(() => {
+    if (printRequest && somethingToPrint) setPrinting(true);
+    // Only a NEW request should print; a later change to the shifts must not print again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printRequest]);
 
   // Shows the clean page, opens the browser's print window, and removes the page again when printing is over or cancelled.
   useEffect(() => {
@@ -143,7 +154,7 @@ export function SchedulePanel(props: {
             <Printer className="h-4 w-4" aria-hidden /> <span className="hidden wide:hidden sm:inline xwide:inline">Print</span>
           </button>
           {props.onToggleDetails && (
-            // Only on wide screens: on a phone the "Health" tab at the bottom does this job.
+            // Only on wide screens: on a phone the "Review" tab at the bottom does this job.
             <button
               type="button"
               aria-expanded={props.detailsOpen ?? false}

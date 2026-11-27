@@ -11,6 +11,7 @@ import { MEASURED_NOTE, readScreenshot, readScreenshotEnhanced } from "../../fea
 import type { ScreenshotReading } from "../../features/import/ocr/screenshot-reader";
 import type { ReadingProgress } from "../../features/import/ocr/tesseract-reader";
 import { enhancedReaderBaseUrl, isEnhancedReadingAvailable } from "../../features/import/ocr/enhanced-reader";
+import { cleanPastedClassText } from "../../features/import/paste-clean";
 
 const EXAMPLE = "MWF 9:00-9:50\nTTh 1:00pm-2:15pm";
 
@@ -137,12 +138,34 @@ export function ImportPanel({
     }
   }
 
-  /** Lets a person paste a screenshot straight into the class-times box (Ctrl+V / Cmd+V). Text pastes as usual. */
+  /**
+   * Lets a person paste into the class-times box (Ctrl+V / Cmd+V):
+   *  - a screenshot is read in the browser;
+   *  - text copied from a school schedule page (with course names, rooms, teachers around the times) is
+   *    tidied down to just the class times, the same way a screenshot is, but ONLY when that clearly helps;
+   *  - any other text pastes exactly as usual.
+   */
   function handlePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
     const picture = Array.from(event.clipboardData.files).find((file) => file.type.startsWith("image/"));
-    if (!picture) return;
+    if (picture) {
+      event.preventDefault();
+      void readInBrowser(picture);
+      return;
+    }
+    // `getData` always exists in a real browser; the check keeps an unusual paste event from crashing the box.
+    const pasted = typeof event.clipboardData.getData === "function" ? event.clipboardData.getData("text") : "";
+    const cleaned = pasted ? cleanPastedClassText(pasted) : null;
+    if (!cleaned) return;
     event.preventDefault();
-    void readInBrowser(picture);
+    // Put the cleaned lines where the cursor is (replacing anything selected), each on its own line.
+    const box = event.currentTarget;
+    const before = classText.slice(0, box.selectionStart);
+    const after = classText.slice(box.selectionEnd);
+    const joined = before + (before && !before.endsWith("\n") ? "\n" : "") + cleaned.classText + (after && !after.startsWith("\n") ? "\n" : "") + after;
+    onClassTextChange(joined);
+    setStatus(
+      `Cleaned up what you pasted: found ${cleaned.linesFound} class ${cleaned.linesFound === 1 ? "time" : "times"} and left out the course names, rooms and teachers. Check each one in the list below.`,
+    );
   }
 
   // Offered once a screenshot has been tried in the browser, including when that failed outright.

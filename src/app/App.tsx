@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, Users, HeartPulse } from "lucide-react";
+import { AlertTriangle, CalendarDays, ClipboardCheck, Users } from "lucide-react";
 import { TopBar } from "../components/app-shell/TopBar";
 import { NextStepBanner } from "../components/app-shell/NextStepBanner";
 import { SettingsDialog } from "../components/app-shell/SettingsDialog";
@@ -107,6 +107,8 @@ export function App({
   const [rosterWide, toggleRosterWide] = useRosterView();
   const healthRef = useRef<HTMLDivElement>(null);
   const [healthFlash, setHealthFlash] = useState(false);
+  // Goes up by one each time the "Print the schedule" button in the Review panel is pressed; the schedule panel watches it and prints.
+  const [printRequest, setPrintRequest] = useState(0);
 
   const { settings, students, assignments } = store;
 
@@ -191,7 +193,8 @@ export function App({
   const tabs: { id: MobileTab; label: string; icon: typeof Users; badge?: number }[] = [
     { id: "students", label: "Students", icon: Users },
     { id: "schedule", label: "Schedule", icon: CalendarDays },
-    { id: "health", label: "Health", icon: HeartPulse, badge: blockingIssues.length + (gapSlots > 0 ? 1 : 0) },
+    // "Review" says what the page is for (check the week, then act on it); the old word "Health" did not.
+    { id: "health", label: "Review", icon: ClipboardCheck, badge: blockingIssues.length + (gapSlots > 0 ? 1 : 0) },
   ];
 
   return (
@@ -223,6 +226,8 @@ export function App({
         onOpenShare={() => setDialog({ kind: "share" })}
         theme={theme}
         onThemeChange={setTheme}
+        textSize={display.textSize}
+        onTextSizeChange={display.setTextSize}
       />
       <NextStepBanner guidance={guidance} onAction={() => guidance.action && onGuidanceAction(guidance.action.kind)} />
       {store.autoFilling && (
@@ -315,6 +320,7 @@ export function App({
             }}
             detailsOpen={detailsOpen}
             onToggleDetails={() => setDetailsOpen(!detailsOpen)}
+            printRequest={printRequest}
           />
         </div>
         <div
@@ -339,6 +345,13 @@ export function App({
               if (!isDesktop) setMobileTab("schedule");
             }}
             onFillGap={store.fillGap}
+            onFillAll={() => store.runAutoFill(false)}
+            onPrint={() => {
+              // On a phone the schedule is on another tab (hidden now); it must be showing for the clean page to print.
+              setMobileTab("schedule");
+              setPrintRequest((count) => count + 1);
+            }}
+            onShare={() => setDialog({ kind: "share" })}
           />
         </div>
       </main>
@@ -400,6 +413,9 @@ export function App({
             else store.addStudent(input);
             setDialog(null);
           }}
+          // "Add and add another": add the student but keep this window open for the next one.
+          onSaveAnother={(input) => store.addStudent(input)}
+          onAddSeveral={() => setDialog({ kind: "bulk" })}
         />
       )}
       {dialog?.kind === "bulk" && (
@@ -518,7 +534,7 @@ export function App({
         <ConfirmDialog title="Assign anyway?" confirmLabel="Yes, assign anyway" onCancel={store.cancelOverride} onConfirm={store.confirmOverride}>
           <p>{store.pendingOverride.message}</p>
           <p>
-            You can still do it. Syncro will keep a warning about {overrideStudent?.name ?? "this student"} visible in Schedule health so it isn&apos;t forgotten.
+            You can still do it. Syncro will keep a warning about {overrideStudent?.name ?? "this student"} visible in the Review panel so it isn&apos;t forgotten.
           </p>
         </ConfirmDialog>
       )}

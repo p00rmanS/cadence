@@ -13,6 +13,11 @@ import "@fontsource/atkinson-hyperlegible/latin-700.css";
 import "@fontsource/bricolage-grotesque/latin-500.css";
 import "@fontsource/bricolage-grotesque/latin-700.css";
 import "./styles/app.css";
+import { applyTheme, readSavedTheme } from "./hooks/useTheme";
+
+// Show the right colors BEFORE the first screen is drawn. Without this, a device set to dark would flash dark
+// for a moment before the app switches itself to the light standard.
+applyTheme(readSavedTheme());
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

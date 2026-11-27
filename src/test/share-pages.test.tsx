@@ -154,7 +154,7 @@ describe("the student's Send your details page", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Fill in my details" }));
     const dialog = screen.getByRole("dialog", { name: "Your details" });
     expect(within(dialog).queryByText(/Photo/)).toBeNull();
-    expect(screen.queryByRole("button", { name: /fill schedule for me/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /fill week/i })).toBeNull();
   });
 
   it("makes a link that opens, checked, to exactly what the student typed", async () => {
@@ -259,7 +259,7 @@ describe("the student's Your shifts page", () => {
 describe("which screen an address opens", () => {
   it("opens the manager's app by default", () => {
     render(<Root />);
-    expect(screen.getAllByRole("button", { name: /fill schedule for me/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /fill week/i }).length).toBeGreaterThan(0);
   });
 
   it("opens the student's page for #/send, with none of the manager's app or saved schedule", () => {
@@ -267,7 +267,7 @@ describe("which screen an address opens", () => {
     window.history.replaceState(null, "", "/#/send");
     render(<Root />);
     expect(screen.getByRole("heading", { name: "Send your details to your manager" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /fill schedule for me/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /fill week/i })).toBeNull();
     expect(screen.queryByText("Troy C.")).toBeNull();
   });
 
@@ -275,7 +275,7 @@ describe("which screen an address opens", () => {
     window.history.replaceState(null, "", `/#/shifts/${buildShiftsCode(makeStudent({ id: "s1", name: "Noa K." }), run("s1", "mon", 9 * 60, 12 * 60), settings, semester)}`);
     render(<Root />);
     expect(screen.getByRole("heading", { name: "Noa K.'s shifts" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /fill schedule for me/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /fill week/i })).toBeNull();
   });
 
   it("opens the manager's app with the Student links window filled in for #/add/<link>, then clears the address", async () => {
@@ -309,7 +309,7 @@ describe("in the manager's app", () => {
     const user = userEvent.setup();
     const copied = fakeClipboard();
     render(<App />);
-    await user.click(screen.getAllByRole("button", { name: /fill schedule for me/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /fill week/i })[0]);
     await user.click(screen.getAllByRole("button", { name: /save & share/i })[0]);
     const dialog = screen.getByRole("dialog", { name: "Save & share" });
     await user.click(within(dialog).getByRole("button", { name: /copy a link that shows troy c\. their own shifts/i }));

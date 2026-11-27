@@ -1,4 +1,4 @@
-import { BREAK_WEEKLY_HOURS, DEVOTIONAL, MIN_SHIFT_MINUTES } from "./constants";
+import { BREAK_WEEKLY_HOURS, DEFAULT_WALKING_MINUTES, DEVOTIONAL, MIN_SHIFT_MINUTES } from "./constants";
 import type { Day, Minutes, ScheduleSettings, Student } from "./types";
 
 /**
@@ -42,6 +42,11 @@ export function breakLimit(settings: ScheduleSettings): number {
 /** Shortest shift allowed, in minutes: the manager's choice in Rules, or the standard 2 hours. */
 export function minShiftMinutes(settings: ScheduleSettings): number {
   return settings.minShiftHours === undefined ? MIN_SHIFT_MINUTES : Math.round(settings.minShiftHours * 60);
+}
+
+/** Minutes a student needs to walk between a class and a shift: the manager's choice in Rules, or the standard 0 (no gap needed). */
+export function walkingMinutes(settings: ScheduleSettings): number {
+  return settings.walkingMinutes ?? DEFAULT_WALKING_MINUTES;
 }
 
 /** True for a half-hour box that falls inside Tuesday devotional while the semester is on. */

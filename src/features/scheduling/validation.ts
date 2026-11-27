@@ -1,4 +1,4 @@
-import { DEFAULT_BREAK_MINUTES, MAX_ASSIGNMENTS, MAX_BREAKS, MAX_DAYS_PER_WEEK, MAX_STUDENTS, STUDENT_COLORS } from "./constants";
+import { DEFAULT_BREAK_MINUTES, MAX_ASSIGNMENTS, MAX_BREAKS, MAX_DAYS_PER_WEEK, MAX_STUDENTS, MAX_WALKING_MINUTES, STUDENT_COLORS } from "./constants";
 import { isValidAvatar } from "../../lib/image";
 import { isIsoDate, isValidTimeZone } from "./time";
 import { MAX_STAFFING_NEEDS } from "./staffing";
@@ -106,7 +106,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Missing settings.");
     return null;
   }
-  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, openDays, staffingNeeds } = input;
+  const { openTime, closeTime, minStaffPerSlot, slotMinutes, weeklyTargetHours, term, breakWeeklyHours, minShiftHours, walkingMinutes, openDays, staffingNeeds } = input;
   if (!isMinutes(openTime) || !isMinutes(closeTime) || openTime >= closeTime) {
     errors.push("Settings: open and close times must be valid, with opening before closing.");
     return null;
@@ -132,6 +132,11 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     errors.push("Settings: the shortest shift must be between half an hour and 4 hours, in half-hour steps.");
     return null;
   }
+  // Walking time: a whole number of minutes from 0 to 30 in steps of 5 (anything else is refused, not rounded).
+  if (walkingMinutes !== undefined && !(typeof walkingMinutes === "number" && Number.isInteger(walkingMinutes) && walkingMinutes >= 0 && walkingMinutes <= MAX_WALKING_MINUTES && walkingMinutes % 5 === 0)) {
+    errors.push("Settings: the walking time must be 0 to 30 minutes, in 5-minute steps.");
+    return null;
+  }
   const needs = readStaffingNeeds(staffingNeeds, errors);
   if (needs === null) return null;
   // Schedules saved before the Semester/Break switch existed have no term; they were made for the semester.
@@ -144,6 +149,7 @@ function readSettings(input: unknown, errors: string[]): ScheduleSettings | null
     term: term === "break" ? "break" : "semester",
     ...(breakWeeklyHours !== undefined ? { breakWeeklyHours } : {}),
     ...(minShiftHours !== undefined ? { minShiftHours } : {}),
+    ...(walkingMinutes !== undefined ? { walkingMinutes } : {}),
     ...(needs.length ? { staffingNeeds: needs } : {}),
     // Schedules saved before Saturday existed have no openDays: they stay Monday to Friday. Anything
     // other than the two real choices is dropped, which also means Monday to Friday.
